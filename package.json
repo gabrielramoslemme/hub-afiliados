@@ -1,0 +1,26 @@
+{
+  "name": "porto-hub-afiliados",
+  "version": "0.0.0",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "packageManager": "npm@10.8.2",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "type-check": "turbo run type-check",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "prepare": "lefthook install || true"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
+    "eslint": "^9.18.0",
+    "lefthook": "^2.1.4",
+    "prettier": "^3.4.2",
+    "turbo": "^2.5.0",
+    "typescript": "^5.7.3"
+  }
+}
