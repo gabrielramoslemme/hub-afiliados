@@ -1,0 +1,91 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.9/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": ["**", "!**/next-env.d.ts", "!package-lock.json"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single"
+    },
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
+    }
+  },
+  "css": {
+    "formatter": {
+      "quoteStyle": "single"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        "noExplicitAny": "error",
+        "noConsole": {
+          "level": "error",
+          "options": {
+            "allow": ["warn", "error"]
+          }
+        }
+      },
+      "correctness": {
+        "noUnusedVariables": {
+          "level": "error",
+          "options": {
+            "ignore": {
+              "*": ["_*"]
+            }
+          }
+        },
+        "noUnusedFunctionParameters": "error"
+      }
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": {
+          "level": "on",
+          "options": {
+            "groups": [
+              [":NODE:", ":PACKAGE_WITH_PROTOCOL:"],
+              [":PACKAGE:", "!@porto/**"],
+              "@porto/**",
+              ["@Domain/**", "@Infra/**", "@Modules/**", "@Testing/**", "@/**"],
+              ":PATH:"
+            ]
+          }
+        }
+      }
+    }
+  },
+  // O NestJS resolve dependencia pelo metadata design:paramtypes que o
+  // emitDecoratorMetadata grava. Um "import type" apaga a referencia em runtime
+  // e o metadata vira [Function], quebrando a injecao sem que lint, type-check
+  // ou build reclamem. Por isso useImportType fica desligado na API.
+  "overrides": [
+    {
+      "includes": ["apps/api/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useImportType": "off"
+          }
+        }
+      }
+    }
+  ]
+}

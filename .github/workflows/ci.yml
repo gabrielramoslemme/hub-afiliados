@@ -36,7 +36,8 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npx turbo run lint type-check
+      - run: npm run lint
+      - run: npx turbo run type-check
       - run: npm run typeorm:run --workspace apps/api
       - run: npx turbo run test
       - run: npm run test:e2e --workspace apps/api

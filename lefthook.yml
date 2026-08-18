@@ -6,6 +6,6 @@ commit-msg:
 pre-commit:
   parallel: true
   commands:
-    lint:
-      glob: '*.{ts,tsx}'
-      run: npx turbo run lint --filter=...[HEAD]
+    biome:
+      glob: '*.{ts,tsx,js,mjs,json}'
+      run: npx --no -- biome check --staged --no-errors-on-unmatched

@@ -13,25 +13,19 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "turbo run lint",
+    "lint": "biome check .",
+    "format": "biome check --write .",
     "test": "turbo run test",
     "type-check": "turbo run type-check",
-    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "prepare": "(lefthook install || true) && npm run build --workspace packages/contracts",
     "db:up": "docker compose up -d postgres",
-    "db:down": "docker compose down",
-    "db:migrate": "npm run typeorm:run --workspace apps/api",
-    "db:revert": "npm run typeorm:revert --workspace apps/api",
-    "db:seed": "npm run seed --workspace apps/api",
-    "test:e2e": "npm run test:e2e --workspace apps/api",
-    "openapi": "npm run openapi:generate --workspace apps/api"
+    "db:down": "docker compose down"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.9",
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
-    "eslint": "^9.18.0",
     "lefthook": "^2.1.4",
-    "prettier": "^3.4.2",
     "turbo": "^2.5.0",
     "typescript": "^5.7.3"
   }

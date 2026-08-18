@@ -6,7 +6,6 @@
     "dev": "next dev --port 3005",
     "build": "next build",
     "start": "next start --port 3005",
-    "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
@@ -31,13 +30,11 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@porto/eslint-config": "*",
     "@porto/tsconfig": "*",
     "@types/js-cookie": "^3.0.6",
     "@types/node": "^22.19.3",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
-    "eslint-config-next": "^15.2.4",
     "typescript": "^5.7.3"
   }
 }
