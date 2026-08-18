@@ -14,8 +14,9 @@ O aplicativo Flutter do afiliado fica em repositório próprio e consome o
 
 ## Pré-requisitos
 
-- **Node 20 ou superior** (`nvm use` ou `fnm use` lê o `.nvmrc`). O `engine-strict`
-  está ligado: com Node 18 o `npm install` falha de propósito.
+- **Node 24 ou superior** (`nvm use` ou `fnm use` lê o `.nvmrc`, que pinha a LTS
+  vigente). O `engine-strict` está ligado: em versão anterior o `npm install`
+  falha de propósito.
 - **npm** — nunca `pnpm` ou `yarn`. O `package-lock.json` da raiz é a fonte única.
 - **Docker**, para o Postgres local.
 

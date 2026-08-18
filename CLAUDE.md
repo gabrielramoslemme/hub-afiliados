@@ -88,7 +88,7 @@ Valem em todo pacote. Violação é bug, não preferência.
 - **Toda migration é reversível** — `down()` sempre implementado.
 - **TDD:** o teste que falha vem antes da implementação.
 - **npm**, nunca `pnpm` ou `yarn`. O `package-lock.json` da raiz é a fonte única.
-- **Node >= 20** (`.nvmrc`; `engine-strict=true` faz o install falhar de propósito no 18).
+- **Node >= 24** (`.nvmrc` pinha a LTS vigente; `engine-strict=true` faz o install falhar de propósito em versão anterior).
 
 ## Vocabulário compartilhado
 
