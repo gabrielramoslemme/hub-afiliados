@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: porto-hub-afiliados-db
+    environment:
+      POSTGRES_USER: porto
+      POSTGRES_PASSWORD: porto
+      POSTGRES_DB: hub_afiliados
+    ports: ['5432:5432']
+    volumes: ['porto-hub-afiliados-pgdata:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U porto -d hub_afiliados']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  porto-hub-afiliados-pgdata:

@@ -1,0 +1,14 @@
+{
+  "extends": "@porto/tsconfig/nest.json",
+  "compilerOptions": {
+    "baseUrl": "./",
+    "outDir": "./dist",
+    "paths": {
+      "@Domain/*": ["src/domain/*"],
+      "@Infra/*": ["src/infra/*"],
+      "@Modules/*": ["src/modules/*"],
+      "@Testing/*": ["src/testing/*"]
+    }
+  },
+  "include": ["src/**/*", "test/**/*", "ormconfig.ts"]
+}
