@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UserRoleEnum } from '../enums';
+import type { UserRoleEnum } from '../enums';
 
 export const adminLoginSchema = z.object({
   email: z.string().email('Informe um e-mail válido'),

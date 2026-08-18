@@ -1,7 +1,7 @@
-import { AffiliateStatusEnum } from '@porto/contracts';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
+import { AffiliateStatusEnum } from '@porto/contracts';
 import { AffiliateStatusHistoryEntity } from '@Infra/database/typeorm/entities/affiliate-status-history.entity';
 
 interface RecordInput {
@@ -24,8 +24,16 @@ export class AffiliateStatusHistoryRepository {
    * da mudança de status. Trilha auditável que pode ficar de fora não é trilha.
    */
   async record(input: RecordInput, manager?: EntityManager): Promise<void> {
-    const repository = manager ? manager.getRepository(AffiliateStatusHistoryEntity) : this.repository;
-    await repository.save(repository.create({ ...input, reason: input.reason ?? null, actorUserId: input.actorUserId ?? null }));
+    const repository = manager
+      ? manager.getRepository(AffiliateStatusHistoryEntity)
+      : this.repository;
+    await repository.save(
+      repository.create({
+        ...input,
+        reason: input.reason ?? null,
+        actorUserId: input.actorUserId ?? null,
+      }),
+    );
   }
 
   listByAffiliateId(affiliateId: number): Promise<AffiliateStatusHistoryEntity[]> {

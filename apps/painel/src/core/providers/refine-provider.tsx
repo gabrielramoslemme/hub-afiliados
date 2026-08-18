@@ -1,13 +1,13 @@
 'use client';
 
-import { Refine } from '@refinedev/core';
-import { RefineThemes, useNotificationProvider } from '@refinedev/antd';
-import routerProvider from '@refinedev/nextjs-router';
 import { AntdRegistry } from '@ant-design/nextjs-registry';
-import { ConfigProvider, App as AntdApp } from 'antd';
-import { Suspense, type PropsWithChildren } from 'react';
-import { dataProvider } from './data-provider';
+import { RefineThemes, useNotificationProvider } from '@refinedev/antd';
+import { Refine } from '@refinedev/core';
+import routerProvider from '@refinedev/nextjs-router';
+import { App as AntdApp, ConfigProvider } from 'antd';
+import { type PropsWithChildren, Suspense } from 'react';
 import { theme } from '@/core/theme/theme';
+import { dataProvider } from './data-provider';
 
 import '@refinedev/antd/dist/reset.css';
 
@@ -25,7 +25,11 @@ export function RefineProvider({ children }: PropsWithChildren): JSX.Element {
               routerProvider={routerProvider}
               dataProvider={dataProvider}
               notificationProvider={useNotificationProvider}
-              options={{ syncWithLocation: true, warnWhenUnsavedChanges: true, disableTelemetry: true }}
+              options={{
+                syncWithLocation: true,
+                warnWhenUnsavedChanges: true,
+                disableTelemetry: true,
+              }}
             >
               {children}
             </Refine>

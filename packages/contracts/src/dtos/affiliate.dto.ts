@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AffiliateStatusEnum, PixKeyTypeEnum } from '../enums';
+import type { AffiliateStatusEnum, PixKeyTypeEnum } from '../enums';
 
 /** Item da fila de aprovação. CPF já vem mascarado da API. */
 export interface AffiliateListItem {

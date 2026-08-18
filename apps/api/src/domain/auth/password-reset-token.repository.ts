@@ -1,7 +1,7 @@
-import { TokenPurposeEnum } from '@porto/contracts';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, LessThanOrEqual, MoreThan, Repository } from 'typeorm';
+import { IsNull, LessThanOrEqual, MoreThan, type Repository } from 'typeorm';
+import { TokenPurposeEnum } from '@porto/contracts';
 import { PasswordResetTokenEntity } from '@Infra/database/typeorm/entities/password-reset-token.entity';
 
 interface CreateTokenInput {
@@ -22,7 +22,10 @@ export class PasswordResetTokenRepository {
     return this.repository.save(this.repository.create(input));
   }
 
-  findUsable(tokenHash: string, purpose: TokenPurposeEnum): Promise<PasswordResetTokenEntity | null> {
+  findUsable(
+    tokenHash: string,
+    purpose: TokenPurposeEnum,
+  ): Promise<PasswordResetTokenEntity | null> {
     return this.repository.findOne({
       where: { tokenHash, purpose, usedAt: IsNull(), expiresAt: MoreThan(new Date()) },
       relations: { user: true },

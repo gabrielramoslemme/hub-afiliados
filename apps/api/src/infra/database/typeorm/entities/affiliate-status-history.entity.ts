@@ -1,5 +1,12 @@
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { AffiliateStatusEnum } from '@porto/contracts';
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { AffiliateEntity } from './affiliate.entity';
 import { UserEntity } from './user.entity';
 

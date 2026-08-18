@@ -1,5 +1,12 @@
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { TokenPurposeEnum } from '@porto/contracts';
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { UserEntity } from './user.entity';
 
 @Entity('password_reset_tokens')

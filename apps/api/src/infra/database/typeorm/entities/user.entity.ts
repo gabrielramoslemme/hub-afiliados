@@ -1,8 +1,14 @@
-import { UserRoleEnum, UserTypeEnum } from '@porto/contracts';
 import {
-  Column, CreateDateColumn, DeleteDateColumn, Entity,
-  Generated, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn,
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  Generated,
+  OneToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
+import { UserRoleEnum, UserTypeEnum } from '@porto/contracts';
 import { AffiliateEntity } from './affiliate.entity';
 
 @Entity('users')
@@ -50,6 +56,9 @@ export class UserEntity {
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz' })
   deletedAt: Date | null;
 
-  @OneToOne(() => AffiliateEntity, (affiliate) => affiliate.user)
+  @OneToOne(
+    () => AffiliateEntity,
+    (affiliate) => affiliate.user,
+  )
   affiliate?: AffiliateEntity | null;
 }

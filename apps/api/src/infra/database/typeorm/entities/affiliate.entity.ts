@@ -1,8 +1,15 @@
-import { AffiliateStatusEnum, PixKeyTypeEnum } from '@porto/contracts';
 import {
-  Column, CreateDateColumn, Entity, Generated, JoinColumn,
-  ManyToOne, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn,
+  Column,
+  CreateDateColumn,
+  Entity,
+  Generated,
+  JoinColumn,
+  ManyToOne,
+  OneToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
+import { AffiliateStatusEnum, type PixKeyTypeEnum } from '@porto/contracts';
 import { TermsVersionEntity } from './terms-version.entity';
 import { UserEntity } from './user.entity';
 
@@ -18,7 +25,10 @@ export class AffiliateEntity {
   @Column({ name: 'user_id', type: 'int', unique: true })
   userId: number;
 
-  @OneToOne(() => UserEntity, (user) => user.affiliate)
+  @OneToOne(
+    () => UserEntity,
+    (user) => user.affiliate,
+  )
   @JoinColumn({ name: 'user_id' })
   user: UserEntity;
 

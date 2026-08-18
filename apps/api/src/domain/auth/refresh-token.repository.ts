@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, MoreThan, Repository } from 'typeorm';
+import { IsNull, MoreThan, type Repository } from 'typeorm';
 import { RefreshTokenEntity } from '@Infra/database/typeorm/entities/refresh-token.entity';
 
 interface CreateRefreshTokenInput {
@@ -28,7 +28,10 @@ export class RefreshTokenRepository {
   }
 
   async rotate(oldId: number, replacementId: number): Promise<void> {
-    await this.repository.update({ id: oldId }, { revokedAt: new Date(), replacedById: replacementId });
+    await this.repository.update(
+      { id: oldId },
+      { revokedAt: new Date(), replacedById: replacementId },
+    );
   }
 
   async revoke(id: number): Promise<void> {

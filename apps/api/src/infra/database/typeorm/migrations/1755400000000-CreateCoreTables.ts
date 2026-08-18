@@ -62,7 +62,9 @@ export class CreateCoreTables1755400000000 implements MigrationInterface {
       )`);
 
     await queryRunner.query(`CREATE INDEX "ix_affiliates_status" ON "affiliates" ("status")`);
-    await queryRunner.query(`CREATE INDEX "ix_affiliates_created_at" ON "affiliates" ("created_at" DESC)`);
+    await queryRunner.query(
+      `CREATE INDEX "ix_affiliates_created_at" ON "affiliates" ("created_at" DESC)`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
