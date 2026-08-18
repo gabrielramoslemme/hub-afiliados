@@ -17,7 +17,7 @@
     "test": "turbo run test",
     "type-check": "turbo run type-check",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
-    "prepare": "lefthook install || true",
+    "prepare": "(lefthook install || true) && npm run build --workspace packages/contracts",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:migrate": "npm run typeorm:run --workspace apps/api",
