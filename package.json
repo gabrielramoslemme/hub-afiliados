@@ -2,9 +2,14 @@
   "name": "porto-hub-afiliados",
   "version": "0.0.0",
   "private": true,
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "packageManager": "npm@10.8.2",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -12,7 +17,14 @@
     "test": "turbo run test",
     "type-check": "turbo run type-check",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
-    "prepare": "lefthook install || true"
+    "prepare": "lefthook install || true",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:migrate": "npm run typeorm:run --workspace apps/api",
+    "db:revert": "npm run typeorm:revert --workspace apps/api",
+    "db:seed": "npm run seed --workspace apps/api",
+    "test:e2e": "npm run test:e2e --workspace apps/api",
+    "openapi": "npm run openapi:generate --workspace apps/api"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
