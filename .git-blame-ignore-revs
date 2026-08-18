@@ -1,0 +1,4 @@
+# Passada mecânica do Biome (formatação e ordem de imports), sem mudança de
+# comportamento. Configure o git para ignorá-la no blame:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+86d3adbf5ecb631716c5ed4a82b658f625f3a13b
