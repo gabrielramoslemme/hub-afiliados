@@ -1,0 +1,81 @@
+---
+name: create-api-endpoint
+description: Use ao criar rota HTTP na API do porto-hub-afiliados — "cria o endpoint", "nova rota", "expõe no admin", "adiciona o controller", "cria o use case" — em qualquer um dos canais /v1/mobile, /v1/admin ou /v1/webhooks.
+---
+
+# Criar endpoint da API
+
+## Antes de tudo: existe guard?
+
+**Nenhuma rota nasce sem guard.** O guard global de negação, `@Public()`, `AffiliateGuard` e `AdminGuard` vêm da **Spec 07, que ainda não foi implementada**.
+
+Enquanto ela não existir, uma rota autenticada nasce aberta — não há o que a proteja e não há `@Public()` para excepcionar as públicas. **Implemente a Spec 07 antes da primeira rota autenticada.** Se o pedido for uma rota pública (cadastro, login, termos vigentes, health), pode seguir.
+
+## Ordem
+
+1. **Ler a spec.** Toda rota desta onda está em `docs/specs/` com os arquivos exatos e o contrato. `docs/specs/00-arquitetura.md`, seção 6, tem a tabela de todas as rotas.
+
+2. **Tipos compartilhados**, se o painel consome a resposta: `@porto/contracts` primeiro — skill `create-contract`.
+
+3. **DTOs** em `src/domain/<agregado>/dtos/`:
+   - Request: classe com `class-validator` (`@IsEmail`, `@MinLength`) e `@ApiProperty`. Mensagem de erro em pt-BR.
+   - Response: classe com `@ApiProperty`. **Classe, não `interface`** — o Swagger precisa do metadado em runtime.
+   - Nomenclatura: `<acao>.request.dto.ts`, `<acao>.response.dto.ts`.
+
+4. **Use case** — teste primeiro (skill `create-unit-test`), depois a implementação:
+   - Usado por dois canais → `src/modules/shared/<agregado>/<nome>.use-case.ts`
+   - Um canal só → `src/modules/<canal>/<agregado>/<nome>.use-case.ts`
+   - Depende de repositórios do domínio, nunca de `Repository<T>` do TypeORM.
+
+5. **Controller** em `src/modules/<canal>/<agregado>/<canal>-<agregado>.controller.ts`. Fino: valida entrada pelo DTO, chama o use case, devolve. Sem regra de negócio.
+
+6. **Registrar no módulo do canal** — `controllers` e, se houver, `providers`. O módulo já importa `SharedModule`, que exporta todos os repositórios.
+
+7. **Rodar o e2e** (skill `create-e2e-test`) e **conferir o contrato**:
+   ```bash
+   npm run openapi:generate --workspace apps/api
+   node -e "console.log(Object.keys(require('./apps/api/openapi.json').paths))"
+   ```
+
+## Atenção: o segmento do canal vai no `@Controller`
+
+Só o `/v1` é aplicado globalmente (`setGlobalPrefix`). Não há `RouterModule` por módulo — estar dentro do `AdminModule` **não** prefixa `admin` na rota.
+
+```ts
+@ApiTags('admin/affiliates')
+@Controller('admin/affiliates')   // → /v1/admin/affiliates
+export class AdminAffiliateController {}
+```
+
+Esquecer o segmento publica a rota do painel em `/v1/affiliates`, fora do canal, sem o guard de audiência que a protegeria.
+
+## Swagger não é opcional
+
+O `openapi.json` é o contrato do app Flutter. Rota sem decorator vira contrato incompleto e o app não a enxerga — e o erro não aparece em nenhum teste daqui.
+
+Toda rota precisa de `@ApiTags`, decorator de resposta (`@ApiOkResponse`, `@ApiCreatedResponse`, `@ApiUnauthorizedResponse`) e DTO de classe com `@ApiProperty`.
+
+## Erros
+
+Nada de montar corpo de erro à mão — o `HttpExceptionFilter` global normaliza. Para um código que o cliente precisa distinguir:
+
+```ts
+throw new ForbiddenException({
+  code: AuthErrorCodeEnum.REGISTRATION_UNDER_REVIEW,
+  message: 'Cadastro em análise.',
+});
+```
+
+O `ValidationPipe` global usa `whitelist` e `forbidNonWhitelisted`: campo fora do DTO devolve 400 sozinho, não precisa checar.
+
+## Erros comuns
+
+| Erro | Correção |
+|---|---|
+| Rota autenticada antes da Spec 07 | Sem guard global ela nasce aberta. Implemente a 07 antes |
+| `@Controller('affiliates')` dentro do `AdminModule` | O canal vai no path: `@Controller('admin/affiliates')` |
+| Response DTO como `interface` | Classe com `@ApiProperty`, senão some do OpenAPI |
+| `id` serial na rota ou na resposta | Sempre `public_id` |
+| CPF ou chave PIX em log ou em listagem | Listagem usa `maskCpf`; log nunca |
+| Regra de negócio no controller | Controller é fino; a regra é do use case |
+| Corpo de erro montado à mão | Deixe o `HttpExceptionFilter` normalizar |

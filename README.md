@@ -8,7 +8,6 @@ Monorepo da API e do painel do Hub de Afiliados da Porto Serviços.
 | `apps/painel` | Painel de backoffice em Next.js + Refine. |
 | `packages/contracts` | Tipos e schemas zod dos DTOs que o painel consome da API. |
 | `packages/tsconfig` | Configurações TypeScript compartilhadas. |
-| `packages/eslint-config` | Configuração ESLint compartilhada. |
 
 O aplicativo Flutter do afiliado fica em repositório próprio e consome o
 `openapi.json` publicado pela API.
@@ -29,11 +28,11 @@ npm install
 cp apps/api/.env.example apps/api/.env
 cp apps/painel/.env.example apps/painel/.env.local
 
-npm run db:up                             # sobe o Postgres
-npm run db:migrate                        # cria e atualiza o schema
-npm run db:seed                           # termos vigentes + operadores do painel
+npm run db:up                                 # sobe o Postgres
+npm run typeorm:run --workspace apps/api      # cria e atualiza o schema
+npm run seed --workspace apps/api             # termos vigentes + operadores do painel
 
-npm run dev                               # sobe API e painel juntos
+npm run dev                                   # sobe API e painel juntos
 ```
 
 | Serviço | URL |
@@ -58,20 +57,31 @@ Todos com `should_change_password = true` e senha `MudarAgora!2026`
 
 ## Comandos
 
+A raiz só tem o que vale para o repositório inteiro:
+
 | Comando | O que faz |
 |---|---|
 | `npm run dev` | API e painel em modo watch |
-| `npm run lint` | ESLint em todos os pacotes |
+| `npm run lint` | Biome: lint, formatação e ordem de imports no repositório inteiro |
 | `npm run type-check` | `tsc --noEmit` em todos os pacotes |
 | `npm run test` | Testes unitários |
-| `npm run test:e2e` | Testes de integração da API (exige Postgres no ar) |
 | `npm run build` | Build de todos os pacotes |
+| `npm run format` | Biome aplicando as correções automáticas |
 | `npm run db:up` / `db:down` | Sobe / derruba o Postgres |
-| `npm run db:migrate` / `db:revert` | Aplica / reverte a última migration |
-| `npm run db:seed` | Popula termos vigentes e operadores |
-| `npm run openapi` | Gera `apps/api/openapi.json` |
 
-Migrations novas: `npm run typeorm:generate --workspace apps/api --name=MinhaMigration`.
+O que pertence a um pacote mora nele:
+
+| Comando | O que faz |
+|---|---|
+| `npm run test:e2e --workspace apps/api` | Testes de integração da API (exige Postgres no ar) |
+| `npm run typeorm:create --workspace apps/api --name=X` | Cria migration com timestamp real da CLI |
+| `npm run typeorm:run --workspace apps/api` | Aplica as migrations |
+| `npm run typeorm:revert --workspace apps/api` | Reverte a última migration |
+| `npm run seed --workspace apps/api` | Popula termos vigentes e operadores |
+| `npm run openapi:generate --workspace apps/api` | Gera `apps/api/openapi.json` |
+
+Migration nova: `npm run typeorm:create --workspace apps/api --name=MinhaMigration`. O
+timestamp vem da CLI do TypeORM — nunca escreva o nome do arquivo à mão.
 
 ## E-mails
 
