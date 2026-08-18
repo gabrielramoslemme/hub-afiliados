@@ -10,5 +10,5 @@
       "@Testing/*": ["src/testing/*"]
     }
   },
-  "include": ["src/**/*", "test/**/*", "ormconfig.ts"]
+  "include": ["src/**/*", "test/**/*", "scripts/**/*", "seeds/**/*", "ormconfig.ts"]
 }

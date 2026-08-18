@@ -1,1 +1,14 @@
-{"name":"@porto/contracts","version":"0.0.0","private":true,"main":"src/index.ts"}
+{
+  "name": "@porto/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint \"src/**/*.ts\"",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": { "zod": "^4.1.12" },
+  "devDependencies": { "@porto/eslint-config": "*", "@porto/tsconfig": "*", "typescript": "^5.7.3" }
+}
