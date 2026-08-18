@@ -3,13 +3,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AffiliateRepository } from '@Domain/affiliates/affiliate.repository';
 import { AffiliateStatusHistoryRepository } from '@Domain/affiliates/affiliate-status-history.repository';
 import { PasswordResetTokenRepository } from '@Domain/auth/password-reset-token.repository';
-import { RefreshTokenRepository } from '@Domain/auth/refresh-token.repository';
 import { TermsVersionRepository } from '@Domain/terms/terms-version.repository';
 import { UserRepository } from '@Domain/users/user.repository';
 import { AffiliateEntity } from '@Infra/database/typeorm/entities/affiliate.entity';
 import { AffiliateStatusHistoryEntity } from '@Infra/database/typeorm/entities/affiliate-status-history.entity';
 import { PasswordResetTokenEntity } from '@Infra/database/typeorm/entities/password-reset-token.entity';
-import { RefreshTokenEntity } from '@Infra/database/typeorm/entities/refresh-token.entity';
 import { TermsVersionEntity } from '@Infra/database/typeorm/entities/terms-version.entity';
 import { UserEntity } from '@Infra/database/typeorm/entities/user.entity';
 
@@ -20,7 +18,6 @@ import { UserEntity } from '@Infra/database/typeorm/entities/user.entity';
       AffiliateEntity,
       TermsVersionEntity,
       PasswordResetTokenEntity,
-      RefreshTokenEntity,
       AffiliateStatusHistoryEntity,
     ]),
   ],
@@ -29,7 +26,6 @@ import { UserEntity } from '@Infra/database/typeorm/entities/user.entity';
     AffiliateRepository,
     TermsVersionRepository,
     PasswordResetTokenRepository,
-    RefreshTokenRepository,
     AffiliateStatusHistoryRepository,
   ],
   exports: [
@@ -37,7 +33,6 @@ import { UserEntity } from '@Infra/database/typeorm/entities/user.entity';
     AffiliateRepository,
     TermsVersionRepository,
     PasswordResetTokenRepository,
-    RefreshTokenRepository,
     AffiliateStatusHistoryRepository,
     TypeOrmModule,
   ],
