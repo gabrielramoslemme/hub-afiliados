@@ -30,7 +30,7 @@ async function seed(): Promise<void> {
   }
 
   await dataSource.destroy();
-  process.stdout.write('Seed concluído\n');
+  process.stdout.write('Seed completed\n');
 }
 
 void seed();

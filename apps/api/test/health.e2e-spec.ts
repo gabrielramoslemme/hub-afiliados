@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { type INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
@@ -14,9 +14,11 @@ describe('Health (e2e)', () => {
     await app.init();
   });
 
-  afterAll(async () => { await app.close(); });
+  afterAll(async () => {
+    await app.close();
+  });
 
-  it('responde 200 com status ok', async () => {
+  it('responds 200 with status ok', async () => {
     const response = await request(app.getHttpServer()).get('/v1/health').expect(200);
     expect(response.body).toEqual({ status: 'ok', uptime: expect.any(Number) });
   });

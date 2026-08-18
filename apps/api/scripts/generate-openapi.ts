@@ -20,7 +20,7 @@ async function generate(): Promise<void> {
   writeFileSync(target, `${JSON.stringify(document, null, 2)}\n`);
 
   await app.close();
-  process.stdout.write(`OpenAPI escrito em ${target}\n`);
+  process.stdout.write(`OpenAPI written to ${target}\n`);
 }
 
 void generate();

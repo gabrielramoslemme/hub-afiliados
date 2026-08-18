@@ -2,27 +2,27 @@ import { isValidCpf, maskCpf, sanitizeCpf } from './cpf.util';
 
 describe('cpf.util', () => {
   describe('sanitizeCpf', () => {
-    it('remove pontuação', () => {
+    it('strips punctuation', () => {
       expect(sanitizeCpf('529.982.247-25')).toBe('52998224725');
     });
   });
 
   describe('isValidCpf', () => {
-    it('aceita um CPF com dígito verificador correto', () => {
+    it('accepts a CPF with a valid check digit', () => {
       expect(isValidCpf('529.982.247-25')).toBe(true);
     });
 
-    it('rejeita um CPF com dígito verificador errado', () => {
+    it('rejects a CPF with an invalid check digit', () => {
       expect(isValidCpf('529.982.247-26')).toBe(false);
     });
 
-    it('rejeita uma sequência de dígitos iguais', () => {
+    it('rejects a sequence of identical digits', () => {
       expect(isValidCpf('111.111.111-11')).toBe(false);
     });
   });
 
   describe('maskCpf', () => {
-    it('esconde os seis primeiros dígitos', () => {
+    it('hides the first six digits', () => {
       expect(maskCpf('52998224725')).toBe('***.***.247-25');
     });
   });
