@@ -4,11 +4,30 @@
     "baseUrl": "./",
     "outDir": "./dist",
     "paths": {
-      "@Domain/*": ["src/domain/*"],
-      "@Infra/*": ["src/infra/*"],
-      "@Modules/*": ["src/modules/*"],
-      "@Testing/*": ["src/testing/*"]
+      "@Domain/*": [
+        "src/domain/*"
+      ],
+      "@Infra/*": [
+        "src/infra/*"
+      ],
+      "@Modules/*": [
+        "src/modules/*"
+      ],
+      "@Testing/*": [
+        "src/testing/*"
+      ]
     }
   },
-  "include": ["src/**/*", "test/**/*", "scripts/**/*", "seeds/**/*", "ormconfig.ts"]
+  "include": [
+    "src/**/*",
+    "test/**/*",
+    "scripts/**/*",
+    "seeds/**/*",
+    "ormconfig.ts"
+  ],
+  "ts-node": {
+    "require": [
+      "tsconfig-paths/register"
+    ]
+  }
 }
