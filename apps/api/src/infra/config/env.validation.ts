@@ -7,4 +7,14 @@ export const envValidationSchema = Joi.object({
   JWT_SECRET: Joi.string().min(32).required(),
   APP_BASE_URL: Joi.string().uri().required(),
   PANEL_BASE_URL: Joi.string().uri().required(),
+  MAIL_PROVIDER: Joi.string().valid('mailersend', 'logger').default('logger'),
+  MAILERSEND_API_KEY: Joi.string().allow('').default(''),
+  MAILERSEND_FROM_EMAIL: Joi.string()
+    .email({ tlds: { allow: false } })
+    .default('nao-responda@afiliados.porto.example'),
+  MAILERSEND_FROM_NAME: Joi.string().default('Hub de Afiliados'),
+  MAILERSEND_TEMPLATE_REGISTRATION_RECEIVED: Joi.string().allow('').default(''),
+  MAILERSEND_TEMPLATE_REGISTRATION_APPROVED: Joi.string().allow('').default(''),
+  MAILERSEND_TEMPLATE_REGISTRATION_REJECTED: Joi.string().allow('').default(''),
+  MAILERSEND_TEMPLATE_PASSWORD_RECOVERY: Joi.string().allow('').default(''),
 });
