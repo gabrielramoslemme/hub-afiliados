@@ -9,9 +9,7 @@ description: Use ao criar tela ou recurso no painel do porto-hub-afiliados — "
 
 O painel hoje é esqueleto — há `layout.tsx`, uma `page.tsx` de placeholder, `apiClient`, `dataProvider`, tema e `RefineProvider`. **Não existem** `authProvider`, `middleware.ts` nem os grupos de rota `(auth)` e `(painel)`.
 
-A primeira tela autenticada exige a **Spec 16** (autenticação do painel) antes. E toda tela depende das rotas `/v1/admin` correspondentes já existirem na API.
-
-`docs/specs/17-painel-fila-de-afiliados.md` tem a lista exata de arquivos da fila de afiliados.
+A primeira tela autenticada exige o `authProvider` e o `middleware.ts` antes. E toda tela depende das rotas `/v1/admin` correspondentes já existirem na API — hoje o único controller da API é o de health.
 
 ## Ordem
 

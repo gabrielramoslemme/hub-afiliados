@@ -7,13 +7,13 @@ description: Use ao criar rota HTTP na API do porto-hub-afiliados — "cria o en
 
 ## Antes de tudo: existe guard?
 
-**Nenhuma rota nasce sem guard.** O guard global de negação, `@Public()`, `AffiliateGuard` e `AdminGuard` vêm da **Spec 07, que ainda não foi implementada**.
+**Nenhuma rota nasce sem guard.** O guard global de negação, `@Public()`, `AffiliateGuard` e `AdminGuard` **ainda não existem neste repositório**.
 
-Enquanto ela não existir, uma rota autenticada nasce aberta — não há o que a proteja e não há `@Public()` para excepcionar as públicas. **Implemente a Spec 07 antes da primeira rota autenticada.** Se o pedido for uma rota pública (cadastro, login, termos vigentes, health), pode seguir.
+Enquanto não existirem, uma rota autenticada nasce aberta — não há o que a proteja e não há `@Public()` para excepcionar as públicas. **Escreva o controle de acesso antes da primeira rota autenticada.** Se o pedido for uma rota pública (cadastro, login, termos vigentes, health), pode seguir.
 
 ## Ordem
 
-1. **Ler a spec.** Toda rota desta onda está em `docs/specs/` com os arquivos exatos e o contrato. `docs/specs/00-arquitetura.md`, seção 6, tem a tabela de todas as rotas.
+1. **Fechar o contrato antes de escrever.** Em qual dos três canais a rota entra (`mobile`, `admin`, `webhooks`), método e path, corpo de entrada e corpo de resposta. Se o pedido deixar algo em aberto, pergunte — não arbitre.
 
 2. **Tipos compartilhados**, se o painel consome a resposta: `@porto/contracts` primeiro — skill `create-contract`.
 
@@ -72,7 +72,7 @@ O `ValidationPipe` global usa `whitelist` e `forbidNonWhitelisted`: campo fora d
 
 | Erro | Correção |
 |---|---|
-| Rota autenticada antes da Spec 07 | Sem guard global ela nasce aberta. Implemente a 07 antes |
+| Rota autenticada sem guard global | Ela nasce aberta. Escreva o controle de acesso antes |
 | `@Controller('affiliates')` dentro do `AdminModule` | O canal vai no path: `@Controller('admin/affiliates')` |
 | Response DTO como `interface` | Classe com `@ApiProperty`, senão some do OpenAPI |
 | `id` serial na rota ou na resposta | Sempre `public_id` |

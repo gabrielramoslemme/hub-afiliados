@@ -10,4 +10,3 @@ coverage/
 .DS_Store
 apps/api/openapi.json
 *.tsbuildinfo
-docs/

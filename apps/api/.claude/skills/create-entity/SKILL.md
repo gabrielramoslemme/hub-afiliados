@@ -11,7 +11,7 @@ Uma entidade nova toca **cinco lugares**. Parar no meio deixa o código compilan
 
 ## Ordem
 
-1. **Ler o modelo de dados** — `docs/specs/00-arquitetura.md`, seção 4, tem a tabela de colunas de cada agregado. Não invente coluna.
+1. **Partir do modelo que já existe** — as entidades em `src/infra/database/typeorm/entities/` e as migrations ao lado são a referência de colunas, tipos e índices. Coluna nova sai do pedido, nunca de suposição: se o pedido não disser, pergunte.
 
 2. **Enum compartilhado primeiro.** Se a entidade tem coluna de enum que o painel também lê, ele nasce em `@porto/contracts` — skill `create-contract`. Nunca declare o enum em `apps/api`.
 
