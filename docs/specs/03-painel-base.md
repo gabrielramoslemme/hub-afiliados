@@ -2,6 +2,9 @@
 
 **Depende de:** 01 · **Entrega:** `npm run dev --workspace apps/painel` sobe o painel em `http://localhost:3005` com o layout do Refine e uma página inicial vazia.
 
+> **Ferramental trocado depois desta spec.** O ESLint e o Prettier descritos aqui foram substituídos pelo Biome, e o pacote `@porto/eslint-config` deixou de existir. A configuração vigente é o `biome.jsonc` da raiz, e o lint é um comando de raiz (`npm run lint`), não uma task do Turbo. Esta spec fica como registro do que foi entregue na época.
+
+
 O esqueleto sai de `mesainc/sis-porto-vendeu-ganhou-painel`. Copie layout, tema e providers; descarte todo recurso de domínio (vendas, estoque, resgatadores).
 
 **Files:**
@@ -366,7 +369,7 @@ Acesse `http://localhost:3005`. Esperado: página com "Hub de Afiliados" e nenhu
 
 ```bash
 npm run type-check --workspace apps/painel
-npm run lint --workspace apps/painel
+npm run lint
 ```
 
 Esperado: ambos sem erro.

@@ -431,7 +431,7 @@ Com API e painel rodando, e ao menos dois cadastros criados via `POST /v1/mobile
 
 ```bash
 npm run type-check --workspace apps/painel
-npm run lint --workspace apps/painel
+npm run lint
 npm run build --workspace apps/painel
 git add apps/painel
 git commit -m "feat(painel): add affiliate approval queue with search, detail and decision actions"

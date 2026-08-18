@@ -2,6 +2,9 @@
 
 **Depende de:** 01, 02, 03 · **Entrega:** o painel importa enums e tipos de `@porto/contracts`; a CI roda lint, type-check, test e build nos dois apps e publica `openapi.json` como artefato.
 
+> **Ferramental trocado depois desta spec.** O ESLint e o Prettier descritos aqui foram substituídos pelo Biome, e o pacote `@porto/eslint-config` deixou de existir. A configuração vigente é o `biome.jsonc` da raiz, e o lint é um comando de raiz (`npm run lint`), não uma task do Turbo. Esta spec fica como registro do que foi entregue na época.
+
+
 Duas coisas juntas porque uma sem a outra não vale: o `contracts` é o que impede a API e o painel de divergirem, e a CI é o que garante que a divergência quebra o build em vez de aparecer em produção.
 
 **Files:**
@@ -356,7 +359,7 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npx turbo run lint type-check
+      - run: npm run lint && npx turbo run type-check
       - run: npm run typeorm:run --workspace apps/api
       - run: npx turbo run test
       - run: npm run test:e2e --workspace apps/api
@@ -380,7 +383,7 @@ jobs:
 - [ ] **Step 9: Verificar a CI localmente**
 
 ```bash
-npx turbo run lint type-check build
+npm run lint && npx turbo run type-check build
 ```
 
 Esperado: todos os pacotes passam.

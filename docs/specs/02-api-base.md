@@ -2,6 +2,9 @@
 
 **Depende de:** 01 · **Entrega:** `npm run dev --workspace apps/api` sobe a API, `GET /v1/health` responde `200` e `/v1/docs` mostra o Swagger.
 
+> **Ferramental trocado depois desta spec.** O ESLint e o Prettier descritos aqui foram substituídos pelo Biome, e o pacote `@porto/eslint-config` deixou de existir. A configuração vigente é o `biome.jsonc` da raiz, e o lint é um comando de raiz (`npm run lint`), não uma task do Turbo. Esta spec fica como registro do que foi entregue na época.
+
+
 O esqueleto sai de `mesainc/sis-porto-vendeu-ganhou-api`. Copie **infraestrutura**, não domínio: nada de baterias, veículos, sucata, vendas, k2tec.
 
 **Files:**

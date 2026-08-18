@@ -2,6 +2,9 @@
 
 **Depende de:** nada · **Entrega:** `npm install` e `npx turbo run lint` rodam na raiz sem erro.
 
+> **Ferramental trocado depois desta spec.** O ESLint e o Prettier descritos aqui foram substituídos pelo Biome, e o pacote `@porto/eslint-config` deixou de existir. A configuração vigente é o `biome.jsonc` da raiz, e o lint é um comando de raiz (`npm run lint`), não uma task do Turbo. Esta spec fica como registro do que foi entregue na época.
+
+
 **Files:**
 - Create: `package.json`, `turbo.json`, `.npmrc`, `.gitignore`, `.nvmrc`, `README.md`
 - Create: `packages/tsconfig/package.json`, `packages/tsconfig/base.json`, `packages/tsconfig/nest.json`, `packages/tsconfig/next.json`
@@ -232,7 +235,7 @@ pre-commit:
   commands:
     lint:
       glob: '*.{ts,tsx}'
-      run: npx turbo run lint --filter=...[HEAD]
+      run: npx --no -- biome check --staged --no-errors-on-unmatched
 ```
 
 - [ ] **Step 8: Instalar e verificar**

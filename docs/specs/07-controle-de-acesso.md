@@ -597,7 +597,7 @@ cadastro e recuperação de senha.
 ```bash
 npm run test --workspace apps/api
 npm run test:e2e --workspace apps/api
-npm run lint --workspace apps/api
+npm run lint
 git add apps/api
 git commit -m "feat(api): add password hashing, jwt audiences, channel guards and rate limit"
 ```

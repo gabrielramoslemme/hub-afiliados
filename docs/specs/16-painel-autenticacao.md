@@ -395,7 +395,7 @@ Com a API rodando e o seed aplicado, em `http://localhost:3005`:
 
 ```bash
 npm run type-check --workspace apps/painel
-npm run lint --workspace apps/painel
+npm run lint
 git add apps/painel
 git commit -m "feat(painel): add authentication, route guard and password recovery screens"
 ```
