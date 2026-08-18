@@ -63,7 +63,7 @@ Valem em todo pacote. Violação é bug, não preferência.
 - **kebab-case** em arquivos, `PascalCase` em classes e componentes, `camelCase` em funções e variáveis.
 - **Não criar arquivo desnecessário** — adaptar o existente sempre que possível.
 
-**Idioma:** tudo em inglês — identificador, arquivo, pasta, tabela, coluna, descrição de teste, log, mensagem de CLI, commit, branch. **Em pt-BR só o que uma pessoa lê:** string de usuário (erro da API, mensagem dos schemas zod, texto do painel, e-mail) e comentário de código.
+**Idioma:** tudo em inglês — identificador, arquivo, pasta, tabela, coluna, descrição de teste, log, mensagem de CLI, mensagem de commit (assunto e corpo), nome de branch. **Em pt-BR só o que uma pessoa lê:** string de usuário (erro da API, mensagem dos schemas zod, texto do painel, e-mail) e comentário de código.
 
 ## Vocabulário compartilhado
 
@@ -76,6 +76,7 @@ Fonte única em `packages/contracts/src/enums/index.ts`, nunca redeclarado em `a
 ## Git
 
 - **Conventional Commits**, validados por commitlint no hook `commit-msg` (lefthook). O escopo é o pacote: `feat(api):`, `fix(painel):`, `chore:`.
+- **A mensagem inteira em inglês — assunto e corpo.** Nome de branch também. Commit em pt-BR é para reescrever antes do push.
 - O `pre-commit` roda `biome check --staged` nos arquivos `.ts`, `.tsx`, `.js`, `.mjs` e `.json`.
 - Nunca commitar `.env` nem `apps/api/openapi.json` — o contrato é artefato de build, gerado pela CI a cada push.
 
