@@ -1,5 +1,7 @@
 import { MailTemplateEnum } from '@porto/contracts';
 
+export const MAIL_PROVIDER = Symbol('MAIL_PROVIDER');
+
 export interface SendMailInput {
   template: MailTemplateEnum;
   to: string;
@@ -10,5 +12,3 @@ export interface SendMailInput {
 export interface MailProvider {
   send(input: SendMailInput): Promise<void>;
 }
-
-export const MAIL_PROVIDER = Symbol('MAIL_PROVIDER');

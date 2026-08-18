@@ -9,7 +9,7 @@ import { EnvironmentVariableService } from '@Infra/config/environment-variable.s
       useFactory: (env: EnvironmentVariableService) => ({
         type: 'postgres' as const,
         url: env.databaseUrl,
-        entities: [`${__dirname}/entities/*.entity{.ts,.js}`],
+        entities: [`${__dirname}/entities/*.typeorm-entity{.ts,.js}`],
         migrations: [`${__dirname}/migrations/*{.ts,.js}`],
         synchronize: false,
         migrationsRun: false,

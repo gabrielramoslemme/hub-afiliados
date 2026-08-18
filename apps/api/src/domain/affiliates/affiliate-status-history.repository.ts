@@ -1,46 +1,11 @@
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
-import { AffiliateStatusEnum } from '@porto/contracts';
-import { AffiliateStatusHistoryEntity } from '@Infra/database/typeorm/entities/affiliate-status-history.entity';
+import { AffiliateStatusHistoryWithActor } from './affiliate-status-history.entity';
 
-interface RecordInput {
-  affiliateId: number;
-  fromStatus: AffiliateStatusEnum | null;
-  toStatus: AffiliateStatusEnum;
-  reason?: string | null;
-  actorUserId?: number | null;
-}
+export const AFFILIATE_STATUS_HISTORY_REPOSITORY = Symbol('AFFILIATE_STATUS_HISTORY_REPOSITORY');
 
-@Injectable()
-export class AffiliateStatusHistoryRepository {
-  constructor(
-    @InjectRepository(AffiliateStatusHistoryEntity)
-    private readonly repository: Repository<AffiliateStatusHistoryEntity>,
-  ) {}
-
-  /**
-   * Recebe o `manager` opcional para que o registro entre na mesma transação
-   * da mudança de status. Trilha auditável que pode ficar de fora não é trilha.
-   */
-  async record(input: RecordInput, manager?: EntityManager): Promise<void> {
-    const repository = manager
-      ? manager.getRepository(AffiliateStatusHistoryEntity)
-      : this.repository;
-    await repository.save(
-      repository.create({
-        ...input,
-        reason: input.reason ?? null,
-        actorUserId: input.actorUserId ?? null,
-      }),
-    );
-  }
-
-  listByAffiliateId(affiliateId: number): Promise<AffiliateStatusHistoryEntity[]> {
-    return this.repository.find({
-      where: { affiliateId },
-      relations: { actor: true },
-      order: { createdAt: 'DESC' },
-    });
-  }
+/**
+ * Só leitura: quem grava é `AffiliateRepository.changeStatus`, na mesma
+ * transação da mudança. Trilha que pode ficar de fora não é trilha.
+ */
+export interface AffiliateStatusHistoryRepository {
+  listByAffiliateId(affiliateId: number): Promise<AffiliateStatusHistoryWithActor[]>;
 }

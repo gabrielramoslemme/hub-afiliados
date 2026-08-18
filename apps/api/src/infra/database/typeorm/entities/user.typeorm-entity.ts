@@ -9,10 +9,11 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { UserRoleEnum, UserTypeEnum } from '@porto/contracts';
-import { AffiliateEntity } from './affiliate.entity';
+import { UserEntity } from '@Domain/users/user.entity';
+import { AffiliateTypeormEntity } from './affiliate.typeorm-entity';
 
 @Entity('users')
-export class UserEntity {
+export class UserTypeormEntity implements UserEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -57,8 +58,8 @@ export class UserEntity {
   deletedAt: Date | null;
 
   @OneToOne(
-    () => AffiliateEntity,
+    () => AffiliateTypeormEntity,
     (affiliate) => affiliate.user,
   )
-  affiliate?: AffiliateEntity | null;
+  affiliate: AffiliateTypeormEntity | null;
 }

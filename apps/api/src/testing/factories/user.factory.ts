@@ -1,11 +1,11 @@
 import { UserRoleEnum, UserTypeEnum } from '@porto/contracts';
-import { UserEntity } from '@Infra/database/typeorm/entities/user.entity';
+import { UserEntity } from '@Domain/users/user.entity';
 
 let sequence = 0;
 
 export function buildUser(overrides: Partial<UserEntity> = {}): UserEntity {
   sequence += 1;
-  return Object.assign(new UserEntity(), {
+  return {
     id: sequence,
     publicId: `00000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`,
     name: `Usuário ${sequence}`,
@@ -21,7 +21,7 @@ export function buildUser(overrides: Partial<UserEntity> = {}): UserEntity {
     updatedAt: new Date('2026-08-17T12:00:00Z'),
     deletedAt: null,
     ...overrides,
-  });
+  };
 }
 
 export function buildAdminUser(overrides: Partial<UserEntity> = {}): UserEntity {

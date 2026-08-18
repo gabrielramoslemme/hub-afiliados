@@ -49,9 +49,23 @@ Objeto de domínio vem de `src/testing/factories/` — nunca literal repetido:
 |---|---|
 | `buildUser(overrides?)` | `UserEntity` de afiliado, sem senha |
 | `buildAdminUser(overrides?)` | `UserEntity` de operador, com senha e `role` |
-| `buildAffiliate(overrides?)` | `AffiliateEntity` `PENDING_APPROVAL`, com `user` embutido |
+| `buildAffiliate(overrides?)` | `AffiliateWithUser` `PENDING_APPROVAL`, com `user` embutido |
+
+São os tipos do **domínio** (`src/domain/<agregado>/<nome>.entity.ts`), objetos literais: factory de teste não instancia classe do TypeORM.
 
 Todas aceitam `overrides` — teste só o que muda: `buildAffiliate({ status: AffiliateStatusEnum.APPROVED })`.
+
+Dublê de repositório já existe pronto em `src/testing/mocks/repositories/`, tipado pelo contrato:
+
+```ts
+import { USER_REPOSITORY } from '@Domain/users/user.repository';
+import { userRepositoryMock } from '@Testing/mocks/repositories/user.repository.mock';
+
+const users = userRepositoryMock();
+const useCase = new ApproveAffiliateUseCase(users);
+```
+
+Por serem `jest.Mocked<Contrato>`, método novo no contrato quebra a compilação de todos os dublês até ser preenchido — é o comportamento desejado, não efeito colateral. No `Test.createTestingModule`, o dublê entra pelo token: `{ provide: USER_REPOSITORY, useValue: users }`.
 
 Dublê de service reutilizável vira arquivo em `src/testing/mocks/services/`, no padrão de `mail.service.mock.ts`:
 
@@ -67,7 +81,7 @@ Precisou de um objeto novo em dois specs? Vira factory. Em um só? Fica local.
 
 - **Descrição do teste em inglês, descrevendo comportamento** e não implementação: `it('rejects a CPF with an invalid check digit')`, não `it('returns false')`. Ver a seção *Idioma no código* no `CLAUDE.md` da raiz.
 - `describe` aninhado por função quando o arquivo exporta várias (ver `cpf.util.spec.ts`).
-- Repositório é **sempre** dublê. Se aparecer `Repository<T>` do TypeORM no seu spec, o desenho está errado — o use case deveria depender do repositório do domínio.
+- Repositório é **sempre** dublê do contrato. Se aparecer `Repository<T>` do TypeORM ou uma classe `*TypeormRepository` no seu spec, o desenho está errado — o use case depende da interface do domínio, injetada pelo token.
 - Um `expect` por comportamento. Teste que afirma cinco coisas esconde qual quebrou.
 - Sem `any`: o lint roda no `test/` e no `src/`.
 

@@ -1,20 +1,8 @@
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { TermsVersionEntity } from '@Infra/database/typeorm/entities/terms-version.entity';
+import { TermsVersionEntity } from './terms-version.entity';
 
-@Injectable()
-export class TermsVersionRepository {
-  constructor(
-    @InjectRepository(TermsVersionEntity)
-    private readonly repository: Repository<TermsVersionEntity>,
-  ) {}
+export const TERMS_VERSION_REPOSITORY = Symbol('TERMS_VERSION_REPOSITORY');
 
-  findCurrent(): Promise<TermsVersionEntity | null> {
-    return this.repository.findOne({ where: { isCurrent: true } });
-  }
-
-  findById(id: number): Promise<TermsVersionEntity | null> {
-    return this.repository.findOne({ where: { id } });
-  }
+export interface TermsVersionRepository {
+  findCurrent(): Promise<TermsVersionEntity | null>;
+  findById(id: number): Promise<TermsVersionEntity | null>;
 }

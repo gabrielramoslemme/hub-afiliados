@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EmailParams, MailerSend, Recipient, Sender } from 'mailersend';
+import { MailProvider, SendMailInput } from '@Domain/notifications/mail.provider';
 import { EnvironmentVariableService } from '@Infra/config/environment-variable.service';
-import { MailProvider, SendMailInput } from './mail-provider.interface';
 import { MAIL_SUBJECT, MAIL_TEMPLATE_ENV_KEY } from './templates/mail-template.config';
 
 @Injectable()

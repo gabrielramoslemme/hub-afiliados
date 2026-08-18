@@ -7,20 +7,21 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { AffiliateStatusEnum } from '@porto/contracts';
-import { AffiliateEntity } from './affiliate.entity';
-import { UserEntity } from './user.entity';
+import { AffiliateStatusHistoryEntity } from '@Domain/affiliates/affiliate-status-history.entity';
+import { AffiliateTypeormEntity } from './affiliate.typeorm-entity';
+import { UserTypeormEntity } from './user.typeorm-entity';
 
 @Entity('affiliate_status_history')
-export class AffiliateStatusHistoryEntity {
+export class AffiliateStatusHistoryTypeormEntity implements AffiliateStatusHistoryEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column({ name: 'affiliate_id', type: 'int' })
   affiliateId: number;
 
-  @ManyToOne(() => AffiliateEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => AffiliateTypeormEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'affiliate_id' })
-  affiliate: AffiliateEntity;
+  affiliate: AffiliateTypeormEntity;
 
   @Column({ name: 'from_status', type: 'varchar', length: 20, nullable: true })
   fromStatus: AffiliateStatusEnum | null;
@@ -34,9 +35,9 @@ export class AffiliateStatusHistoryEntity {
   @Column({ name: 'actor_user_id', type: 'int', nullable: true })
   actorUserId: number | null;
 
-  @ManyToOne(() => UserEntity, { nullable: true })
+  @ManyToOne(() => UserTypeormEntity, { nullable: true })
   @JoinColumn({ name: 'actor_user_id' })
-  actor: UserEntity | null;
+  actor: UserTypeormEntity | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

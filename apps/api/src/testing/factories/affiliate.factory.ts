@@ -1,13 +1,13 @@
 import { AffiliateStatusEnum, PixKeyTypeEnum } from '@porto/contracts';
-import { AffiliateEntity } from '@Infra/database/typeorm/entities/affiliate.entity';
+import { AffiliateWithUser } from '@Domain/affiliates/affiliate.entity';
 import { buildUser } from './user.factory';
 
 let sequence = 0;
 
-export function buildAffiliate(overrides: Partial<AffiliateEntity> = {}): AffiliateEntity {
+export function buildAffiliate(overrides: Partial<AffiliateWithUser> = {}): AffiliateWithUser {
   sequence += 1;
   const user = overrides.user ?? buildUser();
-  return Object.assign(new AffiliateEntity(), {
+  return {
     id: sequence,
     publicId: `10000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`,
     userId: user.id,
@@ -18,12 +18,11 @@ export function buildAffiliate(overrides: Partial<AffiliateEntity> = {}): Affili
     status: AffiliateStatusEnum.PENDING_APPROVAL,
     approvedAt: null,
     approvedByUserId: null,
-    approvedBy: null,
     rejectionReason: null,
     termsVersionId: 1,
     termsAcceptedAt: new Date('2026-08-17T12:00:00Z'),
     createdAt: new Date('2026-08-17T12:00:00Z'),
     updatedAt: new Date('2026-08-17T12:00:00Z'),
     ...overrides,
-  });
+  };
 }

@@ -1,7 +1,8 @@
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { TermsVersionEntity } from '@Domain/terms/terms-version.entity';
 
 @Entity('terms_versions')
-export class TermsVersionEntity {
+export class TermsVersionTypeormEntity implements TermsVersionEntity {
   @PrimaryGeneratedColumn()
   id: number;
 

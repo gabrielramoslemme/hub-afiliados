@@ -19,8 +19,8 @@ Identidade unificada em `users`, perfil 1:1 em `affiliates`. **Esquecer de checa
 
 | Pasta | O que mora | Depende de |
 |---|---|---|
-| `src/domain/<agregado>/` | repositórios, DTOs, filtros, eventos e utilitários do agregado | TypeORM e `@porto/contracts` |
-| `src/infra/` | `config/`, `database/typeorm/`, `services/`, `shared/` (filtros) | nada de `modules/` |
+| `src/domain/<agregado>/` | contratos de repositório, tipos do agregado, DTOs, filtros, eventos e utilitários | só `@porto/contracts` |
+| `src/infra/` | `config/`, `database/typeorm/` (entidades, adapters, migrations), `services/`, `shared/` (filtros) | domain; nada de `modules/` |
 | `src/modules/<canal>/` | controllers e use cases; `shared/` guarda o que dois canais usam | domain e infra |
 | `src/testing/` | factories e mocks — fora do build (`tsconfig.build.json`) | — |
 
@@ -30,9 +30,11 @@ Aliases `@Domain/*` · `@Infra/*` · `@Modules/*` · `@Testing/*`, declarados em
 
 | Coisa | Caminho |
 |---|---|
-| Entidade | `src/infra/database/typeorm/entities/<nome>.entity.ts` |
+| Tipo do agregado | `src/domain/<agregado>/<nome>.entity.ts` (interface) |
+| Contrato de repositório | `src/domain/<agregado>/<nome>.repository.ts` (interface + `Symbol`) |
+| Entidade TypeORM | `src/infra/database/typeorm/entities/<nome>.typeorm-entity.ts` |
+| Adapter do repositório | `src/infra/database/typeorm/repositories/<nome>.typeorm-repository.ts` |
 | Migration | `src/infra/database/typeorm/migrations/<timestamp>-<Nome>.ts` |
-| Repositório | `src/domain/<agregado>/<nome>.repository.ts` |
 | DTO de request/response | `src/domain/<agregado>/dtos/<nome>.request.dto.ts` |
 | Use case usado por dois canais | `src/modules/shared/<agregado>/<nome>.use-case.ts` |
 | Use case de um canal só | `src/modules/<canal>/<agregado>/<nome>.use-case.ts` |
@@ -45,15 +47,25 @@ Aliases `@Domain/*` · `@Infra/*` · `@Modules/*` · `@Testing/*`, declarados em
 
 ## Repositórios
 
-Todo acesso ao banco fica aqui. **Use case nunca injeta `Repository<T>` do TypeORM.**
+Contrato no domínio, implementação em infra. **Use case nunca injeta `Repository<T>` do TypeORM nem a classe do adapter — só o contrato, pelo token.**
 
-- `@Injectable()` com `@InjectRepository(Entity)` privado.
-- Métodos devolvem `Promise<Entity | null>` sem lançar — quem decide 404 é o use case.
-- Registrados e exportados pelo `SharedModule`; o canal só precisa importá-lo.
-- Entidade nova entra em **três** arrays do `SharedModule`: `TypeOrmModule.forFeature`, `providers` e `exports`. Faltou um, é `Repository not found` só em runtime.
+- O contrato é uma `interface` em `src/domain/<agregado>/<nome>.repository.ts`, com o `Symbol` no mesmo arquivo (`export const USER_REPOSITORY = Symbol('USER_REPOSITORY')`). A interface some na compilação; o `Symbol` é o que o Nest resolve em runtime, e mantê-los juntos impede que o par se separe.
+- O adapter é `@Injectable()` em `src/infra/database/typeorm/repositories/<nome>.typeorm-repository.ts`, declara `implements <Contrato>` e é o **único** lugar com `@InjectRepository`.
+- Métodos devolvem `Promise<T | null>` sem lançar — quem decide 404 é o use case.
+- **O tipo de retorno diz quais relações vêm carregadas:** `AffiliateEntity` (só escalares), `AffiliateWithUser`, `AffiliateDetail`. Prometer no tipo uma relação que o adapter não carregou é `undefined` em produção sem o compilador reclamar.
+- **Escrita que precisa ser atômica vira método do agregado** (`changeStatus`), com a transação inteira dentro do adapter. Nenhum `EntityManager` atravessa o contrato.
+- Injeção sempre pelo token:
+  ```ts
+  constructor(@Inject(USER_REPOSITORY) private readonly users: UserRepository) {}
+  ```
+  **Esquecer o `@Inject` passa em lint, type-check e build** e falha quando o container sobe.
+- Repositório novo entra em **dois** lugares do `SharedModule`: `TypeOrmModule.forFeature` (a entidade) e a lista `REPOSITORIES` (o par token/adapter). O `exports` é derivado dela, então não há terceiro array para esquecer.
+- `biome check` falha se `src/domain/**` importar `typeorm`, `@nestjs/typeorm`, `@Infra/*` ou `@Modules/*`.
 
 ## Entidades
 
+- Arquivo `<nome>.typeorm-entity.ts`, classe `<Nome>TypeormEntity`, declarando `implements <TipoDoDominio>` — é o compilador cobrando que a tabela atenda o contrato.
+- **Os dois DataSources encontram as entidades por esse sufixo** (`typeorm.module.ts` e `ormconfig.ts`). Renomear arquivo sem trocar os dois globs derruba a aplicação na subida.
 - Tabela e coluna em `snake_case` via `name:`; propriedade em `camelCase`.
 - `id` serial PK interno **mais** `public_id` uuid `@Generated('uuid')` único — só o `public_id` sai da API.
 - Timestamps `timestamptz` via `@CreateDateColumn` / `@UpdateDateColumn`. Soft delete (`@DeleteDateColumn`) só onde o modelo pede (`users`).
@@ -123,7 +135,9 @@ import type { ConfigService } from '@nestjs/config';   // ERRADO
 import { ConfigService } from '@nestjs/config';        // certo
 ```
 
-Por isso `style/useImportType` está desligada para `apps/api` no `biome.jsonc` da raiz. Não religue, e nada de `import type` em arquivo com decorator. Conferir o emitido:
+Por isso `style/useImportType` está desligada para `apps/api` no `biome.jsonc` da raiz. Não religue, e nada de `import type` em arquivo com decorator.
+
+**A exceção é a dependência resolvida por token.** Com `@Inject(USER_REPOSITORY)` o token vem do decorator e o metadata deixa de ser consultado — por isso um contrato só de tipo (`interface`) funciona ali. A regra continua valendo para tudo que o Nest resolve pela classe. Conferir o emitido:
 
 ```bash
 grep -o '__metadata("design:paramtypes".\{0,80\}' apps/api/dist/<caminho>.js

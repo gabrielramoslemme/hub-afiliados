@@ -1,31 +1,27 @@
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { AffiliateEntity } from '@Infra/database/typeorm/entities/affiliate.entity';
+import { AffiliateStatusEnum } from '@porto/contracts';
+import { AffiliateDetail, AffiliateEntity, AffiliateWithUser } from './affiliate.entity';
 
-@Injectable()
-export class AffiliateRepository {
-  constructor(
-    @InjectRepository(AffiliateEntity)
-    private readonly repository: Repository<AffiliateEntity>,
-  ) {}
+export const AFFILIATE_REPOSITORY = Symbol('AFFILIATE_REPOSITORY');
 
-  findByCpf(cpf: string): Promise<AffiliateEntity | null> {
-    return this.repository.findOne({ where: { cpf } });
-  }
+export interface ChangeAffiliateStatusInput {
+  affiliateId: number;
+  toStatus: AffiliateStatusEnum;
+  /** Motivo registrado na trilha de auditoria. */
+  reason?: string | null;
+  actorUserId?: number | null;
+  /** Colunas que a transição também altera, gravadas na mesma transação. */
+  changes?: Partial<Pick<AffiliateEntity, 'approvedAt' | 'approvedByUserId' | 'rejectionReason'>>;
+}
 
-  findByPublicId(publicId: string): Promise<AffiliateEntity | null> {
-    return this.repository.findOne({
-      where: { publicId },
-      relations: { user: true, termsVersion: true, approvedBy: true },
-    });
-  }
-
-  findByUserId(userId: number): Promise<AffiliateEntity | null> {
-    return this.repository.findOne({ where: { userId }, relations: { user: true } });
-  }
-
-  save(affiliate: Partial<AffiliateEntity>): Promise<AffiliateEntity> {
-    return this.repository.save(this.repository.create(affiliate));
-  }
+export interface AffiliateRepository {
+  findByCpf(cpf: string): Promise<AffiliateEntity | null>;
+  findByPublicId(publicId: string): Promise<AffiliateDetail | null>;
+  findByUserId(userId: number): Promise<AffiliateWithUser | null>;
+  save(affiliate: Partial<AffiliateEntity>): Promise<AffiliateEntity>;
+  /**
+   * Muda o status e grava o histórico na mesma transação. O status anterior sai
+   * da linha travada dentro dela — recebê-lo de fora permitiria registrar uma
+   * transição que nunca aconteceu.
+   */
+  changeStatus(input: ChangeAffiliateStatusInput): Promise<AffiliateEntity | null>;
 }

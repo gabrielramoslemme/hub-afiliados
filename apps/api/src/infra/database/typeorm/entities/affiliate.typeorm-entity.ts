@@ -10,11 +10,12 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { AffiliateStatusEnum, type PixKeyTypeEnum } from '@porto/contracts';
-import { TermsVersionEntity } from './terms-version.entity';
-import { UserEntity } from './user.entity';
+import { AffiliateEntity } from '@Domain/affiliates/affiliate.entity';
+import { TermsVersionTypeormEntity } from './terms-version.typeorm-entity';
+import { UserTypeormEntity } from './user.typeorm-entity';
 
 @Entity('affiliates')
-export class AffiliateEntity {
+export class AffiliateTypeormEntity implements AffiliateEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -26,11 +27,11 @@ export class AffiliateEntity {
   userId: number;
 
   @OneToOne(
-    () => UserEntity,
+    () => UserTypeormEntity,
     (user) => user.affiliate,
   )
   @JoinColumn({ name: 'user_id' })
-  user: UserEntity;
+  user: UserTypeormEntity;
 
   @Column({ type: 'varchar', length: 11, unique: true })
   cpf: string;
@@ -50,9 +51,9 @@ export class AffiliateEntity {
   @Column({ name: 'approved_by_user_id', type: 'int', nullable: true })
   approvedByUserId: number | null;
 
-  @ManyToOne(() => UserEntity, { nullable: true })
+  @ManyToOne(() => UserTypeormEntity, { nullable: true })
   @JoinColumn({ name: 'approved_by_user_id' })
-  approvedBy: UserEntity | null;
+  approvedBy: UserTypeormEntity | null;
 
   @Column({ name: 'rejection_reason', type: 'text', nullable: true })
   rejectionReason: string | null;
@@ -60,9 +61,9 @@ export class AffiliateEntity {
   @Column({ name: 'terms_version_id', type: 'int' })
   termsVersionId: number;
 
-  @ManyToOne(() => TermsVersionEntity)
+  @ManyToOne(() => TermsVersionTypeormEntity)
   @JoinColumn({ name: 'terms_version_id' })
-  termsVersion: TermsVersionEntity;
+  termsVersion: TermsVersionTypeormEntity;
 
   @Column({ name: 'terms_accepted_at', type: 'timestamptz' })
   termsAcceptedAt: Date;

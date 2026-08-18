@@ -7,19 +7,20 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { TokenPurposeEnum } from '@porto/contracts';
-import { UserEntity } from './user.entity';
+import { PasswordResetTokenEntity } from '@Domain/auth/password-reset-token.entity';
+import { UserTypeormEntity } from './user.typeorm-entity';
 
 @Entity('password_reset_tokens')
-export class PasswordResetTokenEntity {
+export class PasswordResetTokenTypeormEntity implements PasswordResetTokenEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column({ name: 'user_id', type: 'int' })
   userId: number;
 
-  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => UserTypeormEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
-  user: UserEntity;
+  user: UserTypeormEntity;
 
   /** SHA-256 do token. O valor em claro só existe no e-mail enviado ao usuário. */
   @Column({ name: 'token_hash', type: 'varchar', length: 64, unique: true })

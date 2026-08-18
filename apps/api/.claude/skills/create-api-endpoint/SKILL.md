@@ -25,7 +25,11 @@ Enquanto não existirem, uma rota autenticada nasce aberta — não há o que a 
 4. **Use case** — teste primeiro (skill `create-unit-test`), depois a implementação:
    - Usado por dois canais → `src/modules/shared/<agregado>/<nome>.use-case.ts`
    - Um canal só → `src/modules/<canal>/<agregado>/<nome>.use-case.ts`
-   - Depende de repositórios do domínio, nunca de `Repository<T>` do TypeORM.
+   - Depende dos **contratos** do domínio, injetados pelo token — nunca de `Repository<T>` do TypeORM nem da classe do adapter:
+     ```ts
+     constructor(@Inject(USER_REPOSITORY) private readonly users: UserRepository) {}
+     ```
+     Esquecer o `@Inject` passa em lint, type-check e build, e só falha quando o container sobe.
 
 5. **Controller** em `src/modules/<canal>/<agregado>/<canal>-<agregado>.controller.ts`. Fino: valida entrada pelo DTO, chama o use case, devolve. Sem regra de negócio.
 

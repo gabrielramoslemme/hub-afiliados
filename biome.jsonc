@@ -86,6 +86,33 @@
           }
         }
       }
+    },
+    // O dominio declara contratos; quem conhece TypeORM sao os adapters em
+    // src/infra/database/typeorm/repositories. Sem esta regra a inversao volta
+    // a vazar no primeiro PR com pressa, e nada quebra ate alguem reparar.
+    {
+      "includes": ["apps/api/src/domain/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "typeorm": "The domain layer must not depend on TypeORM. Declare the contract here and implement it in src/infra/database/typeorm/repositories.",
+                  "@nestjs/typeorm": "The domain layer must not depend on TypeORM. Declare the contract here and implement it in src/infra/database/typeorm/repositories."
+                },
+                "patterns": [
+                  {
+                    "group": ["@Infra/**", "@Modules/**"],
+                    "message": "The domain layer must not import from infra or modules. Dependencies point inwards: infra implements the domain contracts."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }
