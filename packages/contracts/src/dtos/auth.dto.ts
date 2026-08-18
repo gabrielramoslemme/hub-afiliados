@@ -10,7 +10,6 @@ export type AdminLoginRequest = z.infer<typeof adminLoginSchema>;
 
 export interface AdminLoginResponse {
   accessToken: string;
-  refreshToken: string;
   user: {
     publicId: string;
     name: string;
