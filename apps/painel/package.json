@@ -1,0 +1,43 @@
+{
+  "name": "@porto/painel",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3005",
+    "build": "next build",
+    "start": "next start --port 3005",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^5.5.1",
+    "@ant-design/nextjs-registry": "^1.0.0",
+    "@hookform/resolvers": "^5.2.2",
+    "@refinedev/antd": "^6.0.3",
+    "@refinedev/core": "^5.0.6",
+    "@refinedev/nextjs-router": "^7.0.4",
+    "@porto/contracts": "*",
+    "@tanstack/react-query": "^5.90.2",
+    "antd": "^5.23.0",
+    "dayjs": "^1.11.13",
+    "js-cookie": "^3.0.5",
+    "next": "^15.2.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.65.0",
+    "tailwindcss": "^4.1.14",
+    "@tailwindcss/postcss": "^4.1.14",
+    "postcss": "^8.5.6",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@porto/eslint-config": "*",
+    "@porto/tsconfig": "*",
+    "@types/js-cookie": "^3.0.6",
+    "@types/node": "^22.19.3",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "eslint-config-next": "^15.2.4",
+    "typescript": "^5.7.3"
+  }
+}
