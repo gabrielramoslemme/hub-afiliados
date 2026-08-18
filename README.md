@@ -98,6 +98,8 @@ o gera a cada push e publica como artefato, nomeado pelo SHA do commit.
 
 ## Documentação
 
-Escopo, arquitetura e planejamento em [`docs/`](docs/):
-[`docs/specs/`](docs/specs/) é a referência técnica e
-[`docs/tasks/`](docs/tasks/) são os cards do Jira.
+As regras de cada pacote ficam no `CLAUDE.md` dele — [`apps/api`](apps/api/CLAUDE.md),
+[`apps/painel`](apps/painel/CLAUDE.md) e
+[`packages/contracts`](packages/contracts/CLAUDE.md). O
+[`CLAUDE.md` da raiz](CLAUDE.md) traz o que vale no repositório inteiro:
+convenções de código, regras invioláveis e o estado atual da implementação.
