@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MailProvider, SendMailInput } from '@Domain/notifications/mail.provider';
+import { SendMailInput } from '@Domain/notifications/mailer';
+import { MailProvider } from './mail-provider.interface';
 
 @Injectable()
 export class LoggerMailProvider implements MailProvider {

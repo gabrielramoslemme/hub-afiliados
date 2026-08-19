@@ -67,10 +67,10 @@ const useCase = new ApproveAffiliateUseCase(users);
 
 Por serem `jest.Mocked<Contrato>`, método novo no contrato quebra a compilação de todos os dublês até ser preenchido — é o comportamento desejado, não efeito colateral. No `Test.createTestingModule`, o dublê entra pelo token: `{ provide: USER_REPOSITORY, useValue: users }`.
 
-Dublê de service reutilizável vira arquivo em `src/testing/mocks/services/`, no padrão de `mail.service.mock.ts`:
+Dublê de service reutilizável vira arquivo em `src/testing/mocks/services/`, tipado pelo port e não pela classe concreta, no padrão de `mailer.mock.ts`:
 
 ```ts
-export const mailServiceMock = (): jest.Mocked<Pick<MailService, 'send'>> => ({
+export const mailerMock = (): jest.Mocked<Mailer> => ({
   send: jest.fn().mockResolvedValue(undefined),
 });
 ```

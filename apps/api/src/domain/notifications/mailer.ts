@@ -1,6 +1,6 @@
 import { MailTemplateEnum } from '@porto/contracts';
 
-export const MAIL_PROVIDER = Symbol('MAIL_PROVIDER');
+export const MAILER = Symbol('MAILER');
 
 export interface SendMailInput {
   template: MailTemplateEnum;
@@ -9,6 +9,10 @@ export interface SendMailInput {
   variables: Record<string, string>;
 }
 
-export interface MailProvider {
+/**
+ * O que a aplicação precisa: enviar. Quantos fornecedores existem por trás,
+ * e qual está ligado, é assunto de infra.
+ */
+export interface Mailer {
   send(input: SendMailInput): Promise<void>;
 }

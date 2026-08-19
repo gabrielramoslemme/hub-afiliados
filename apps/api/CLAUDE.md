@@ -143,9 +143,11 @@ O `openapi.json` é o contrato do app Flutter — rota sem decorator vira contra
 
 ## E-mail
 
-`MailService.send` **nunca lança** — falha vira log e o fluxo segue. Deliberado: e-mail não enviado é incidente operacional; aprovação revertida por causa dele seria incidente de negócio. Não embrulhe em `try/catch`.
+O use case injeta o port `Mailer` (`@Inject(MAILER)`, de `src/domain/notifications/mailer.ts`) e não conhece fornecedor nenhum. Quem implementa é o `MailService`.
 
-Provider por `MAIL_PROVIDER` (`logger` em dev e teste, `mailersend` fora). IDs de template vêm de variável de ambiente, nunca de código. Templates, gatilhos e variáveis em [`docs/EMAILS.md`](docs/EMAILS.md).
+`Mailer.send` **nunca lança** — falha vira log e o fluxo segue. Deliberado: e-mail não enviado é incidente operacional; aprovação revertida por causa dele seria incidente de negócio. Não embrulhe em `try/catch`.
+
+Dentro de infra, `MAIL_PROVIDER` escolhe o fornecedor concreto (`logger` em dev e teste, `mailersend` fora) — dois ports em camadas diferentes, de propósito: o domínio quer enviar, infra sabe por onde. IDs de template vêm de variável de ambiente, nunca de código. Templates, gatilhos e variáveis em [`docs/EMAILS.md`](docs/EMAILS.md).
 
 ## Testes
 

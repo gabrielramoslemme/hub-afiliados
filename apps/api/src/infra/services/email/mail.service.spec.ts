@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { MailTemplateEnum } from '@porto/contracts';
-import { MailProvider } from '@Domain/notifications/mail.provider';
 import { MailService } from './mail.service';
+import { MailProvider } from './mail-provider.interface';
 
 describe('MailService', () => {
   const input = {

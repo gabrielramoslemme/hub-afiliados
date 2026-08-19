@@ -1,12 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import {
-  MAIL_PROVIDER,
-  type MailProvider,
-  type SendMailInput,
-} from '@Domain/notifications/mail.provider';
+import { Mailer, SendMailInput } from '@Domain/notifications/mailer';
+import { MAIL_PROVIDER, type MailProvider } from './mail-provider.interface';
 
 @Injectable()
-export class MailService {
+export class MailService implements Mailer {
   private readonly logger = new Logger(MailService.name);
 
   constructor(@Inject(MAIL_PROVIDER) private readonly provider: MailProvider) {}
