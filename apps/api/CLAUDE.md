@@ -15,19 +15,58 @@ Identidade unificada em `users`, perfil 1:1 em `affiliates`. **Esquecer de checa
 
 **Só o `/v1` é global** (`setGlobalPrefix`) — não há `RouterModule`. Estar dentro do `AdminModule` **não** prefixa `admin`: o canal vai no path, `@Controller('admin/affiliates')`. Esquecer publica a rota fora do canal, sem o guard de audiência.
 
-## Camadas
+## Arquitetura
 
-| Pasta | O que mora | Depende de |
+**A dependência aponta para dentro.** O domínio não sabe que Nest, TypeORM ou HTTP existem; cada camada de fora conhece só as de dentro. O que o domínio precisa do mundo, ele **declara** como contrato — quem implementa é infra. Inverter isso não é questão de estilo: é o bug que este desenho existe para impedir.
+
+| Camada | O que mora | Conhece |
 |---|---|---|
-| `src/domain/<agregado>/` | contratos, tipos do agregado, erros de domínio, regras puras | só `@porto/contracts` |
-| `src/application/<agregado>/` | use cases — orquestram o domínio, sem HTTP e sem ORM | domain |
-| `src/infra/` | `config/`, `database/typeorm/` (entidades, adapters, migrations), `services/`, `shared/` (filtros) | domain |
-| `src/http/<canal>/` | controllers, DTOs, guards e o `*.module.ts` do canal | application e domain |
-| `src/testing/` | factories e mocks — fora do build (`tsconfig.build.json`) | — |
+| `src/domain/<agregado>/` | tipos do agregado, contratos de repositório (interface + `Symbol`), erros de domínio, regra pura (`cpf.util.ts`) | só `@porto/contracts` |
+| `src/application/<agregado>/` | use cases: orquestram contratos, decidem a regra de negócio | domain |
+| `src/infra/` | adapters que **implementam** contratos: `database/typeorm/`, `services/email/`, mais `config/` e `shared/filters/` | domain |
+| `src/http/<canal>/` | controllers, DTOs, guards e o `*.module.ts` do canal | application, domain |
+| `src/testing/` | factories e mocks — fora do build (`tsconfig.build.json`) | domain, application |
 
-Aliases `@Domain/*` · `@Application/*` · `@Infra/*` · `@Http/*` · `@Testing/*`, declarados em **três** lugares: `tsconfig.json`, `jest.config.ts` e `test/jest-e2e.json`. Alias novo exige editar os três, senão o unitário ou o e2e quebra com "Cannot find module".
+### Como uma requisição atravessa
 
-**As camadas são cobradas pelo `biome check`, não pela boa vontade:**
+Aprovar um afiliado pelo painel. **Os arquivos de `http/` e `application/` abaixo são ilustrativos** — a Onda 1 ainda não tem nenhuma dessas rotas; o resto existe.
+
+```
+POST /v1/admin/affiliates/:publicId/approve
+│
+├─ http/admin/affiliates/admin-affiliates.controller.ts
+│     guard de audiência, ValidationPipe no DTO, chama o use case. Sem regra.
+│
+├─ application/affiliates/approve-affiliate.use-case.ts
+│     a regra: só PENDING_APPROVAL vira APPROVED; senão lança DomainError.
+│     Conhece dois Symbol e duas interfaces, nada de infra:
+│       @Inject(AFFILIATE_REPOSITORY) → domain/affiliates/affiliate.repository.ts
+│       @Inject(MAILER)               → domain/notifications/mailer.ts
+│
+├─ infra/database/typeorm/repositories/affiliate.typeorm-repository.ts
+│     implementa o contrato: SELECT ... FOR UPDATE, status e histórico na mesma transação.
+│
+├─ infra/services/email/mail.service.ts
+│     implementa Mailer: envia e nunca lança.
+│
+└─ infra/shared/filters/http-exception.filter.ts
+      traduz o DomainError para status e monta o corpo do erro.
+```
+
+Quem liga `Symbol` a classe é o `*.module.ts` — o use case nunca vê o adapter.
+
+### Quem decide o quê
+
+| Decisão | Camada |
+|---|---|
+| CPF é válido; a transição de status é permitida | domain |
+| Afiliado ausente é erro, e qual erro | application — lança `DomainError` |
+| Isso vira 404, 409 ou 403 | infra — o filtro, a partir do `kind` |
+| A escrita é atômica; o que é lido com lock | infra — o adapter |
+| Qual audiência de JWT pode chamar | http — guard do canal |
+| O formato do JSON que sai | http — DTO de resposta |
+
+### Cobrado por lint, não por boa vontade
 
 | Camada | Não pode importar |
 |---|---|
@@ -36,6 +75,17 @@ Aliases `@Domain/*` · `@Application/*` · `@Infra/*` · `@Http/*` · `@Testing/
 | `src/http/**` | `@Infra/database/*` — controller chama use case, não repositório |
 
 **`*.module.ts` fica fora dessas regras**, nas duas últimas linhas: wiring existe para conhecer o concreto, e é o único arquivo da camada que pode.
+
+Aliases `@Domain/*` · `@Application/*` · `@Infra/*` · `@Http/*` · `@Testing/*`, declarados em **três** lugares: `tsconfig.json`, `jest.config.ts` e `test/jest-e2e.json`. Alias novo exige editar os três, senão o unitário ou o e2e quebra com "Cannot find module".
+
+### Quatro falhas que passam por lint, type-check e build
+
+E só aparecem quando o container sobe ou a rota é chamada. Se algo quebrou em runtime com tudo verde, comece por aqui:
+
+1. **`@Inject(TOKEN)` esquecido** no construtor do use case — contrato é interface, não existe em runtime.
+2. **Adapter fora do `RepositoriesModule`** — provider não encontrado na primeira chamada da rota.
+3. **`import type` em arquivo com decorator** resolvido por classe — o metadata vira `[Function]`. Ver a seção no fim deste guia.
+4. **Relação prometida no tipo de retorno e não carregada no adapter** — `undefined` em produção, sem o compilador reclamar.
 
 ## Onde cada coisa mora
 
@@ -72,7 +122,6 @@ Contrato no domínio, implementação em infra. **Use case nunca injeta `Reposit
   ```
   **Esquecer o `@Inject` passa em lint, type-check e build** e falha quando o container sobe.
 - Repositório novo entra em **dois** lugares do `RepositoriesModule` (`src/infra/database/typeorm/repositories/`): `TypeOrmModule.forFeature` (a entidade) e a lista `REPOSITORIES` (o par token/adapter). O `exports` é derivado dela, então não há terceiro array para esquecer.
-- O use case injeta o contrato pelo token e nunca vê o adapter. A tabela de camadas acima é cobrada no `biome check`.
 
 ## Entidades
 
