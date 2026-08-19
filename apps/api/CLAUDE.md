@@ -139,7 +139,7 @@ O `HttpExceptionFilter` global normaliza toda resposta de erro:
 O `openapi.json` é o contrato do app Flutter — rota sem decorator vira contrato incompleto, o app não a enxerga e nenhum teste daqui acusa.
 
 - Toda rota precisa de `@ApiTags`, decorator de resposta (`@ApiOkResponse`, `@ApiCreatedResponse`, …) e DTO de **classe** com `@ApiProperty`.
-- DTO de resposta é classe em `src/domain/<agregado>/dtos/`, nunca a `interface` de `@porto/contracts` — o Swagger precisa do metadado em runtime. Os dois coexistem: a classe descreve, o tipo compartilhado tipa o painel.
+- DTO de resposta é classe em `src/http/<canal>/<agregado>/dtos/`, nunca a `interface` de `@porto/contracts` — o Swagger precisa do metadado em runtime. Os dois coexistem: a classe descreve, o tipo compartilhado tipa o painel.
 
 ## E-mail
 
