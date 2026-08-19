@@ -19,12 +19,23 @@ Identidade unificada em `users`, perfil 1:1 em `affiliates`. **Esquecer de checa
 
 | Pasta | O que mora | Depende de |
 |---|---|---|
-| `src/domain/<agregado>/` | contratos de repositório, tipos do agregado, DTOs, filtros, eventos e utilitários | só `@porto/contracts` |
-| `src/infra/` | `config/`, `database/typeorm/` (entidades, adapters, migrations), `services/`, `shared/` (filtros) | domain; nada de `modules/` |
-| `src/modules/<canal>/` | controllers e use cases; `shared/` guarda o que dois canais usam | domain e infra |
+| `src/domain/<agregado>/` | contratos, tipos do agregado, erros de domínio, regras puras | só `@porto/contracts` |
+| `src/application/<agregado>/` | use cases — orquestram o domínio, sem HTTP e sem ORM | domain |
+| `src/infra/` | `config/`, `database/typeorm/` (entidades, adapters, migrations), `services/`, `shared/` (filtros) | domain |
+| `src/http/<canal>/` | controllers, DTOs, guards e o `*.module.ts` do canal | application e domain |
 | `src/testing/` | factories e mocks — fora do build (`tsconfig.build.json`) | — |
 
-Aliases `@Domain/*` · `@Infra/*` · `@Modules/*` · `@Testing/*`, declarados em **três** lugares: `tsconfig.json`, `jest.config.ts` e `test/jest-e2e.json`. Alias novo exige editar os três, senão o unitário ou o e2e quebra com "Cannot find module".
+Aliases `@Domain/*` · `@Application/*` · `@Infra/*` · `@Http/*` · `@Testing/*`, declarados em **três** lugares: `tsconfig.json`, `jest.config.ts` e `test/jest-e2e.json`. Alias novo exige editar os três, senão o unitário ou o e2e quebra com "Cannot find module".
+
+**As camadas são cobradas pelo `biome check`, não pela boa vontade:**
+
+| Camada | Não pode importar |
+|---|---|
+| `src/domain/**` | `typeorm`, `@nestjs/typeorm`, `@Infra/*`, `@Http/*`, `@Application/*` |
+| `src/application/**` | `@nestjs/swagger`, `class-validator`, `express`, `typeorm`, `@Infra/*`, `@Http/*`; de `@nestjs/common` só `Inject`, `Injectable` e `Logger` |
+| `src/http/**` | `@Infra/database/*` — controller chama use case, não repositório |
+
+**`*.module.ts` fica fora dessas regras**, nas duas últimas linhas: wiring existe para conhecer o concreto, e é o único arquivo da camada que pode.
 
 ## Onde cada coisa mora
 
@@ -35,10 +46,10 @@ Aliases `@Domain/*` · `@Infra/*` · `@Modules/*` · `@Testing/*`, declarados em
 | Entidade TypeORM | `src/infra/database/typeorm/entities/<nome>.typeorm-entity.ts` |
 | Adapter do repositório | `src/infra/database/typeorm/repositories/<nome>.typeorm-repository.ts` |
 | Migration | `src/infra/database/typeorm/migrations/<timestamp>-<Nome>.ts` |
-| DTO de request/response | `src/domain/<agregado>/dtos/<nome>.request.dto.ts` |
-| Use case usado por dois canais | `src/modules/shared/<agregado>/<nome>.use-case.ts` |
-| Use case de um canal só | `src/modules/<canal>/<agregado>/<nome>.use-case.ts` |
-| Controller | `src/modules/<canal>/<agregado>/<canal>-<agregado>.controller.ts` |
+| Use case | `src/application/<agregado>/<nome>.use-case.ts` |
+| Controller | `src/http/<canal>/<agregado>/<canal>-<agregado>.controller.ts` |
+| DTO de request/response | `src/http/<canal>/<agregado>/dtos/<nome>.request.dto.ts` |
+| Módulo do canal | `src/http/<canal>/<canal>.module.ts` |
 | Variável de ambiente | `src/infra/config/` |
 | Factory e mock de teste | `src/testing/` |
 | Teste unitário | ao lado do arquivo, `.spec.ts` |
@@ -59,8 +70,8 @@ Contrato no domínio, implementação em infra. **Use case nunca injeta `Reposit
   constructor(@Inject(USER_REPOSITORY) private readonly users: UserRepository) {}
   ```
   **Esquecer o `@Inject` passa em lint, type-check e build** e falha quando o container sobe.
-- Repositório novo entra em **dois** lugares do `SharedModule`: `TypeOrmModule.forFeature` (a entidade) e a lista `REPOSITORIES` (o par token/adapter). O `exports` é derivado dela, então não há terceiro array para esquecer.
-- `biome check` falha se `src/domain/**` importar `typeorm`, `@nestjs/typeorm`, `@Infra/*` ou `@Modules/*`.
+- Repositório novo entra em **dois** lugares do `RepositoriesModule` (`src/infra/database/typeorm/repositories/`): `TypeOrmModule.forFeature` (a entidade) e a lista `REPOSITORIES` (o par token/adapter). O `exports` é derivado dela, então não há terceiro array para esquecer.
+- O use case injeta o contrato pelo token e nunca vê o adapter. A tabela de camadas acima é cobrada no `biome check`.
 
 ## Entidades
 

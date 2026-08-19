@@ -10,11 +10,11 @@ import { AffiliateStatusHistoryTypeormEntity } from '@Infra/database/typeorm/ent
 import { PasswordResetTokenTypeormEntity } from '@Infra/database/typeorm/entities/password-reset-token.typeorm-entity';
 import { TermsVersionTypeormEntity } from '@Infra/database/typeorm/entities/terms-version.typeorm-entity';
 import { UserTypeormEntity } from '@Infra/database/typeorm/entities/user.typeorm-entity';
-import { AffiliateTypeormRepository } from '@Infra/database/typeorm/repositories/affiliate.typeorm-repository';
-import { AffiliateStatusHistoryTypeormRepository } from '@Infra/database/typeorm/repositories/affiliate-status-history.typeorm-repository';
-import { PasswordResetTokenTypeormRepository } from '@Infra/database/typeorm/repositories/password-reset-token.typeorm-repository';
-import { TermsVersionTypeormRepository } from '@Infra/database/typeorm/repositories/terms-version.typeorm-repository';
-import { UserTypeormRepository } from '@Infra/database/typeorm/repositories/user.typeorm-repository';
+import { AffiliateTypeormRepository } from './affiliate.typeorm-repository';
+import { AffiliateStatusHistoryTypeormRepository } from './affiliate-status-history.typeorm-repository';
+import { PasswordResetTokenTypeormRepository } from './password-reset-token.typeorm-repository';
+import { TermsVersionTypeormRepository } from './terms-version.typeorm-repository';
+import { UserTypeormRepository } from './user.typeorm-repository';
 
 const REPOSITORIES = [
   { provide: USER_REPOSITORY, useClass: UserTypeormRepository },
@@ -40,4 +40,4 @@ const REPOSITORIES = [
   providers: REPOSITORIES,
   exports: [...REPOSITORIES.map((repository) => repository.provide), TypeOrmModule],
 })
-export class SharedModule {}
+export class RepositoriesModule {}

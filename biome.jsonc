@@ -64,7 +64,7 @@
               [":NODE:", ":PACKAGE_WITH_PROTOCOL:"],
               [":PACKAGE:", "!@porto/**"],
               "@porto/**",
-              ["@Domain/**", "@Infra/**", "@Modules/**", "@Testing/**", "@/**"],
+              ["@Domain/**", "@Application/**", "@Infra/**", "@Http/**", "@Testing/**", "@/**"],
               ":PATH:"
             ]
           }
@@ -104,8 +104,66 @@
                 },
                 "patterns": [
                   {
-                    "group": ["@Infra/**", "@Modules/**"],
-                    "message": "The domain layer must not import from infra or modules. Dependencies point inwards: infra implements the domain contracts."
+                    "group": ["@Infra/**", "@Http/**", "@Application/**"],
+                    "message": "The domain layer must not import from infra, http or application. Dependencies point inwards: the outer layers implement the domain contracts."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    // O use case orquestra o dominio; entrega HTTP e persistencia sao de fora.
+    // De @nestjs/common so passam os simbolos de injecao: um ForbiddenException
+    // aqui dentro amarraria a regra de negocio ao protocolo de transporte.
+    {
+      "includes": ["apps/api/src/application/**", "!apps/api/src/application/**/*.module.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@nestjs/common": {
+                    "allowImportNames": ["Inject", "Injectable", "Logger"],
+                    "message": "The application layer may only use Nest for injection. Throw a DomainError instead of an HTTP exception; the filter maps it to a status."
+                  },
+                  "@nestjs/swagger": "OpenAPI metadata belongs to the http layer, on the response DTO.",
+                  "class-validator": "Request validation belongs to the http layer, on the request DTO.",
+                  "express": "The application layer must not know about the transport.",
+                  "typeorm": "The application layer talks to repository contracts, never to the ORM.",
+                  "@nestjs/typeorm": "The application layer talks to repository contracts, never to the ORM."
+                },
+                "patterns": [
+                  {
+                    "group": ["@Infra/**", "@Http/**"],
+                    "message": "The application layer depends on domain contracts only. Infra implements them and http calls the use case."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    // Controller conversa com use case. Alcancar o repositorio daqui pula a
+    // camada onde a regra de negocio mora, e some sem deixar rastro no teste.
+    // O *.module.ts fica de fora: wiring existe justamente para conhecer o
+    // concreto, e e o unico arquivo do canal que pode.
+    {
+      "includes": ["apps/api/src/http/**", "!apps/api/src/http/**/*.module.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@Infra/database/**"],
+                    "message": "The http layer must not reach the database. Call a use case in the application layer."
                   }
                 ]
               }

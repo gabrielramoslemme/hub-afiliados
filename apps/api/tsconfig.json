@@ -6,7 +6,8 @@
     "paths": {
       "@Domain/*": ["src/domain/*"],
       "@Infra/*": ["src/infra/*"],
-      "@Modules/*": ["src/modules/*"],
+      "@Application/*": ["src/application/*"],
+      "@Http/*": ["src/http/*"],
       "@Testing/*": ["src/testing/*"]
     }
   },

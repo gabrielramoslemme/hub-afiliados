@@ -7,7 +7,7 @@ description: Use ao criar ou alterar uma entidade de domínio na API do porto-hu
 
 ## Overview
 
-O domínio declara **o que** o agregado é e **o que** se pode fazer com ele; `infra/database/typeorm` implementa. Um agregado novo toca **sete lugares** — parar no meio deixa o código compilando e quebrado em runtime: adapter sem registro no `SharedModule` explode como provider não encontrado só quando a rota é chamada.
+O domínio declara **o que** o agregado é e **o que** se pode fazer com ele; `infra/database/typeorm` implementa. Um agregado novo toca **sete lugares** — parar no meio deixa o código compilando e quebrado em runtime: adapter sem registro no `RepositoriesModule` explode como provider não encontrado só quando a rota é chamada.
 
 ## Ordem
 
@@ -96,7 +96,7 @@ O domínio declara **o que** o agregado é e **o que** se pode fazer com ele; `i
    }
    ```
 
-7. **Registrar no `SharedModule`** — **dois** lugares:
+7. **Registrar no `RepositoriesModule`** (`src/infra/database/typeorm/repositories/repositories.module.ts`) — **dois** lugares:
    - `TypeOrmModule.forFeature([...])` — a entidade TypeORM
    - a lista `REPOSITORIES` — o par `{ provide: TOKEN, useClass: Adapter }`
 
@@ -121,11 +121,11 @@ O `type-check` é o primeiro filtro: se a entidade não atender o tipo do domín
 
 | Erro | Correção |
 |---|---|
-| Provider não encontrado em runtime | Faltou o par `{ provide, useClass }` na lista `REPOSITORIES` do `SharedModule` |
+| Provider não encontrado em runtime | Faltou o par `{ provide, useClass }` na lista `REPOSITORIES` do `RepositoriesModule` |
 | `Repository not found` em runtime | Faltou a entidade no `TypeOrmModule.forFeature` |
 | Injeção falha só quando o container sobe | Faltou `@Inject(TOKEN)` no construtor do use case — contrato é interface, não existe em runtime |
 | Entidade não é encontrada pelo TypeORM | O arquivo precisa terminar em `.typeorm-entity.ts`: é assim que os globs de `typeorm.module.ts` e `ormconfig.ts` a acham |
-| `biome check` reclama de import em `src/domain` | O domínio não importa `typeorm`, `@nestjs/typeorm`, `@Infra/*` nem `@Modules/*`. Inverta: o adapter é que conhece os dois lados |
+| `biome check` reclama de import em `src/domain` | O domínio não importa `typeorm`, `@nestjs/typeorm`, `@Infra/*`, `@Http/*` nem `@Application/*`. Inverta: o adapter é que conhece os dois lados |
 | Relação `undefined` em runtime com tipo dizendo que existe | O método promete uma variante `...With...` mas o adapter não pediu `relations` |
 | Entidade criou a tabela sozinha | Não cria. `synchronize: false`. Faltou a migration |
 | `id` serial aparecendo em resposta ou rota | Exponha `public_id`. O `id` é interno |

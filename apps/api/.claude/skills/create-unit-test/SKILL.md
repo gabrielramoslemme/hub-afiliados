@@ -16,8 +16,8 @@ O repositório é TDD: **o teste que falha vem antes da implementação, sempre.
 Ao lado do arquivo testado, com sufixo `.spec.ts`:
 
 ```
-src/modules/shared/affiliates/register-affiliate.use-case.ts
-src/modules/shared/affiliates/register-affiliate.use-case.spec.ts
+src/application/affiliates/register-affiliate.use-case.ts
+src/application/affiliates/register-affiliate.use-case.spec.ts
 ```
 
 O `jest.config.ts` casa `.*\.spec\.ts$` dentro de `src/`. Nada de pasta `__tests__`.

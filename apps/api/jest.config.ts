@@ -10,8 +10,9 @@ const config: Config = {
   testEnvironment: 'node',
   moduleNameMapper: {
     '^@Domain/(.*)$': '<rootDir>/src/domain/$1',
+    '^@Application/(.*)$': '<rootDir>/src/application/$1',
     '^@Infra/(.*)$': '<rootDir>/src/infra/$1',
-    '^@Modules/(.*)$': '<rootDir>/src/modules/$1',
+    '^@Http/(.*)$': '<rootDir>/src/http/$1',
     '^@Testing/(.*)$': '<rootDir>/src/testing/$1',
   },
 };

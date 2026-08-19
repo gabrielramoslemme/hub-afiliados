@@ -17,23 +17,22 @@ Enquanto não existirem, uma rota autenticada nasce aberta — não há o que a 
 
 2. **Tipos compartilhados**, se o painel consome a resposta: `@porto/contracts` primeiro — skill `create-contract`.
 
-3. **DTOs** em `src/domain/<agregado>/dtos/`:
+3. **DTOs** em `src/http/<canal>/<agregado>/dtos/` — contrato de fio e metadado de OpenAPI são entrega, não domínio:
    - Request: classe com `class-validator` (`@IsEmail`, `@MinLength`) e `@ApiProperty`. Mensagem de erro em pt-BR.
    - Response: classe com `@ApiProperty`. **Classe, não `interface`** — o Swagger precisa do metadado em runtime.
    - Nomenclatura: `<acao>.request.dto.ts`, `<acao>.response.dto.ts`.
 
 4. **Use case** — teste primeiro (skill `create-unit-test`), depois a implementação:
-   - Usado por dois canais → `src/modules/shared/<agregado>/<nome>.use-case.ts`
-   - Um canal só → `src/modules/<canal>/<agregado>/<nome>.use-case.ts`
+   - Sempre em `src/application/<agregado>/<nome>.use-case.ts`. **O use case não pertence a canal**: aprovar afiliado é operação do negócio, e o canal só decide quem pode chamar.
    - Depende dos **contratos** do domínio, injetados pelo token — nunca de `Repository<T>` do TypeORM nem da classe do adapter:
      ```ts
      constructor(@Inject(USER_REPOSITORY) private readonly users: UserRepository) {}
      ```
      Esquecer o `@Inject` passa em lint, type-check e build, e só falha quando o container sobe.
 
-5. **Controller** em `src/modules/<canal>/<agregado>/<canal>-<agregado>.controller.ts`. Fino: valida entrada pelo DTO, chama o use case, devolve. Sem regra de negócio.
+5. **Controller** em `src/http/<canal>/<agregado>/<canal>-<agregado>.controller.ts`. Fino: valida entrada pelo DTO, chama o use case, devolve. Sem regra de negócio, e sem tocar em repositório — o `biome check` reprova.
 
-6. **Registrar no módulo do canal** — `controllers` e, se houver, `providers`. O módulo já importa `SharedModule`, que exporta todos os repositórios.
+6. **Registrar no módulo do canal** (`src/http/<canal>/<canal>.module.ts`) — o controller em `controllers` e o use case em `providers`. O módulo já importa o `RepositoriesModule`, que exporta os tokens dos repositórios.
 
 7. **Rodar o e2e** (skill `create-e2e-test`) e **conferir o contrato**:
    ```bash
