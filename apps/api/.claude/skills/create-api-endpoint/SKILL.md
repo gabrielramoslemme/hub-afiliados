@@ -24,6 +24,7 @@ Enquanto não existirem, uma rota autenticada nasce aberta — não há o que a 
 
 4. **Use case** — teste primeiro (skill `create-unit-test`), depois a implementação:
    - Sempre em `src/application/<agregado>/<nome>.use-case.ts`. **O use case não pertence a canal**: aprovar afiliado é operação do negócio, e o canal só decide quem pode chamar.
+   - Falha de regra lança `DomainError` (`src/domain/<agregado>/<agregado>.errors.ts`), nunca `NotFoundException` e afins — o lint reprova, e o `HttpExceptionFilter` já traduz `kind` para status.
    - Depende dos **contratos** do domínio, injetados pelo token — nunca de `Repository<T>` do TypeORM nem da classe do adapter:
      ```ts
      constructor(@Inject(USER_REPOSITORY) private readonly users: UserRepository) {}

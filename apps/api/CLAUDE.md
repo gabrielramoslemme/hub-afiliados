@@ -47,6 +47,7 @@ Aliases `@Domain/*` · `@Application/*` · `@Infra/*` · `@Http/*` · `@Testing/
 | Adapter do repositório | `src/infra/database/typeorm/repositories/<nome>.typeorm-repository.ts` |
 | Migration | `src/infra/database/typeorm/migrations/<timestamp>-<Nome>.ts` |
 | Use case | `src/application/<agregado>/<nome>.use-case.ts` |
+| Erro de domínio | `src/domain/<agregado>/<agregado>.errors.ts` (base em `src/domain/errors/`) |
 | Controller | `src/http/<canal>/<agregado>/<canal>-<agregado>.controller.ts` |
 | DTO de request/response | `src/http/<canal>/<agregado>/dtos/<nome>.request.dto.ts` |
 | Módulo do canal | `src/http/<canal>/<canal>.module.ts` |
@@ -114,9 +115,23 @@ O `HttpExceptionFilter` global normaliza toda resposta de erro:
 { "statusCode": 403, "code": "REGISTRATION_UNDER_REVIEW", "message": "...", "path": "/v1/mobile/auth/login", "timestamp": "..." }
 ```
 
-- Emitir: `throw new ForbiddenException({ code: AuthErrorCodeEnum.REGISTRATION_UNDER_REVIEW, message: 'Cadastro em análise.' })`.
+- **O use case lança `DomainError`, nunca exceção do Nest.** O `biome check` reprova `ForbiddenException` dentro de `src/application/**`: status HTTP não significa nada para um webhook ou um job chamando o mesmo use case.
+
+  ```ts
+  export class RegistrationUnderReviewError extends DomainError {
+    readonly kind = DomainErrorKindEnum.FORBIDDEN;
+    readonly code = AuthErrorCodeEnum.REGISTRATION_UNDER_REVIEW;
+
+    constructor() {
+      super('Cadastro em análise.');
+    }
+  }
+  ```
+
+- **Traduzir `kind` para status é do filtro**, e é a tabela inteira: `NOT_FOUND` 404 · `CONFLICT` 409 · `INVALID_INPUT` 400 · `UNAUTHORIZED` 401 · `FORBIDDEN` 403.
 - `code` vem de `AuthErrorCodeEnum` quando o cliente precisa distinguir o caso para escolher a mensagem; nas demais respostas é `null`.
-- 5xx é logado com stack, 4xx não. **Não logue a exceção você mesmo** — o filtro já faz.
+- **Guard e controller continuam podendo lançar exceção do Nest** — eles já são a camada de HTTP.
+- 5xx é logado com stack e responde `Erro interno`: a mensagem original pode carregar nome de coluna ou detalhe de schema. 4xx não é logado. **Não logue a exceção você mesmo** — o filtro já faz.
 - O `ValidationPipe` global usa `whitelist`, `forbidNonWhitelisted` e `transform`: campo fora do DTO devolve 400 sozinho.
 
 ## Swagger
