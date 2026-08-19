@@ -71,6 +71,7 @@ Contrato no domínio, implementação em infra. **Use case nunca injeta `Reposit
 - Timestamps `timestamptz` via `@CreateDateColumn` / `@UpdateDateColumn`. Soft delete (`@DeleteDateColumn`) só onde o modelo pede (`users`).
 - Enum vem de `@porto/contracts` e é gravado como `varchar`. Não use o tipo `enum` do Postgres: adicionar valor viraria migration de schema.
 - `email` é `citext` (case-insensitive), não `varchar`.
+- Índice, `CHECK` e nome de FK do schema são declarados aqui também — ver *Migrations*.
 
 ## Migrations
 
@@ -78,7 +79,8 @@ Contrato no domínio, implementação em infra. **Use case nunca injeta `Reposit
 - **O timestamp vem da CLI, nunca escrito à mão.**
 - SQL escrito à mão em `queryRunner.query`, no estilo das existentes: índices nomeados `ix_<tabela>_<colunas>` e índice parcial onde a consulta é sempre filtrada (`WHERE "revoked_at" IS NULL`).
 - `down()` sempre implementado, derrubando na ordem inversa.
-- `typeorm:generate` não produz a migration final aqui (não expressa `citext` nem índice parcial): serve como **detector de drift** entre entidade e schema — o esperado é "No changes".
+- **O que a migration cria, a entidade declara também:** índice (`@Index`, com `where` quando parcial), `CHECK` (`@Check`) e nome de FK (`@JoinColumn({ foreignKeyConstraintName })`). Não é enfeite — é o que mantém o detector de drift utilizável.
+- `typeorm:generate` não escreve a migration final aqui (batiza constraint com hash e não expressa `DESC` em índice): serve como **detector de drift** entre entidade e schema, e o esperado é `No changes`. **Nesse caso ele sai com código ≠ 0** — é sucesso, não falha; não encadeie com `&&`.
 
 **Atenção: `ormconfig.ts` e o `DatabaseModule` são dois DataSources.** O `ormconfig.ts` é o do CLI (lê `.env` por `dotenv`, aponta para os `.ts`); o `DatabaseModule` é o da aplicação (lê o `EnvironmentVariableService`, aponta para `__dirname`). Mexeu em um, confira o outro — o sintoma de divergência é migration que roda no CLI e some em runtime.
 

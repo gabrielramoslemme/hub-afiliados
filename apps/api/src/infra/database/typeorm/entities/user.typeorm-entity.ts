@@ -1,4 +1,5 @@
 import {
+  Check,
   Column,
   CreateDateColumn,
   DeleteDateColumn,
@@ -13,6 +14,10 @@ import { UserEntity } from '@Domain/users/user.entity';
 import { AffiliateTypeormEntity } from './affiliate.typeorm-entity';
 
 @Entity('users')
+@Check(
+  'ck_users_role_required_for_admin',
+  `("type" = 'ADMIN' AND "role" IS NOT NULL) OR ("type" = 'AFFILIATE' AND "role" IS NULL)`,
+)
 export class UserTypeormEntity implements UserEntity {
   @PrimaryGeneratedColumn()
   id: number;

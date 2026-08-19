@@ -66,6 +66,21 @@ O domínio declara **o que** o agregado é e **o que** se pode fazer com ele; `i
    ```
    Coluna em `snake_case` via `name:`, propriedade em `camelCase`. `timestamptz` sempre. Enum de `@porto/contracts` gravado como `varchar`. FK sempre com a coluna escalar (`affiliateId`) **e** a relação — a escalar é o que o adapter filtra sem `join`. Relação declarada sem `?`, senão a entidade não satisfaz a variante `...With...`.
 
+   **Índice, `CHECK` e nome de FK que a migration cria entram aqui também**, senão o detector de drift acusa diferença para sempre:
+   ```ts
+   @Entity('affiliate_payouts')
+   @Index('ix_affiliate_payouts_affiliate', ['affiliateId'])
+   @Check('ck_affiliate_payouts_amount', '"amount_cents" > 0')
+   export class AffiliatePayoutTypeormEntity implements AffiliatePayoutEntity {
+     @ManyToOne(() => AffiliateTypeormEntity)
+     @JoinColumn({
+       name: 'affiliate_id',
+       foreignKeyConstraintName: 'affiliate_payouts_affiliate_id_fkey',
+     })
+     affiliate: AffiliateTypeormEntity;
+   }
+   ```
+
 6. **Adapter** em `src/infra/database/typeorm/repositories/<nome>.typeorm-repository.ts` — o único lugar com `@InjectRepository`:
    ```ts
    @Injectable()
@@ -96,10 +111,11 @@ O domínio declara **o que** o agregado é e **o que** se pode fazer com ele; `i
 ```bash
 npm run type-check --workspace apps/api                      # o implements cobra a conformidade
 npm run typeorm:run --workspace apps/api
+npm run typeorm:generate --workspace apps/api --name=Drift   # espera "No changes"
 npm run test:e2e --workspace apps/api
 ```
 
-O `type-check` é o primeiro filtro: se a entidade não atender o tipo do domínio, ele fala antes de qualquer banco subir.
+O `type-check` é o primeiro filtro: se a entidade não atender o tipo do domínio, ele fala antes de qualquer banco subir. O `generate` é o segundo: se a entidade e o schema divergirem, ele descreve a diferença em SQL. Ele sai com código ≠ 0 justamente quando dá `No changes`.
 
 ## Erros comuns
 

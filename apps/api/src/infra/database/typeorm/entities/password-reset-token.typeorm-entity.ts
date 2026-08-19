@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -11,6 +12,9 @@ import { PasswordResetTokenEntity } from '@Domain/auth/password-reset-token.enti
 import { UserTypeormEntity } from './user.typeorm-entity';
 
 @Entity('password_reset_tokens')
+@Index('ix_password_reset_tokens_user_purpose', ['userId', 'purpose'], {
+  where: '"used_at" IS NULL',
+})
 export class PasswordResetTokenTypeormEntity implements PasswordResetTokenEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -19,7 +23,7 @@ export class PasswordResetTokenTypeormEntity implements PasswordResetTokenEntity
   userId: number;
 
   @ManyToOne(() => UserTypeormEntity, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'user_id' })
+  @JoinColumn({ name: 'user_id', foreignKeyConstraintName: 'password_reset_tokens_user_id_fkey' })
   user: UserTypeormEntity;
 
   /** SHA-256 do token. O valor em claro só existe no e-mail enviado ao usuário. */

@@ -1,8 +1,10 @@
 import {
+  Check,
   Column,
   CreateDateColumn,
   Entity,
   Generated,
+  Index,
   JoinColumn,
   ManyToOne,
   OneToOne,
@@ -15,6 +17,9 @@ import { TermsVersionTypeormEntity } from './terms-version.typeorm-entity';
 import { UserTypeormEntity } from './user.typeorm-entity';
 
 @Entity('affiliates')
+@Index('ix_affiliates_status', ['status'])
+@Index('ix_affiliates_created_at', ['createdAt'])
+@Check('ck_affiliates_rejection_reason', `"status" <> 'REJECTED' OR "rejection_reason" IS NOT NULL`)
 export class AffiliateTypeormEntity implements AffiliateEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -29,8 +34,9 @@ export class AffiliateTypeormEntity implements AffiliateEntity {
   @OneToOne(
     () => UserTypeormEntity,
     (user) => user.affiliate,
+    { onDelete: 'CASCADE' },
   )
-  @JoinColumn({ name: 'user_id' })
+  @JoinColumn({ name: 'user_id', foreignKeyConstraintName: 'affiliates_user_id_fkey' })
   user: UserTypeormEntity;
 
   @Column({ type: 'varchar', length: 11, unique: true })
@@ -52,7 +58,10 @@ export class AffiliateTypeormEntity implements AffiliateEntity {
   approvedByUserId: number | null;
 
   @ManyToOne(() => UserTypeormEntity, { nullable: true })
-  @JoinColumn({ name: 'approved_by_user_id' })
+  @JoinColumn({
+    name: 'approved_by_user_id',
+    foreignKeyConstraintName: 'affiliates_approved_by_user_id_fkey',
+  })
   approvedBy: UserTypeormEntity | null;
 
   @Column({ name: 'rejection_reason', type: 'text', nullable: true })
@@ -62,7 +71,10 @@ export class AffiliateTypeormEntity implements AffiliateEntity {
   termsVersionId: number;
 
   @ManyToOne(() => TermsVersionTypeormEntity)
-  @JoinColumn({ name: 'terms_version_id' })
+  @JoinColumn({
+    name: 'terms_version_id',
+    foreignKeyConstraintName: 'affiliates_terms_version_id_fkey',
+  })
   termsVersion: TermsVersionTypeormEntity;
 
   @Column({ name: 'terms_accepted_at', type: 'timestamptz' })

@@ -1,7 +1,8 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 import { TermsVersionEntity } from '@Domain/terms/terms-version.entity';
 
 @Entity('terms_versions')
+@Index('uq_terms_versions_current', ['isCurrent'], { unique: true, where: '"is_current" = true' })
 export class TermsVersionTypeormEntity implements TermsVersionEntity {
   @PrimaryGeneratedColumn()
   id: number;

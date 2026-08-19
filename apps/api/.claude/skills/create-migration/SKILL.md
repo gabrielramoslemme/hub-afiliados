@@ -49,21 +49,23 @@ As duas migrations existentes (`1755400000000`, `1755410000000`) carregam timest
    ```
    Se o `revert` falhar ou deixar resíduo, a migration não está pronta.
 
-6. **Conferir se a entidade e o schema concordam** — ver *Checagem de drift* abaixo.
+6. **Espelhar na entidade** o que a migration criou — índice, `CHECK` e nome de FK. Sem isso o detector de drift passa a acusar diferença para sempre e deixa de servir para alguma coisa.
+
+7. **Conferir se a entidade e o schema concordam** — ver a seção abaixo.
 
 ## Nunca use `migration:generate` para produzir a migration final
 
-Este repositório escreve SQL à mão porque usa coisas que o `generate` não sabe expressar: `citext`, índice parcial (`WHERE "revoked_at" IS NULL`), enum gravado como `varchar`. O `generate` vai propor desfazer tudo isso a cada execução.
+Este repositório escreve SQL à mão: constraint e índice nomeados por convenção (`ix_<tabela>_<colunas>`, `ck_<tabela>_<regra>`), índice parcial e ordenação `DESC` — o `generate` batiza tudo com hash (`FK_c5f88f63a07…`) e não expressa a ordenação.
 
-**Mas ele é excelente como detector de drift.** Com o banco em dia:
+**Mas ele é o detector de drift, e ele funciona:** as entidades declaram as mesmas constraints e índices que as migrations criam, então o esperado é `No changes`. Com o banco em dia:
 
 ```bash
 npm run typeorm:run --workspace apps/api
 npm run typeorm:generate --workspace apps/api --name=Drift
 ```
 
-- Arquivo vazio ou erro "No changes in database schema were found" → entidade e schema concordam.
-- Arquivo com conteúdo → **leia o SQL proposto**: é a diferença que você esqueceu. Corrija à mão na sua migration e **apague o arquivo de drift**. Ele nunca é commitado.
+- `No changes in database schema were found` → entidade e schema concordam. **O comando sai com código ≠ 0 nesse caso** — é o sucesso, não uma falha; não encadeie com `&&`.
+- Arquivo com conteúdo → **leia o SQL proposto**: é a diferença que você esqueceu, na migration **ou** na entidade. Corrija e **apague o arquivo de drift**. Ele nunca é commitado.
 
 ## Convenções de SQL
 
@@ -77,6 +79,8 @@ npm run typeorm:generate --workspace apps/api --name=Drift
 | Enum de `@porto/contracts` | `varchar(N) NOT NULL` — nunca o tipo `enum` do Postgres |
 | Chave estrangeira | sempre com `REFERENCES` e `ON DELETE` explícito |
 | Índice | `ix_<tabela>_<colunas>`; parcial (`WHERE ...`) quando a consulta sempre filtra |
+| `CHECK` | `ck_<tabela>_<regra>` |
+| Espelho na entidade | todo índice, `CHECK` e nome de FK também declarado na entidade |
 | `down()` | sempre implementado, derrubando na ordem inversa do `up()` |
 
 ## Erros comuns
@@ -87,7 +91,9 @@ npm run typeorm:generate --workspace apps/api --name=Drift
 | Usar a data de hoje formatada (`20260818...`) como timestamp | O TypeORM espera epoch em ms, não data legível |
 | Commitar a migration de drift | Ela é diagnóstico; apagar depois de ler |
 | `down()` vazio "porque é só criar tabela" | `down()` derruba a tabela. Sempre reversível |
-| Rodar `migration:generate` esperando o arquivo final | Gera ruído com `citext` e índice parcial. Use `create` |
+| Rodar `migration:generate` esperando o arquivo final | Ele nomeia constraint com hash. Use `create` e escreva o SQL |
+| Criar índice ou `CHECK` só na migration | A entidade declara também, senão o detector de drift acusa diferença para sempre |
+| Tratar o código ≠ 0 do `generate` como falha | `No changes` sai com código ≠ 0. É o resultado esperado |
 | Alterar uma migration já aplicada em outro ambiente | Crie uma nova. Migration aplicada é imutável |
 | Renomear valor de enum sem migrar dados | O valor está gravado como `varchar` nas linhas existentes |
 
