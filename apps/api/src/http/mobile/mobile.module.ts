@@ -1,5 +1,10 @@
 import { Module } from '@nestjs/common';
-import { RepositoriesModule } from '@Infra/database/typeorm/repositories/repositories.module';
+import { UseCasesModule } from '@Infra/di/use-cases.module';
+import { MobileAffiliatesController } from './affiliates/mobile-affiliates.controller';
+import { MobileTermsController } from './terms/mobile-terms.controller';
 
-@Module({ imports: [RepositoriesModule] })
+@Module({
+  imports: [UseCasesModule],
+  controllers: [MobileTermsController, MobileAffiliatesController],
+})
 export class MobileModule {}

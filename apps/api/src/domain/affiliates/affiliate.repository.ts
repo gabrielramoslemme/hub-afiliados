@@ -1,7 +1,8 @@
-import { AffiliateStatusEnum } from '@porto/contracts';
+import { AffiliateStatusEnum, PixKeyTypeEnum } from '@porto/contracts';
+import { createToken } from '@Domain/shared/token';
 import { AffiliateDetail, AffiliateEntity, AffiliateWithUser } from './affiliate.entity';
 
-export const AFFILIATE_REPOSITORY = Symbol('AFFILIATE_REPOSITORY');
+export const AFFILIATE_REPOSITORY = createToken<AffiliateRepository>('AFFILIATE_REPOSITORY');
 
 export interface ChangeAffiliateStatusInput {
   affiliateId: number;
@@ -11,6 +12,16 @@ export interface ChangeAffiliateStatusInput {
   actorUserId?: number | null;
   /** Colunas que a transição também altera, gravadas na mesma transação. */
   changes?: Partial<Pick<AffiliateEntity, 'approvedAt' | 'approvedByUserId' | 'rejectionReason'>>;
+}
+
+export interface CreateAffiliateWithUserInput {
+  fullName: string;
+  email: string;
+  cpf: string;
+  pixKeyType: PixKeyTypeEnum;
+  pixKey: string;
+  termsVersionId: number;
+  termsAcceptedAt: Date;
 }
 
 export interface AffiliateRepository {
@@ -24,4 +35,10 @@ export interface AffiliateRepository {
    * transição que nunca aconteceu.
    */
   changeStatus(input: ChangeAffiliateStatusInput): Promise<AffiliateEntity | null>;
+  /**
+   * Cria o usuário sem senha, o afiliado em PENDING_APPROVAL e a primeira linha
+   * da trilha na mesma transação. Trilha que pode ficar de fora não é trilha, e
+   * usuário órfão barraria a pessoa de se cadastrar de novo com o mesmo e-mail.
+   */
+  createWithUser(input: CreateAffiliateWithUserInput): Promise<AffiliateWithUser>;
 }

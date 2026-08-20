@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { AffiliateStatusEnum, UserTypeEnum } from '@porto/contracts';
 import {
   AffiliateDetail,
   AffiliateEntity,
@@ -9,9 +10,30 @@ import {
 import {
   AffiliateRepository,
   ChangeAffiliateStatusInput,
+  CreateAffiliateWithUserInput,
 } from '@Domain/affiliates/affiliate.repository';
+import {
+  CpfAlreadyRegisteredError,
+  EmailAlreadyRegisteredError,
+} from '@Domain/affiliates/affiliates.errors';
 import { AffiliateTypeormEntity } from '@Infra/database/typeorm/entities/affiliate.typeorm-entity';
 import { AffiliateStatusHistoryTypeormEntity } from '@Infra/database/typeorm/entities/affiliate-status-history.typeorm-entity';
+import { UserTypeormEntity } from '@Infra/database/typeorm/entities/user.typeorm-entity';
+
+const UNIQUE_VIOLATION = '23505';
+
+/**
+ * A checagem prévia do use case dá a mensagem boa no caso comum; o índice único
+ * é o que decide quando dois cadastros chegam juntos. Sem esta tradução a
+ * corrida vira 500.
+ */
+function translateUniqueViolation(error: unknown): unknown {
+  const constraint = error as { code?: string; constraint?: string };
+  if (constraint.code !== UNIQUE_VIOLATION) return error;
+  if (constraint.constraint === 'users_email_key') return new EmailAlreadyRegisteredError();
+  if (constraint.constraint === 'affiliates_cpf_key') return new CpfAlreadyRegisteredError();
+  return error;
+}
 
 @Injectable()
 export class AffiliateTypeormRepository implements AffiliateRepository {
@@ -67,5 +89,48 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
 
       return updated;
     });
+  }
+
+  async createWithUser(input: CreateAffiliateWithUserInput): Promise<AffiliateWithUser> {
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const user = await manager.save(
+          manager.create(UserTypeormEntity, {
+            name: input.fullName,
+            email: input.email,
+            password: null,
+            passwordSetAt: null,
+            shouldChangePassword: false,
+            isActive: true,
+            type: UserTypeEnum.AFFILIATE,
+            role: null,
+          }),
+        );
+
+        const affiliate = await manager.save(
+          manager.create(AffiliateTypeormEntity, {
+            userId: user.id,
+            cpf: input.cpf,
+            pixKeyType: input.pixKeyType,
+            pixKey: input.pixKey,
+            status: AffiliateStatusEnum.PENDING_APPROVAL,
+            termsVersionId: input.termsVersionId,
+            termsAcceptedAt: input.termsAcceptedAt,
+          }),
+        );
+
+        await manager.insert(AffiliateStatusHistoryTypeormEntity, {
+          affiliateId: affiliate.id,
+          fromStatus: null,
+          toStatus: AffiliateStatusEnum.PENDING_APPROVAL,
+          reason: null,
+          actorUserId: null,
+        });
+
+        return { ...affiliate, user };
+      });
+    } catch (error) {
+      throw translateUniqueViolation(error);
+    }
   }
 }

@@ -1,4 +1,4 @@
-import { AuthErrorCodeEnum } from '@porto/contracts';
+import { ApiErrorCode } from '@porto/contracts';
 
 /**
  * Semântica da falha, não status HTTP: o mesmo use case pode ser chamado por
@@ -17,7 +17,7 @@ export abstract class DomainError extends Error {
   abstract readonly kind: DomainErrorKindEnum;
 
   /** Preenchido só quando o cliente precisa distinguir o caso para escolher a mensagem. */
-  readonly code: AuthErrorCodeEnum | null = null;
+  readonly code: ApiErrorCode | null = null;
 
   constructor(message: string) {
     super(message);

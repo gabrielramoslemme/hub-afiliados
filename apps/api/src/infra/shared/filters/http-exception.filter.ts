@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { AuthErrorCodeEnum } from '@porto/contracts';
+import { ApiErrorCode } from '@porto/contracts';
 import { DomainError, DomainErrorKindEnum } from '@Domain/errors/domain.error';
 
 const STATUS_BY_KIND: Record<DomainErrorKindEnum, HttpStatus> = {
@@ -18,9 +18,19 @@ const STATUS_BY_KIND: Record<DomainErrorKindEnum, HttpStatus> = {
   [DomainErrorKindEnum.FORBIDDEN]: HttpStatus.FORBIDDEN,
 };
 
+/**
+ * O contrato declara `message` como texto, e o `ValidationPipe` manda uma lista
+ * com um item por campo. Sem juntar aqui, a mesma rota responderia ora string,
+ * ora array, e o app teria de adivinhar qual das duas chegou.
+ */
+function joinMessages(message: unknown): string | undefined {
+  if (Array.isArray(message)) return message.join(' ');
+  return typeof message === 'string' ? message : undefined;
+}
+
 interface ErrorDescription {
   status: number;
-  code: AuthErrorCodeEnum | null;
+  code: ApiErrorCode | null;
   message: string;
 }
 
@@ -61,8 +71,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
         typeof payload === 'string' ? { message: payload } : (payload as Record<string, unknown>);
       return {
         status: exception.getStatus(),
-        code: (body.code as AuthErrorCodeEnum | undefined) ?? null,
-        message: (body.message as string | undefined) ?? 'Erro',
+        code: (body.code as ApiErrorCode | undefined) ?? null,
+        message: joinMessages(body.message) ?? 'Erro',
       };
     }
 

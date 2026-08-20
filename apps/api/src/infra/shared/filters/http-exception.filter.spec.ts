@@ -67,6 +67,19 @@ describe('HttpExceptionFilter', () => {
     expect(body).toMatchObject({ statusCode: 400, message: 'Campo obrigatório' });
   });
 
+  it('joins the field messages of a validation error into one sentence', () => {
+    const body = bodySentFor(
+      new BadRequestException({
+        statusCode: 400,
+        message: ['Informe um e-mail válido.', 'Informe um CPF válido.'],
+        error: 'Bad Request',
+      }),
+    );
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(body.message).toBe('Informe um e-mail válido. Informe um CPF válido.');
+  });
+
   it('reads the code out of an http exception payload', () => {
     const body = bodySentFor(
       new ForbiddenException({

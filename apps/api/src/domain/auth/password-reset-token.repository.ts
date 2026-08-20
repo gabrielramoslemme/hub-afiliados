@@ -1,10 +1,13 @@
 import { TokenPurposeEnum } from '@porto/contracts';
+import { createToken } from '@Domain/shared/token';
 import {
   PasswordResetTokenEntity,
   PasswordResetTokenWithUser,
 } from './password-reset-token.entity';
 
-export const PASSWORD_RESET_TOKEN_REPOSITORY = Symbol('PASSWORD_RESET_TOKEN_REPOSITORY');
+export const PASSWORD_RESET_TOKEN_REPOSITORY = createToken<PasswordResetTokenRepository>(
+  'PASSWORD_RESET_TOKEN_REPOSITORY',
+);
 
 export interface CreateTokenInput {
   userId: number;

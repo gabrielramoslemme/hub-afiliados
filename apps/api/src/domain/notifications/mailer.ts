@@ -1,6 +1,7 @@
 import { MailTemplateEnum } from '@porto/contracts';
+import { createToken } from '@Domain/shared/token';
 
-export const MAILER = Symbol('MAILER');
+export const MAILER = createToken<Mailer>('MAILER');
 
 export interface SendMailInput {
   template: MailTemplateEnum;

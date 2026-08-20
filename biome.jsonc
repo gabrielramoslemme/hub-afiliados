@@ -115,10 +115,12 @@
       }
     },
     // O use case orquestra o dominio; entrega HTTP e persistencia sao de fora.
-    // De @nestjs/common so passam os simbolos de injecao: um ForbiddenException
-    // aqui dentro amarraria a regra de negocio ao protocolo de transporte.
+    // Nem @nestjs/common entra, e aqui nao ha excecao de *.module.ts: a classe e
+    // TypeScript puro e o wiring mora em src/infra/di, porque Nest e infra. Um
+    // ForbiddenException aqui amarraria a regra de negocio ao protocolo de
+    // transporte.
     {
-      "includes": ["apps/api/src/application/**", "!apps/api/src/application/**/*.module.ts"],
+      "includes": ["apps/api/src/application/**"],
       "linter": {
         "rules": {
           "style": {
@@ -126,10 +128,7 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "@nestjs/common": {
-                    "allowImportNames": ["Inject", "Injectable", "Logger"],
-                    "message": "The application layer may only use Nest for injection. Throw a DomainError instead of an HTTP exception; the filter maps it to a status."
-                  },
+                  "@nestjs/common": "The application layer must not depend on Nest. Wire the use case in src/infra/di/use-cases.module.ts, and throw a DomainError instead of an HTTP exception; the filter maps it to a status.",
                   "@nestjs/swagger": "OpenAPI metadata belongs to the http layer, on the response DTO.",
                   "class-validator": "Request validation belongs to the http layer, on the request DTO.",
                   "express": "The application layer must not know about the transport.",
@@ -140,6 +139,29 @@
                   {
                     "group": ["@Infra/**", "@Http/**"],
                     "message": "The application layer depends on domain contracts only. Infra implements them and http calls the use case."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    // Infra implementa contrato do dominio. Alcancar um use case daqui inverteria
+    // a seta da dependencia — a excecao e src/infra/di, cujo trabalho e
+    // justamente montar o use case, e por isso fica de fora da regra.
+    {
+      "includes": ["apps/api/src/infra/**", "!apps/api/src/infra/di/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@Application/**", "@Http/**"],
+                    "message": "Infra implements the domain contracts. Wiring the application layer is the job of src/infra/di, and http calls infra, never the other way round."
                   }
                 ]
               }

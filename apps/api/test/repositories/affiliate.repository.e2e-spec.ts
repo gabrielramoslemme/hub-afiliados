@@ -10,6 +10,7 @@ import {
   AFFILIATE_STATUS_HISTORY_REPOSITORY,
   AffiliateStatusHistoryRepository,
 } from '../../src/domain/affiliates/affiliate-status-history.repository';
+import { CpfAlreadyRegisteredError } from '../../src/domain/affiliates/affiliates.errors';
 import { USER_REPOSITORY, UserRepository } from '../../src/domain/users/user.repository';
 
 describe('AffiliateRepository (integration)', () => {
@@ -163,5 +164,44 @@ describe('AffiliateRepository (integration)', () => {
       status: AffiliateStatusEnum.PENDING_APPROVAL,
     });
     expect(await history.listByAffiliateId(affiliateId)).toHaveLength(0);
+  });
+
+  describe('createWithUser', () => {
+    const createInput = {
+      fullName: 'Bruno Alves',
+      email: 'bruno@example.com',
+      cpf: '11144477735',
+      pixKeyType: PixKeyTypeEnum.EMAIL,
+      pixKey: 'bruno@example.com',
+      termsVersionId: 1,
+      termsAcceptedAt: new Date('2026-08-18T10:00:00Z'),
+    };
+
+    it('creates user, affiliate and the first history row atomically', async () => {
+      const affiliate = await affiliates.createWithUser(createInput);
+
+      expect(affiliate).toMatchObject({
+        status: AffiliateStatusEnum.PENDING_APPROVAL,
+        user: expect.objectContaining({ email: 'bruno@example.com', password: null }),
+      });
+      expect(await history.listByAffiliateId(affiliate.id)).toEqual([
+        expect.objectContaining({
+          fromStatus: null,
+          toStatus: AffiliateStatusEnum.PENDING_APPROVAL,
+        }),
+      ]);
+    });
+
+    it('rolls back the user when the affiliate insert fails', async () => {
+      await affiliates.createWithUser(createInput);
+      const [{ count: beforeCount }] = await dataSource.query('SELECT count(*) FROM users');
+
+      await expect(
+        affiliates.createWithUser({ ...createInput, email: 'outro@example.com' }),
+      ).rejects.toThrow(CpfAlreadyRegisteredError);
+
+      const [{ count: afterCount }] = await dataSource.query('SELECT count(*) FROM users');
+      expect(afterCount).toBe(beforeCount);
+    });
   });
 });

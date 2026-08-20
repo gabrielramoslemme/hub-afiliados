@@ -1,6 +1,9 @@
+import { createToken } from '@Domain/shared/token';
 import { AffiliateStatusHistoryWithActor } from './affiliate-status-history.entity';
 
-export const AFFILIATE_STATUS_HISTORY_REPOSITORY = Symbol('AFFILIATE_STATUS_HISTORY_REPOSITORY');
+export const AFFILIATE_STATUS_HISTORY_REPOSITORY = createToken<AffiliateStatusHistoryRepository>(
+  'AFFILIATE_STATUS_HISTORY_REPOSITORY',
+);
 
 /**
  * Só leitura: quem grava é `AffiliateRepository.changeStatus`, na mesma
