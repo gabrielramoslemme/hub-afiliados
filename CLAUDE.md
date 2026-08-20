@@ -43,6 +43,7 @@ npm run db:down      # derruba o Postgres
 
 Valem em todo pacote. Violação é bug, não preferência.
 
+- **Dependência externa fica na borda.** Framework, ORM, SDK de fornecedor, cliente HTTP, relógio, gerador de id: a regra de negócio declara o contrato do que precisa, a camada de fora implementa, e só o wiring importa a biblioteca. Vale para decorator e tipo, não só para chamada. O teste: **trocar o fornecedor não pode tocar arquivo de regra** — se toca, o contrato está faltando.
 - **Toda rota HTTP sob `/v1`.** Sem exceção.
 - **O identificador exposto é `public_id` (uuid).** O `id` serial nunca aparece em resposta, rota, URL do painel ou log.
 - **Nenhuma rota sem guard por omissão.** Rota pública exige o decorator `@Public()` explícito.
@@ -57,7 +58,7 @@ Valem em todo pacote. Violação é bug, não preferência.
 ## Convenções de código
 
 - **`function` declaration** para funções nomeadas; arrow function só em callback inline.
-- **Sem `any`** e **sem `console.log`** — erro no Biome, não aviso. Na API, use o `Logger` do Nest.
+- **Sem `any`** e **sem `console.log`** — erro no Biome, não aviso. Na API, use o `Logger` do Nest; na camada de application, nem ele — ver [`apps/api/CLAUDE.md`](apps/api/CLAUDE.md).
 - **Variável não usada só passa com prefixo `_`.**
 - **Comentário explica *por quê*, nunca *o quê*.**
 - **kebab-case** em arquivos, `PascalCase` em classes e componentes, `camelCase` em funções e variáveis.
@@ -69,7 +70,7 @@ Valem em todo pacote. Violação é bug, não preferência.
 
 Fonte única em `packages/contracts/src/enums/index.ts`, nunca redeclarado em `apps/api` nem em `apps/painel`:
 
-`UserTypeEnum` · `UserRoleEnum` · `AffiliateStatusEnum` · `PixKeyTypeEnum` · `TokenPurposeEnum` · `AuthAudienceEnum` · `AuthErrorCodeEnum` · `MailTemplateEnum`
+`UserTypeEnum` · `UserRoleEnum` · `AffiliateStatusEnum` · `PixKeyTypeEnum` · `TokenPurposeEnum` · `AuthAudienceEnum` · `AuthErrorCodeEnum` · `MailTemplateEnum` · `RegistrationErrorCodeEnum`
 
 **O pacote é consumido compilado.** Depois de editar `packages/contracts/src`, rode `npm run build --workspace packages/contracts` — o `turbo` faz isso sozinho nas tasks, comando direto (`seed`, `openapi:generate`, `ts-node`) não.
 

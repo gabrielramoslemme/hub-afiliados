@@ -25,15 +25,33 @@ Enquanto não existirem, uma rota autenticada nasce aberta — não há o que a 
 4. **Use case** — teste primeiro (skill `create-unit-test`), depois a implementação:
    - Sempre em `src/application/<agregado>/<nome>.use-case.ts`. **O use case não pertence a canal**: aprovar afiliado é operação do negócio, e o canal só decide quem pode chamar.
    - Falha de regra lança `DomainError` (`src/domain/<agregado>/<agregado>.errors.ts`), nunca `NotFoundException` e afins — o lint reprova, e o `HttpExceptionFilter` já traduz `kind` para status.
-   - Depende dos **contratos** do domínio, injetados pelo token — nunca de `Repository<T>` do TypeORM nem da classe do adapter:
+   - **Classe TypeScript pura, sem decorator.** `@nestjs/common` inteiro — `Injectable`, `Inject`, `Logger` — é reprovado pelo lint nesta camada; quem monta o use case é o `UseCasesModule`, em infra.
+   - **Implementa `UseCase<TInput, TOutput>`** (`@Application/use-case`) — um `execute`, uma entrada, uma saída. Sem entrada é `UseCase<void, T>`, com `execute()` sem parâmetro.
+   - Depende dos **contratos** do domínio, nunca de `Repository<T>` do TypeORM nem da classe do adapter:
      ```ts
-     constructor(@Inject(USER_REPOSITORY) private readonly users: UserRepository) {}
+     export class ApproveAffiliateUseCase
+       implements UseCase<ApproveAffiliateInput, ApproveAffiliateOutput>
+     {
+       constructor(private readonly affiliateRepository: AffiliateRepository) {}
+
+       async execute(input: ApproveAffiliateInput): Promise<ApproveAffiliateOutput> { /* ... */ }
+     }
      ```
-     Esquecer o `@Inject` passa em lint, type-check e build, e só falha quando o container sobe.
 
 5. **Controller** em `src/http/<canal>/<agregado>/<canal>-<agregado>.controller.ts`. Fino: valida entrada pelo DTO, chama o use case, devolve. Sem regra de negócio, e sem tocar em repositório — o `biome check` reprova.
 
-6. **Registrar no módulo do canal** (`src/http/<canal>/<canal>.module.ts`) — o controller em `controllers` e o use case em `providers`. O módulo já importa o `RepositoriesModule`, que exporta os tokens dos repositórios.
+   A propriedade injetada é o **camelCase do nome do tipo, sufixo de categoria incluído** — o construtor tem que dizer se aquilo é use case, repositório ou provider:
+   ```ts
+   constructor(private readonly createAffiliateUseCase: CreateAffiliateUseCase) {}
+   ```
+
+6. **Registrar em dois módulos**:
+   - o use case em `src/infra/di/use-cases.module.ts`, uma linha na lista `USE_CASES`:
+     ```ts
+     provideUseCase(ApproveAffiliateUseCase, [AFFILIATE_REPOSITORY, MAILER]),
+     ```
+     **Um token por parâmetro do construtor, na mesma ordem.** Os dois são erro de type-check: token a menos pela quantidade, token trocado pelo contrato que ele carrega (`Token<AffiliateRepository>` não entra onde se espera `Token<UserRepository>`).
+   - o controller em `controllers`, no `src/http/<canal>/<canal>.module.ts` — que importa o `UseCasesModule`, não o `RepositoriesModule`.
 
 7. **Rodar o e2e** (skill `create-e2e-test`) e **conferir o contrato**:
    ```bash
@@ -81,5 +99,9 @@ O `ValidationPipe` global usa `whitelist` e `forbidNonWhitelisted`: campo fora d
 | Response DTO como `interface` | Classe com `@ApiProperty`, senão some do OpenAPI |
 | `id` serial na rota ou na resposta | Sempre `public_id` |
 | CPF ou chave PIX em log ou em listagem | Listagem usa `maskCpf`; log nunca |
+| Dependência injetada com apelido (`createAffiliate`, `users`, `env`) | camelCase do tipo, com o sufixo: `createAffiliateUseCase`, `userRepository`, `environmentVariableService` |
 | Regra de negócio no controller | Controller é fino; a regra é do use case |
+| `@Injectable()` ou `@Inject()` no use case | O lint reprova: a camada não depende de Nest. O wiring é o `provideUseCase` no `UseCasesModule` |
+| Use case com `handle()`, `run()` ou `perform()` | `implements UseCase<...>` reprova no type-check: o método é `execute`, sempre |
+| Use case não resolve quando o container sobe | Faltou a linha em `USE_CASES`, ou o canal não importa o `UseCasesModule` |
 | Corpo de erro montado à mão | Deixe o `HttpExceptionFilter` normalizar |

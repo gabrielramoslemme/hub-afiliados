@@ -17,13 +17,13 @@ Identidade unificada em `users`, perfil 1:1 em `affiliates`. **Esquecer de checa
 
 ## Arquitetura
 
-**A dependência aponta para dentro.** O domínio não sabe que Nest, TypeORM ou HTTP existem; cada camada de fora conhece só as de dentro. O que o domínio precisa do mundo, ele **declara** como contrato — quem implementa é infra. Inverter isso não é questão de estilo: é o bug que este desenho existe para impedir.
+**A dependência aponta para dentro.** O núcleo — domínio e application — não sabe que Nest, TypeORM ou HTTP existem; cada camada de fora conhece só as de dentro. O que o domínio precisa do mundo, ele **declara** como contrato — quem implementa é infra. Inverter isso não é questão de estilo: é o bug que este desenho existe para impedir.
 
 | Camada | O que mora | Conhece |
 |---|---|---|
-| `src/domain/<agregado>/` | tipos do agregado, contratos de repositório (interface + `Symbol`), erros de domínio, regra pura (`cpf.util.ts`) | só `@porto/contracts` |
-| `src/application/<agregado>/` | use cases: orquestram contratos, decidem a regra de negócio | domain |
-| `src/infra/` | adapters que **implementam** contratos: `database/typeorm/`, `services/email/`, mais `config/` e `shared/filters/` | domain |
+| `src/domain/<agregado>/` | tipos do agregado, contratos de repositório (interface + token), erros de domínio, regra pura (`cpf.util.ts`) | só `@porto/contracts` |
+| `src/application/<agregado>/` | use cases: classes TypeScript puras que implementam `UseCase`, orquestram contratos e decidem a regra de negócio | domain |
+| `src/infra/` | adapters que **implementam** contratos: `database/typeorm/`, `services/email/`, mais `config/`, `shared/filters/` e `di/`, o wiring | domain — e application, só em `di/` |
 | `src/http/<canal>/` | controllers, DTOs, guards e o `*.module.ts` do canal | application, domain |
 | `src/testing/` | factories e mocks — fora do build (`tsconfig.build.json`) | domain, application |
 
@@ -39,9 +39,12 @@ POST /v1/admin/affiliates/:publicId/approve
 │
 ├─ application/affiliates/approve-affiliate.use-case.ts
 │     a regra: só PENDING_APPROVAL vira APPROVED; senão lança DomainError.
-│     Conhece dois Symbol e duas interfaces, nada de infra:
-│       @Inject(AFFILIATE_REPOSITORY) → domain/affiliates/affiliate.repository.ts
-│       @Inject(MAILER)               → domain/notifications/mailer.ts
+│     Classe pura — sem decorator, sem Nest, sem infra. Conhece duas interfaces:
+│       AffiliateRepository → domain/affiliates/affiliate.repository.ts
+│       Mailer              → domain/notifications/mailer.ts
+│
+├─ infra/di/use-cases.module.ts
+│     o wiring: liga cada token a um parâmetro do construtor.
 │
 ├─ infra/database/typeorm/repositories/affiliate.typeorm-repository.ts
 │     implementa o contrato: SELECT ... FOR UPDATE, status e histórico na mesma transação.
@@ -53,7 +56,43 @@ POST /v1/admin/affiliates/:publicId/approve
       traduz o DomainError para status e monta o corpo do erro.
 ```
 
-Quem liga `Symbol` a classe é o `*.module.ts` — o use case nunca vê o adapter.
+Quem liga token a implementação é `*.module.ts`, em dois passos: o `RepositoriesModule` diz **qual adapter** atende cada contrato, o `UseCasesModule` diz **qual token** entra em cada parâmetro do construtor. O use case não vê nem um nem outro.
+
+### Dependência externa fica na borda
+
+**A regra vale para qualquer biblioteca, não só para o ORM.** Se a regra de negócio precisa do que uma dependência externa faz, ela declara o contrato e a borda implementa. O teste é sempre o mesmo: **trocar o fornecedor não pode tocar arquivo de regra.**
+
+| Dependência externa | O que o núcleo declara | Quem importa a biblioteca |
+|---|---|---|
+| Postgres, via TypeORM | `AffiliateRepository` (`src/domain/affiliates/`) | `AffiliateTypeormRepository` |
+| MailerSend | `Mailer` (`src/domain/notifications/`) | `MailService` e os providers |
+| Nest, como container de DI | nada — o use case é classe comum | `src/infra/di/use-cases.module.ts` |
+
+O terceiro é o menos óbvio, e por isso o mais fácil de deixar passar. `@Injectable` e `@Inject` parecem anotação, mas emitem `require('@nestjs/common')` no arquivo compilado: um use case decorado carrega o framework junto, e passa a só existir dentro do container. Sem decorator, quem monta o use case é o wiring — em infra, porque o container é infraestrutura como qualquer outra:
+
+```ts
+const USE_CASES = [
+  provideUseCase(CreateAffiliateUseCase, [
+    USER_REPOSITORY,
+    AFFILIATE_REPOSITORY,
+    TERMS_VERSION_REPOSITORY,
+    MAILER,
+  ]),
+  provideUseCase(GetCurrentTermsUseCase, [TERMS_VERSION_REPOSITORY]),
+];
+```
+
+- **Use case novo: uma linha em `USE_CASES`.** O `exports` é derivado da lista, e o token do provider é a própria classe — o controller continua injetando pelo tipo, sem `@Inject`.
+- **Todo use case implementa `UseCase<TInput, TOutput>`** (`src/application/use-case.ts`). Nenhum código trata use case genericamente — o contrato existe para o compilador recusar o próximo que nascer com `handle` ou `run`. Sem entrada é `UseCase<void, T>`, com `execute()` sem parâmetro: TypeScript aceita o método mais curto e deixa omitir o argumento na chamada.
+- **A saída é tipo próprio do use case, nunca a entidade do domínio crua.** `GetCurrentTermsOutput`, não `TermsVersionEntity`: devolver a entidade entrega junto o `id` serial, e contar com o controller para descartá-lo é confiar a regra à camada errada. `Date` sai como `Date` — formatar para o fio é do DTO de resposta.
+- **O array é posicional, e o compilador cobra a posição.** O `provideUseCase` é tipado sobre os parâmetros do construtor, e cada token carrega o contrato que promete (`Token<UserRepository>`), então **token a menos e token trocado são erro de type-check** — o segundo aponta o método que falta:
+
+  ```
+  Type 'Token<AffiliateRepository>' is not assignable to type 'Token<UserRepository>'.
+    Type 'AffiliateRepository' is missing the following properties from type 'UserRepository': findByEmail, findById
+  ```
+- O canal importa `UseCasesModule`, não `RepositoriesModule`: controller não alcança repositório nem por wiring.
+- Precisa logar dentro de um use case? O `Logger` do Nest também está barrado aqui, pela mesma regra — declare um port no domínio, como o `Mailer`.
 
 ### Quem decide o quê
 
@@ -71,32 +110,37 @@ Quem liga `Symbol` a classe é o `*.module.ts` — o use case nunca vê o adapte
 | Camada | Não pode importar |
 |---|---|
 | `src/domain/**` | `typeorm`, `@nestjs/typeorm`, `@Infra/*`, `@Http/*`, `@Application/*` |
-| `src/application/**` | `@nestjs/swagger`, `class-validator`, `express`, `typeorm`, `@Infra/*`, `@Http/*`; de `@nestjs/common` só `Inject`, `Injectable` e `Logger` |
+| `src/application/**` | `@nestjs/common` **inteiro**, `@nestjs/swagger`, `class-validator`, `express`, `typeorm`, `@nestjs/typeorm`, `@Infra/*`, `@Http/*` |
+| `src/infra/**` | `@Application/*` e `@Http/*` — infra implementa contrato do domínio, não chama use case |
 | `src/http/**` | `@Infra/database/*` — controller chama use case, não repositório |
 
-**`*.module.ts` fica fora dessas regras**, nas duas últimas linhas: wiring existe para conhecer o concreto, e é o único arquivo da camada que pode.
+**As exceções são o wiring, e só ele:** `src/infra/di/**` conhece a application porque montar o use case é o trabalho dele, e o `*.module.ts` do canal conhece infra pelo mesmo motivo. **`src/application/**` não tem exceção nenhuma** — não existe arquivo dessa camada que possa importar Nest.
 
 Aliases `@Domain/*` · `@Application/*` · `@Infra/*` · `@Http/*` · `@Testing/*`, declarados em **três** lugares: `tsconfig.json`, `jest.config.ts` e `test/jest-e2e.json`. Alias novo exige editar os três, senão o unitário ou o e2e quebra com "Cannot find module".
 
-### Quatro falhas que passam por lint, type-check e build
+### Três falhas que passam por lint, type-check e build
 
 E só aparecem quando o container sobe ou a rota é chamada. Se algo quebrou em runtime com tudo verde, comece por aqui:
 
-1. **`@Inject(TOKEN)` esquecido** no construtor do use case — contrato é interface, não existe em runtime.
-2. **Adapter fora do `RepositoriesModule`** — provider não encontrado na primeira chamada da rota.
-3. **`import type` em arquivo com decorator** resolvido por classe — o metadata vira `[Function]`. Ver a seção no fim deste guia.
-4. **Relação prometida no tipo de retorno e não carregada no adapter** — `undefined` em produção, sem o compilador reclamar.
+1. **Adapter fora do `RepositoriesModule`** — provider não encontrado na primeira chamada da rota.
+2. **`import type` em arquivo com decorator** resolvido por classe — o metadata vira `[Function]`. Ver a seção no fim deste guia.
+3. **Relação prometida no tipo de retorno e não carregada no adapter** — `undefined` em produção, sem o compilador reclamar.
+
+Token trocado de posição no `provideUseCase` **era** a quarta, e a pior: dois tokens invertidos compilavam e injetavam o colaborador errado. Hoje o `Token<T>` fecha esse caminho no type-check.
 
 ## Onde cada coisa mora
 
 | Coisa | Caminho |
 |---|---|
 | Tipo do agregado | `src/domain/<agregado>/<nome>.entity.ts` (interface) |
-| Contrato de repositório | `src/domain/<agregado>/<nome>.repository.ts` (interface + `Symbol`) |
+| Contrato de repositório | `src/domain/<agregado>/<nome>.repository.ts` (interface + token) |
+| Token de contrato | `src/domain/shared/token.ts` (`createToken`, `Token<T>`) |
 | Entidade TypeORM | `src/infra/database/typeorm/entities/<nome>.typeorm-entity.ts` |
 | Adapter do repositório | `src/infra/database/typeorm/repositories/<nome>.typeorm-repository.ts` |
 | Migration | `src/infra/database/typeorm/migrations/<timestamp>-<Nome>.ts` |
 | Use case | `src/application/<agregado>/<nome>.use-case.ts` |
+| Contrato do use case | `src/application/use-case.ts` |
+| Wiring dos use cases | `src/infra/di/use-cases.module.ts` |
 | Erro de domínio | `src/domain/<agregado>/<agregado>.errors.ts` (base em `src/domain/errors/`) |
 | Controller | `src/http/<canal>/<agregado>/<canal>-<agregado>.controller.ts` |
 | DTO de request/response | `src/http/<canal>/<agregado>/dtos/<nome>.request.dto.ts` |
@@ -107,20 +151,49 @@ E só aparecem quando o container sobe ou a rota é chamada. Se algo quebrou em 
 | Teste de integração | `test/<assunto>.e2e-spec.ts` |
 | Seed | `seeds/seed.ts` |
 
+## Nome da dependência injetada
+
+**A propriedade é o camelCase do nome do tipo, sufixo de categoria incluído.** Sem exceção e sem apelido: o construtor precisa dizer *o que* cada colaborador é — use case, repositório, provider, service — sem obrigar quem lê a ir atrás do tipo.
+
+```ts
+// no use case: contrato e nada mais
+constructor(
+  private readonly userRepository: UserRepository,
+  private readonly affiliateRepository: AffiliateRepository,
+  private readonly mailer: Mailer,
+) {}
+
+// em infra e http, onde a classe é o token: @Inject só quando o alvo é contrato
+constructor(@Inject(MAIL_PROVIDER) private readonly mailProvider: MailProvider) {}
+```
+
+| Tipo | Propriedade |
+|---|---|
+| `CreateAffiliateUseCase` | `createAffiliateUseCase` |
+| `TermsVersionRepository` | `termsVersionRepository` |
+| `MailProvider` | `mailProvider` |
+| `EnvironmentVariableService` | `environmentVariableService` |
+| `Mailer` | `mailer` — o port não tem sufixo de categoria, e o nome dele já basta |
+| `Repository<UserTypeormEntity>` | `repository` — dentro do adapter, é o único que existe |
+
+Nada de `users`, `affiliates`, `terms`, `provider`, `env`, `config`. O nome curto some no meio das outras dependências, e num construtor de cinco linhas vira adivinhação.
+
 ## Repositórios
 
-Contrato no domínio, implementação em infra. **Use case nunca injeta `Repository<T>` do TypeORM nem a classe do adapter — só o contrato, pelo token.**
+Contrato no domínio, implementação em infra. **Use case nunca recebe `Repository<T>` do TypeORM nem a classe do adapter — só o contrato.**
 
-- O contrato é uma `interface` em `src/domain/<agregado>/<nome>.repository.ts`, com o `Symbol` no mesmo arquivo (`export const USER_REPOSITORY = Symbol('USER_REPOSITORY')`). A interface some na compilação; o `Symbol` é o que o Nest resolve em runtime, e mantê-los juntos impede que o par se separe.
+- O contrato é uma `interface` em `src/domain/<agregado>/<nome>.repository.ts`, com o token no mesmo arquivo. A interface some na compilação; o token é o que o Nest resolve em runtime, e mantê-los juntos impede que o par se separe.
+
+  ```ts
+  export const USER_REPOSITORY = createToken<UserRepository>('USER_REPOSITORY');
+  ```
+
+  **`createToken` (`src/domain/shared/token.ts`), nunca `Symbol` cru.** O `Token<UserRepository>` continua sendo um `Symbol` comum em runtime — o contrato é fantasma, só existe para o compilador. É ele que faz o `UseCasesModule` recusar o token certo na posição errada. (O `app.get(TOKEN)` do e2e continua devolvendo `any` — o overload do Nest não tem onde inferir a partir de um `symbol`; siga passando o genérico explícito.)
 - O adapter é `@Injectable()` em `src/infra/database/typeorm/repositories/<nome>.typeorm-repository.ts`, declara `implements <Contrato>` e é o **único** lugar com `@InjectRepository`.
 - Métodos devolvem `Promise<T | null>` sem lançar — quem decide 404 é o use case.
 - **O tipo de retorno diz quais relações vêm carregadas:** `AffiliateEntity` (só escalares), `AffiliateWithUser`, `AffiliateDetail`. Prometer no tipo uma relação que o adapter não carregou é `undefined` em produção sem o compilador reclamar.
 - **Escrita que precisa ser atômica vira método do agregado** (`changeStatus`), com a transação inteira dentro do adapter. Nenhum `EntityManager` atravessa o contrato.
-- Injeção sempre pelo token:
-  ```ts
-  constructor(@Inject(USER_REPOSITORY) private readonly users: UserRepository) {}
-  ```
-  **Esquecer o `@Inject` passa em lint, type-check e build** e falha quando o container sobe.
+- No use case o construtor declara só a interface (`private readonly userRepository: UserRepository`); o token correspondente entra na linha do `UseCasesModule`. Dentro de infra e http, a injeção de contrato continua sendo `@Inject(TOKEN)` no construtor.
 - Repositório novo entra em **dois** lugares do `RepositoriesModule` (`src/infra/database/typeorm/repositories/`): `TypeOrmModule.forFeature` (a entidade) e a lista `REPOSITORIES` (o par token/adapter). O `exports` é derivado dela, então não há terceiro array para esquecer.
 
 ## Entidades
@@ -192,7 +265,7 @@ O `openapi.json` é o contrato do app Flutter — rota sem decorator vira contra
 
 ## E-mail
 
-O use case injeta o port `Mailer` (`@Inject(MAILER)`, de `src/domain/notifications/mailer.ts`) e não conhece fornecedor nenhum. Quem implementa é o `MailService`.
+O use case recebe o port `Mailer` (`src/domain/notifications/mailer.ts`) pelo construtor — o token `MAILER` fica no `UseCasesModule` — e não conhece fornecedor nenhum. Quem implementa é o `MailService`.
 
 `Mailer.send` **nunca lança** — falha vira log e o fluxo segue. Deliberado: e-mail não enviado é incidente operacional; aprovação revertida por causa dele seria incidente de negócio. Não embrulhe em `try/catch`.
 
@@ -216,7 +289,7 @@ import { ConfigService } from '@nestjs/config';        // certo
 
 Por isso `style/useImportType` está desligada para `apps/api` no `biome.jsonc` da raiz. Não religue, e nada de `import type` em arquivo com decorator.
 
-**A exceção é a dependência resolvida por token.** Com `@Inject(USER_REPOSITORY)` o token vem do decorator e o metadata deixa de ser consultado — por isso um contrato só de tipo (`interface`) funciona ali. A regra continua valendo para tudo que o Nest resolve pela classe. Conferir o emitido:
+**A exceção é a dependência resolvida por token** — `@Inject(MAIL_PROVIDER)` em infra, ou o `inject:` do `UseCasesModule`: o token não sai do metadata, e por isso um contrato só de tipo (`interface`) funciona ali. **No use case a regra nem chega a se aplicar**: sem decorator, o `design:paramtypes` não é emitido. Ela continua valendo para tudo que o Nest resolve pela classe — adapter, controller, guard, filtro. Conferir o emitido:
 
 ```bash
 grep -o '__metadata("design:paramtypes".\{0,80\}' apps/api/dist/<caminho>.js

@@ -61,11 +61,11 @@ Dublê de repositório já existe pronto em `src/testing/mocks/repositories/`, t
 import { USER_REPOSITORY } from '@Domain/users/user.repository';
 import { userRepositoryMock } from '@Testing/mocks/repositories/user.repository.mock';
 
-const users = userRepositoryMock();
-const useCase = new ApproveAffiliateUseCase(users);
+const userRepository = userRepositoryMock();
+const useCase = new ApproveAffiliateUseCase(userRepository);
 ```
 
-Por serem `jest.Mocked<Contrato>`, método novo no contrato quebra a compilação de todos os dublês até ser preenchido — é o comportamento desejado, não efeito colateral. No `Test.createTestingModule`, o dublê entra pelo token: `{ provide: USER_REPOSITORY, useValue: users }`.
+Por serem `jest.Mocked<Contrato>`, método novo no contrato quebra a compilação de todos os dublês até ser preenchido — é o comportamento desejado, não efeito colateral. No `Test.createTestingModule`, o dublê entra pelo token: `{ provide: USER_REPOSITORY, useValue: userRepository }`.
 
 Dublê de service reutilizável vira arquivo em `src/testing/mocks/services/`, tipado pelo port e não pela classe concreta, no padrão de `mailer.mock.ts`:
 

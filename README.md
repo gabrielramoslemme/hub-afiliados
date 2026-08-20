@@ -91,6 +91,33 @@ conteúdo no log — sem custo e sem risco de disparar para endereço real. Em
 homologação e produção, use `mailersend`. Detalhes em
 [`apps/api/docs/EMAILS.md`](apps/api/docs/EMAILS.md).
 
+## Termos e condições
+
+O aceite do afiliado aponta para a linha de `terms_versions` vigente no momento
+do cadastro, e é isso que dá valor jurídico ao registro. Duas consequências
+operacionais:
+
+- **Versão publicada nunca é editada.** Corrigir o texto de uma versão já aceita
+  reescreve o que as pessoas aceitaram. Texto novo é linha nova.
+- **Só uma linha pode ter `is_current = true`** — o índice parcial
+  `uq_terms_versions_current` recusa a segunda. Publicar é, portanto, despromover
+  a vigente e promover a nova **na mesma transação**:
+
+```sql
+BEGIN;
+UPDATE terms_versions SET is_current = false WHERE is_current = true;
+INSERT INTO terms_versions (version, content_url, published_at, is_current)
+VALUES ('2.0', 'https://.../termos/2.0', now(), true);
+COMMIT;
+```
+
+Quem já aceitou a `1.0` continua apontando para ela. Cadastro enviado com uma
+versão que não é mais a vigente é recusado com `OUTDATED_TERMS`, e o app relê os
+termos em `GET /v1/mobile/terms/current`.
+
+Em desenvolvimento, `npm run seed --workspace apps/api` publica a `1.0-homolog`
+provisória — o texto oficial é dependência do Jurídico da Porto.
+
 ## Contrato para o aplicativo
 
 O `openapi.json` é artefato de build, não fonte — não é versionado no git. A CI

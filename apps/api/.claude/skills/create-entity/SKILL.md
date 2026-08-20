@@ -31,9 +31,13 @@ O domínio declara **o que** o agregado é e **o que** se pode fazer com ele; `i
    ```
    **Uma variante por conjunto de relações carregadas.** É assim que o tipo de retorno do repositório para de mentir sobre o que veio do banco.
 
-4. **Contrato do repositório** em `src/domain/<agregado>/<nome>.repository.ts` — `interface` mais o `Symbol`, no mesmo arquivo. Métodos devolvem `Promise<T | null>` e **não lançam**: quem decide 404 é o use case.
+4. **Contrato do repositório** em `src/domain/<agregado>/<nome>.repository.ts` — `interface` mais o token, no mesmo arquivo. Métodos devolvem `Promise<T | null>` e **não lançam**: quem decide 404 é o use case.
+
+   **O token sai de `createToken` (`@Domain/shared/token`), nunca de `Symbol` cru** — em runtime é o mesmo `Symbol`, mas o contrato no tipo é o que faz o `UseCasesModule` recusar o token na posição errada.
    ```ts
-   export const AFFILIATE_PAYOUT_REPOSITORY = Symbol('AFFILIATE_PAYOUT_REPOSITORY');
+   export const AFFILIATE_PAYOUT_REPOSITORY = createToken<AffiliatePayoutRepository>(
+     'AFFILIATE_PAYOUT_REPOSITORY',
+   );
 
    export interface AffiliatePayoutRepository {
      findByPublicId(publicId: string): Promise<AffiliatePayoutWithAffiliate | null>;
@@ -123,7 +127,8 @@ O `type-check` é o primeiro filtro: se a entidade não atender o tipo do domín
 |---|---|
 | Provider não encontrado em runtime | Faltou o par `{ provide, useClass }` na lista `REPOSITORIES` do `RepositoriesModule` |
 | `Repository not found` em runtime | Faltou a entidade no `TypeOrmModule.forFeature` |
-| Injeção falha só quando o container sobe | Faltou `@Inject(TOKEN)` no construtor do use case — contrato é interface, não existe em runtime |
+| `Token<X> is not assignable to Token<Y>` no `UseCasesModule` | A ordem dos tokens no `provideUseCase(...)` não bate com a do construtor. O erro nomeia os métodos que faltam — case token com parâmetro pela posição |
+| Token declarado com `Symbol(...)` | Use `createToken<Contrato>('NOME')`: o `Symbol` cru é `symbol` para o compilador, e volta a deixar passar token trocado |
 | Entidade não é encontrada pelo TypeORM | O arquivo precisa terminar em `.typeorm-entity.ts`: é assim que os globs de `typeorm.module.ts` e `ormconfig.ts` a acham |
 | `biome check` reclama de import em `src/domain` | O domínio não importa `typeorm`, `@nestjs/typeorm`, `@Infra/*`, `@Http/*` nem `@Application/*`. Inverta: o adapter é que conhece os dois lados |
 | Relação `undefined` em runtime com tipo dizendo que existe | O método promete uma variante `...With...` mas o adapter não pediu `relations` |
