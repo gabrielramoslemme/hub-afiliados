@@ -6,7 +6,7 @@ import { MAIL_PROVIDER, type MailProvider } from './mail-provider.interface';
 export class MailService implements Mailer {
   private readonly logger = new Logger(MailService.name);
 
-  constructor(@Inject(MAIL_PROVIDER) private readonly provider: MailProvider) {}
+  constructor(@Inject(MAIL_PROVIDER) private readonly mailProvider: MailProvider) {}
 
   /**
    * Nunca lança. Um e-mail que não saiu é um incidente operacional;
@@ -14,7 +14,7 @@ export class MailService implements Mailer {
    */
   async send(input: SendMailInput): Promise<void> {
     try {
-      await this.provider.send(input);
+      await this.mailProvider.send(input);
     } catch (error) {
       this.logger.error(
         `Falha ao enviar e-mail do template ${input.template}`,

@@ -3,10 +3,10 @@ import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class EnvironmentVariableService {
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly configService: ConfigService) {}
 
   private required(key: string): string {
-    const value = this.config.get<string>(key);
+    const value = this.configService.get<string>(key);
     if (!value) throw new Error(`Missing environment variable: ${key}`);
     return value;
   }
@@ -18,7 +18,7 @@ export class EnvironmentVariableService {
     return this.nodeEnv === 'production';
   }
   get port(): number {
-    return Number(this.config.get('PORT') ?? 3000);
+    return Number(this.configService.get('PORT') ?? 3000);
   }
   get databaseUrl(): string {
     return this.required('DATABASE_URL');
@@ -34,10 +34,10 @@ export class EnvironmentVariableService {
   }
 
   get mailProvider(): 'mailersend' | 'logger' {
-    return (this.config.get<string>('MAIL_PROVIDER') ?? 'logger') as 'mailersend' | 'logger';
+    return (this.configService.get<string>('MAIL_PROVIDER') ?? 'logger') as 'mailersend' | 'logger';
   }
   get mailerSendApiKey(): string {
-    return this.config.get<string>('MAILERSEND_API_KEY') ?? '';
+    return this.configService.get<string>('MAILERSEND_API_KEY') ?? '';
   }
   get mailFromEmail(): string {
     return this.required('MAILERSEND_FROM_EMAIL');
@@ -46,6 +46,6 @@ export class EnvironmentVariableService {
     return this.required('MAILERSEND_FROM_NAME');
   }
   mailTemplateId(key: string): string {
-    return this.config.get<string>(key) ?? '';
+    return this.configService.get<string>(key) ?? '';
   }
 }

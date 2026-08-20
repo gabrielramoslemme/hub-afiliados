@@ -12,24 +12,24 @@ describe('MailService', () => {
   };
 
   it('delegates sending to the configured provider', async () => {
-    const provider: MailProvider = { send: jest.fn().mockResolvedValue(undefined) };
-    await new MailService(provider).send(input);
-    expect(provider.send).toHaveBeenCalledWith(input);
+    const mailProvider: MailProvider = { send: jest.fn().mockResolvedValue(undefined) };
+    await new MailService(mailProvider).send(input);
+    expect(mailProvider.send).toHaveBeenCalledWith(input);
   });
 
   it('does not propagate the error when the provider fails', async () => {
-    const provider: MailProvider = {
+    const mailProvider: MailProvider = {
       send: jest.fn().mockRejectedValue(new Error('MailerSend is down')),
     };
-    const service = new MailService(provider);
+    const service = new MailService(mailProvider);
     await expect(service.send(input)).resolves.toBeUndefined();
   });
 
   it('logs the error without exposing the recipient', async () => {
-    const provider: MailProvider = { send: jest.fn().mockRejectedValue(new Error('boom')) };
+    const mailProvider: MailProvider = { send: jest.fn().mockRejectedValue(new Error('boom')) };
     const spy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
 
-    await new MailService(provider).send(input);
+    await new MailService(mailProvider).send(input);
 
     const logged = spy.mock.calls[0]?.[0] as string;
     expect(logged).toContain(MailTemplateEnum.REGISTRATION_APPROVED);
