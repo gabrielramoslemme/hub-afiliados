@@ -59,6 +59,14 @@
   --text-eyebrow--letter-spacing: 0.12em;
   --text-eyebrow--font-weight: 600;
 
+  /*
+    A coluna de conteúdo do site, na medida da Porto (`--ui-container-size` de
+    portoseguro.com.br). Lá o número é `131.2rem` porque a raiz deles é 10px
+    (`html { font-size: 62.5% }`); com a nossa raiz de 16px, os mesmos 1312px
+    são `82rem`.
+  */
+  --container-site: 82rem;
+
   --radius-card: 0.75rem;
   /* Painel é o card grande da página — cupom, extrato, formulário. */
   --radius-panel: 1.25rem;
@@ -208,6 +216,43 @@
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
+  }
+}
+
+/*
+  A coluna do site: os 1312px do token mais uma folga lateral que cresce em três
+  degraus, como no `.c-container` da Porto — 20px, 40px a partir de 1392px e
+  64px a partir de 1440px, onde a caixa fecha em 1440px.
+
+  Mora em `components` e não em `utilities` de propósito: `max-width` faz parte
+  da regra, e é a ordem das camadas que deixa um `max-w-md` no JSX vencer os
+  três degraus de uma vez. Em `utilities` ele venceria só o degrau base, e a
+  coluna estreita de `/entrar` voltaria a abrir para 1440px no monitor grande.
+*/
+@layer components {
+  /*
+    A folga é variável, e não `px-*` no JSX, porque o `max-width` a soma: os dois
+    precisam virar no mesmo degrau, ou a coluna de conteúdo encolhe junto com a
+    folga em vez de ficar nos 1312px.
+  */
+  .container-site {
+    --edge-spacing: 1.25rem;
+    width: 100%;
+    max-width: calc(var(--container-site) + var(--edge-spacing) * 2);
+    margin-inline: auto;
+    padding-inline: var(--edge-spacing);
+  }
+
+  @media (min-width: 1392px) {
+    .container-site {
+      --edge-spacing: 2.5rem;
+    }
+  }
+
+  @media (min-width: 1440px) {
+    .container-site {
+      --edge-spacing: 4rem;
+    }
   }
 }
 

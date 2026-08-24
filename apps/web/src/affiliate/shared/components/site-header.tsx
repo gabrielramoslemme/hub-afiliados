@@ -105,7 +105,7 @@ export function SiteHeader() {
         (scrolled || open) && 'shadow-card',
       )}
     >
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6 lg:px-8">
+      <div className="container-site flex h-16 items-center justify-between">
         <Link
           href="/"
           aria-label="Hub de Afiliados da Porto Serviços"
@@ -183,7 +183,7 @@ export function SiteHeader() {
           id="menu-mobile"
           className="animate-pop-in origin-top border-t border-ink-200 bg-white md:hidden"
         >
-          <ul className="mx-auto max-w-6xl px-6 py-2">
+          <ul className="container-site py-2">
             {[
               ...nav,
               { label: site.accountCta, href: AFFILIATE_LOGIN_PATH },

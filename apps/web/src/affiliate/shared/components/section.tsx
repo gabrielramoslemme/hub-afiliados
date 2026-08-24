@@ -2,7 +2,7 @@ import type { ComponentProps, ReactNode } from 'react';
 import { cn } from '@/shared/lib/cn';
 
 export function Container({ className, ...props }: ComponentProps<'div'>) {
-  return <div className={cn('mx-auto w-full max-w-6xl px-6 lg:px-8', className)} {...props} />;
+  return <div className={cn('container-site', className)} {...props} />;
 }
 
 export function Eyebrow({ className, ...props }: ComponentProps<'p'>) {
