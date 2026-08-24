@@ -201,6 +201,135 @@
           }
         }
       }
+    },
+    // A web serve dois publicos que nao se encontram: o afiliado e o analista
+    // da Porto. Ate aqui a separacao era so o prefixo do nome da pasta, e tres
+    // imports cruzados vazaram sem lint, type-check ou build reclamarem. O
+    // route group entra junto, senao a casca de rota importa o que quiser.
+    //
+    // ATENCAO: quando dois overrides alcancam o mesmo arquivo, o ultimo
+    // SUBSTITUI a configuracao da regra, nao acrescenta a ela. Por isso o
+    // padrao de barrel esta repetido nos quatro blocos em vez de morar sozinho
+    // num override amplo: la ele apagaria a regra de fatia de todo arquivo de
+    // apps/web/src, e o lint passaria limpo sem checar cruzamento nenhum.
+    // Padrao novo aqui entra nos quatro.
+    //
+    // O barrel: o index.ts de cada feature e a API publica dela, e o resto e
+    // interno. data.ts e session.ts sao excecao porque importam server-only —
+    // reexporta-los do barrel quebraria o build no primeiro 'use client' que
+    // importasse a feature, com erro apontando para o barrel e nao para a
+    // causa. Import dentro da propria feature e relativo, nao passa pelo alias
+    // e por isso nao e alcancado.
+    {
+      "includes": ["apps/web/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "@/*/features/*/**",
+                      "!@/*/features/*/data",
+                      "!@/*/features/*/session"
+                    ],
+                    "message": "Import the feature barrel (@/<slice>/features/<name>), its data or its session, never a file inside it."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/web/src/admin/**", "apps/web/src/app/(admin)/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@/affiliate/**"],
+                    "message": "The admin panel must not import from the affiliate portal. What both sides need goes to src/shared."
+                  },
+                  {
+                    "group": [
+                      "@/*/features/*/**",
+                      "!@/*/features/*/data",
+                      "!@/*/features/*/session"
+                    ],
+                    "message": "Import the feature barrel (@/<slice>/features/<name>), its data or its session, never a file inside it."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/web/src/affiliate/**", "apps/web/src/app/(affiliate)/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@/admin/**"],
+                    "message": "The affiliate portal must not import from the admin panel. What both sides need goes to src/shared."
+                  },
+                  {
+                    "group": [
+                      "@/*/features/*/**",
+                      "!@/*/features/*/data",
+                      "!@/*/features/*/session"
+                    ],
+                    "message": "Import the feature barrel (@/<slice>/features/<name>), its data or its session, never a file inside it."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    // src/shared e o fundo da pilha: quem depende dele nao pode ser sua
+    // dependencia. Foi assim que a mascara de CPF acabou dentro de uma feature
+    // com o painel importando de la.
+    {
+      "includes": ["apps/web/src/shared/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@/admin/**", "@/affiliate/**", "@/app/**"],
+                    "message": "src/shared must not depend on a slice. Move what it needs down into src/shared, or keep the code in the slice that owns it."
+                  },
+                  {
+                    "group": [
+                      "@/*/features/*/**",
+                      "!@/*/features/*/data",
+                      "!@/*/features/*/session"
+                    ],
+                    "message": "Import the feature barrel (@/<slice>/features/<name>), its data or its session, never a file inside it."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }
