@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { AffiliateDetailScreen } from '@/features/admin-affiliates/affiliate-detail';
+import { AffiliateDetailScreen } from '@/admin/features/affiliates';
 
 export const metadata: Metadata = {
   title: 'Cadastro do afiliado',

@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
-import { AffiliatesQueue } from '@/features/admin-affiliates/affiliates-queue';
-import { parseQueueParams, type RawSearchParams } from '@/features/admin-affiliates/queue-params';
+import {
+  AffiliatesQueue,
+  parseQueueParams,
+  type RawSearchParams,
+} from '@/admin/features/affiliates';
 
 export const metadata: Metadata = {
   title: 'Fila de afiliados',

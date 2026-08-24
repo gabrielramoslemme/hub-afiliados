@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import type { PropsWithChildren } from 'react';
-import { Toaster } from '@/components/ui/toaster';
-import { site } from '@/core/content/landing';
+import { site } from '@/affiliate/shared/content';
+import { Toaster } from '@/shared/components/ui/toaster';
 import './globals.css';
 
 /*

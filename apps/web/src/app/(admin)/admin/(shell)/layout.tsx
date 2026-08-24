@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import type { PropsWithChildren } from 'react';
-import { readSessionUser } from '@/features/admin-auth/session';
-import { AdminTopbar } from '@/features/admin-shell/admin-topbar';
+import { readSessionUser } from '@/admin/features/auth/session';
+import { AdminTopbar } from '@/admin/features/shell';
 
 /**
  * O middleware já barra quem não tem cookie. Esta segunda checagem existe porque

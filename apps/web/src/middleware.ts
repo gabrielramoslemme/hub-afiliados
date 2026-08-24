@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { LOGIN_PATH, QUEUE_PATH, REDIRECT_PARAM } from '@/core/admin-routes';
-import { AFFILIATE_AREA_PATH, AFFILIATE_LOGIN_PATH } from '@/core/affiliate-routes';
-import { AFFILIATE_SESSION_COOKIE, SESSION_COOKIE } from '@/core/session-cookie';
+import { LOGIN_PATH, QUEUE_PATH, REDIRECT_PARAM } from '@/admin/shared/routes';
+import { AFFILIATE_AREA_PATH, AFFILIATE_LOGIN_PATH } from '@/affiliate/shared/routes';
+import { AFFILIATE_SESSION_COOKIE, SESSION_COOKIE } from '@/shared/lib/session-cookie';
 
 function redirectTo(request: NextRequest, pathname: string, keepTarget = false): NextResponse {
   const url = request.nextUrl.clone();

@@ -1,25 +1,55 @@
 # Web — `@porto/web`
 
-Next 15 (App Router) + React 19 + Tailwind 4 + shadcn sobre Radix. **Quatro superfícies num app só:** a landing page pública, o cadastro do afiliado, a área logada do afiliado e o painel de análise da Porto. Regras do monorepo no [`CLAUDE.md` da raiz](../../CLAUDE.md).
+Next 15 (App Router) + React 19 + Tailwind 4 + shadcn sobre Radix. **Dois públicos que não se encontram:** o afiliado, que chega pela landing, se cadastra e entra na própria área; e o analista da Porto, que entra no painel para aprovar ou reprovar. Regras do monorepo no [`CLAUDE.md` da raiz](../../CLAUDE.md).
 
 ## Onde cada coisa mora
 
+O primeiro nível de `src/` é o **dono**, não o domínio. Três fatias, e o Biome não deixa uma importar da outra — ver [Fronteira entre as fatias](#fronteira-entre-as-fatias).
+
 | Pasta | O que mora |
 |---|---|
-| `src/app/(site)/` | rotas públicas: `/`, `/cadastro`, `/cadastro/sucesso`, `/entrar` |
-| `src/app/(affiliate)/` | a área logada do afiliado, sob `/minha-conta` |
-| `src/app/(admin)/` | `/admin/login` e, sob `(shell)`, as rotas com barra e sessão |
-| `src/features/<domínio>/` | as telas, os Server Actions e a regra de apresentação |
-| `src/components/ui/` | os componentes shadcn — `components.json` versionado |
-| `src/components/` | o que duas features dividem e o shadcn não gera: `CountUp`, `CopyCoupon` |
-| `src/core/` | `cn`, `env`, `format`, `http/` e a copy em `content/` |
-| `src/mocks/` | o dublê do canal `/admin` e as fixtures |
+| `src/affiliate/features/<nome>/` | `landing`, `registration`, `auth`, `area` — as telas do afiliado |
+| `src/affiliate/shared/` | o que a fatia inteira divide: `content.ts` (toda a copy), `routes.ts`, `components/` |
+| `src/admin/features/<nome>/` | `auth`, `affiliates`, `shell` — as telas da Porto |
+| `src/admin/shared/routes.ts` | as rotas do painel |
+| `src/shared/` | transversal de verdade: `components/ui/` (shadcn), `components/porto-logo`, `hooks/`, `lib/`, `http/` |
+| `src/app/` | só casca de rota, espelhando as fatias em `(affiliate)/` e `(admin)/` |
 
-Alias `@/*` → `src/*`.
+Alias `@/*` → `src/*`. Um só: o caminho já nomeia o dono.
 
-**A rota é casca:** `page.tsx` importa e monta a tela de `src/features/`, nada mais. Isso mantém a rota do Next trocável sem reescrever a tela — e é o que permite `/cadastro` e a seção da landing servirem o mesmo componente.
+Dentro de uma feature: `components/`, `index.ts` e, quando há leitura de servidor, `data.ts`.
 
-**O route group não aparece na URL.** `(site)` e `(admin)` existem para separar layout e bundle: a landing page não carrega uma linha de código do painel.
+**A rota é casca:** `page.tsx` importa e monta a tela, nada mais. Isso mantém a rota do Next trocável sem reescrever a tela — e é o que permite `/cadastro` e a seção da landing servirem o mesmo componente.
+
+**O route group não aparece na URL.** `(affiliate)/(public)`, `(affiliate)/(account)` e `(admin)` existem para separar layout e bundle: a landing page não carrega uma linha de código do painel.
+
+### Fronteira entre as fatias
+
+Quatro `overrides` com `noRestrictedImports` no [`biome.jsonc`](../../biome.jsonc) da raiz, no mesmo formato dos que o `apps/api` usa para as camadas:
+
+| Origem | Não importa | Por quê |
+|---|---|---|
+| `src/admin/**`, `src/app/(admin)/**` | `@/affiliate/**` | o painel não conhece o portal |
+| `src/affiliate/**`, `src/app/(affiliate)/**` | `@/admin/**` | e o portal não conhece o painel |
+| `src/shared/**` | `@/admin/**`, `@/affiliate/**`, `@/app/**` | a seta aponta para dentro |
+| `src/**` | o miolo de outra feature | de fora, só pelo `index.ts` |
+
+O que os dois lados precisam sobe para `src/shared/`. **Nunca** faça `src/shared/` alcançar uma feature: foi essa inversão que colocou a máscara de CPF dentro de `features/registration` com o painel dependendo dela.
+
+`src/middleware.ts` enxerga as duas fatias e **não precisa de exceção escrita** — mora na raiz de `src/`, fora dos globs das regras. Não acrescente um `!` para ele.
+
+### O barrel é a API pública, e `data.ts` fica fora dele
+
+`index.ts` exporta o que atravessa a fronteira da feature, e é **client-safe**: componente, tipo e action `'use server'`.
+
+`data.ts` e `session.ts` importam `server-only`. Reexportá-los do `index.ts` quebraria o build no primeiro `'use client'` que importasse a feature — com erro apontando para o barrel, não para a causa. Por isso são entrada própria, e a regra de deep-import abre exceção só para esses dois nomes:
+
+```ts
+import { WalletCard } from '@/affiliate/features/area';        // barrel
+import { fetchWallet } from '@/affiliate/features/area/data';  // leitura de servidor
+```
+
+**Dentro da feature, import relativo** — nunca o próprio barrel.
 
 ## Dados: o navegador não fala com a API
 
@@ -27,11 +57,11 @@ Alias `@/*` → `src/*`.
 
 | Função | Quando | Onde |
 |---|---|---|
-| `publicApiFetch` | rota pública: cadastro, os dois logins | `src/core/http/api-client.ts` |
+| `publicApiFetch` | rota pública: cadastro, os dois logins | `src/shared/http/api-client.ts` |
 | `authedApiFetch` | canal `/admin`; lê o cookie do operador | idem |
 | `affiliateApiFetch` | canal `/affiliate/me`; lê o cookie do afiliado | idem |
 
-São três funções e não um parâmetro `auth` de propósito: esquecer um booleano é fácil, escolher o nome errado da função não é. E as duas autenticadas leem **cookies diferentes** — trocar de audiência por engano abriria o canal errado com o token errado. As duas convertem o corpo de erro padrão da API em `ApiError`, com `statusCode` e `code`. **A tela escolhe a mensagem pelo `code`, nunca pelo texto** — a tradução mora em `registration-errors.ts` e em `auth-errors.ts`.
+São três funções e não um parâmetro `auth` de propósito: esquecer um booleano é fácil, escolher o nome errado da função não é. E as duas autenticadas leem **cookies diferentes** — trocar de audiência por engano abriria o canal errado com o token errado. As duas convertem o corpo de erro padrão da API em `ApiError`, com `statusCode` e `code`. **A tela escolhe a mensagem pelo `code`, nunca pelo texto** — a tradução mora em `registration/errors.ts` e em `auth/errors.ts`.
 
 **Escrita é Server Action**, sempre em `*.action.ts` com `'use server'`. O action revalida a entrada com o mesmo schema zod do formulário — é isso que impede um POST montado à mão de contornar a tela — e devolve resultado tipado, nunca lança para a UI.
 
@@ -70,7 +100,7 @@ Além dessas duas, mais três presas à mesma timeline: `.reveal-pop` (entrada c
 
 **Peça acima da dobra não usa `view()`.** A timeline mede a posição do elemento na rolagem, então o que já está na tela quando a página abre nasce no estado final — sem animação nenhuma. Aí o movimento é por tempo: `animate-rise`, `animate-draw`, e o atraso num `[animation-delay:…]`.
 
-Sobrou movimento que o CSS não faz? Só então JavaScript, e com as três garantias do `Typewriter` (`src/features/landing/typewriter.tsx`): o conteúdo completo está sempre no acessível, a ausência de `IntersectionObserver` mostra tudo de uma vez, e `prefers-reduced-motion` pula a animação. Hoje são três componentes: `Typewriter`, `CountUp` (`count-up.tsx`, o saldo do hero) e `Tilt` (`tilt.tsx`, a inclinação dos cartões — que ainda ignora ponteiro que não seja `mouse`, porque no toque arrastar sobre o cartão é o gesto de rolar).
+Sobrou movimento que o CSS não faz? Só então JavaScript, e com as três garantias do `Typewriter` (`affiliate/features/landing/components/typewriter.tsx`): o conteúdo completo está sempre no acessível, a ausência de `IntersectionObserver` mostra tudo de uma vez, e `prefers-reduced-motion` pula a animação. Hoje são três componentes: `Typewriter`, `CountUp` (`affiliate/shared/components/count-up.tsx`, o saldo do hero) e `Tilt` (`affiliate/features/landing/components/tilt.tsx`, a inclinação dos cartões — que ainda ignora ponteiro que não seja `mouse`, porque no toque arrastar sobre o cartão é o gesto de rolar).
 
 Duas animações no mesmo elemento pedem **um token composto**, como `--animate-alert`: duas classes `animate-*` escrevem a mesma propriedade `animation` e a última vence.
 
@@ -78,21 +108,21 @@ Componente do Radix precisa de **entrada e saída**: `data-[state=open]:animate-
 
 Animação nova é token `--animate-*` no `@theme` com os keyframes no fim do `globals.css`. Nada de `animation:` solto em componente.
 
-Toda a copy da landing está em `src/core/content/landing.ts`, num arquivo só. Os números que dependem da Porto vivem em `pendingFromPorto`, hoje `null`: a copy funciona sem eles e passa a exibir quando forem preenchidos. **Não escreva número de comissão, desconto ou prazo direto no JSX.**
+Toda a copy da landing está em `src/affiliate/shared/content.ts`, num arquivo só. Os números que dependem da Porto vivem em `pendingFromPorto`, hoje `null`: a copy funciona sem eles e passa a exibir quando forem preenchidos. **Não escreva número de comissão, desconto ou prazo direto no JSX.**
 
 O extrato do hero é a exceção declarada: `showcase` guarda valores de exemplo e a peça imprime `showcase.disclaimer` colado no saldo, não em nota de rodapé. As linhas somam exatamente `totalCents` — extrato ilustrativo que não fecha a conta ensina a não conferir o extrato de verdade. Quando `pendingFromPorto` for preenchido, este bloco sai.
 
 ## Sessão e acesso
 
-Cookie `httpOnly`, `sameSite=lax`, `secure` fora de dev, oito horas. Nomes em `src/core/session-cookie.ts` — módulo neutro porque o `middleware` roda no Edge e não pode importar nada `server-only`.
+Cookie `httpOnly`, `sameSite=lax`, `secure` fora de dev, oito horas. Nomes em `src/shared/lib/session-cookie.ts` — módulo neutro porque o `middleware` roda no Edge e não pode importar nada `server-only`.
 
 **São duas sessões, com cookies de nomes diferentes:** `porto_session` para o operador e `porto_affiliate_session` para o afiliado. Não é zelo: o middleware só enxerga que o cookie *existe*, então um nome compartilhado faria "entrei como afiliado" valer como "entrei no painel de análise".
 
-`middleware.ts` protege `/admin/:path*` e `/minha-conta/:path*` com negação por omissão, cada um conferindo o seu cookie; as exceções são `/admin/login` e `/entrar`, explícitas, e as duas expulsam quem já tem sessão. O layout de `(shell)` e o de `(affiliate)` conferem de novo, porque o middleware só vê que o cookie existe — quem lê o conteúdo é o layout, e cookie corrompido tem que virar login, não tela quebrada.
+`middleware.ts` protege `/admin/:path*` e `/minha-conta/:path*` com negação por omissão, cada um conferindo o seu cookie; as exceções são `/admin/login` e `/entrar`, explícitas, e as duas expulsam quem já tem sessão. O layout de `(shell)` e o de `(account)` conferem de novo, porque o middleware só vê que o cookie existe — quem lê o conteúdo é o layout, e cookie corrompido tem que virar login, não tela quebrada.
 
 ## O painel roda contra dublê
 
-As rotas `/v1/admin` e as da área do afiliado ainda não existem na API — cards 3.6 e 4.x. Com `API_MOCKING=enabled`, o `api-client` troca o **transporte** por `src/mocks/mock-api.ts`, que devolve `Response` a partir das fixtures. Senha: `MudarAgora!2026`, qualquer e-mail, nos dois logins.
+As rotas `/v1/admin` e as da área do afiliado ainda não existem na API — cards 3.6 e 4.x. Com `API_MOCKING=enabled`, o `api-client` troca o **transporte** por `src/shared/http/mocks/mock-api.ts`, que devolve `Response` a partir das fixtures. Senha: `MudarAgora!2026`, qualquer e-mail, nos dois logins.
 
 **O dublê responde por prefixo, não por canal inteiro.** A constante `DUBBED` lista `/admin`, `/affiliate/auth` e `/affiliate/me`. Caminho fora deles devolve `null` e o `api-client` cai no `fetch` de verdade — é isso que mantém `POST /affiliates`, o cadastro público, gravando no Postgres com a mesma flag ligada. Caminho *dentro* de um prefixo dublado e fora da tabela devolve 404, não `null`: escapar para a API trocaria um erro claro por um `ECONNREFUSED`.
 
@@ -110,14 +140,14 @@ Trocar a função de transporte não tem esse problema, porque não depende de n
 
 O `tailwind-merge` classifica `text-<algo>` como cor de texto quando não conhece o valor, e **descarta a classe** ao lado de um `text-ink-900` na mesma chamada de `cn`. O título passa a renderizar no tamanho de corpo, sem erro em lint, type-check ou build.
 
-Criou `--text-*`, `--shadow-*` ou `--radius-*` novo? Acrescente em `extendTailwindMerge`, em `src/core/cn.ts`, e no teste de regressão em `cn.spec.ts`.
+Criou `--text-*`, `--shadow-*` ou `--radius-*` novo? Acrescente em `extendTailwindMerge`, em `src/shared/lib/cn.ts`, e no teste de regressão em `cn.spec.ts`.
 
 ## Atenção: `server-only` no teste
 
-`src/core/http/api-client.ts` importa `server-only`, que lança fora do servidor. Teste de Server Action dubla o módulo inteiro:
+`src/shared/http/api-client.ts` importa `server-only`, que lança fora do servidor. Teste de Server Action dubla o módulo inteiro:
 
 ```ts
-jest.mock('@/core/http/api-client', () => ({ publicApiFetch: jest.fn() }));
+jest.mock('@/shared/http/api-client', () => ({ publicApiFetch: jest.fn() }));
 ```
 
 É também o limite certo da unidade: o teste do action verifica a tradução de erro e o que foi enviado, não o `fetch`.

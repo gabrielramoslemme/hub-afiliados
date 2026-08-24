@@ -1,8 +1,8 @@
 import { Info } from 'lucide-react';
 import type { Metadata } from 'next';
-import { REDIRECT_PARAM } from '@/core/admin-routes';
-import { SignInForm } from '@/features/admin-auth/sign-in-form';
-import { PortoLogo } from '@/features/landing/porto-logo';
+import { SignInForm } from '@/admin/features/auth';
+import { REDIRECT_PARAM } from '@/admin/shared/routes';
+import { PortoLogo } from '@/shared/components/porto-logo';
 
 export const metadata: Metadata = {
   title: 'Entrar no painel',
