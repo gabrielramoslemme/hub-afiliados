@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { UserRoleEnum } from '../enums';
+import type { AffiliateStatusEnum, UserRoleEnum } from '../enums';
 
 export const adminLoginSchema = z.object({
   email: z.string().email('Informe um e-mail válido'),
@@ -16,6 +16,39 @@ export interface AdminLoginResponse {
     email: string;
     role: UserRoleEnum;
     shouldChangePassword: boolean;
+  };
+}
+
+/*
+  Mesma forma do login do operador, e ainda assim um schema próprio: as duas
+  telas vão divergir — o afiliado ganha "esqueci a senha" e o operador não — e
+  compartilhar o schema faria a divergência quebrar a tela errada.
+*/
+export const affiliateLoginSchema = z.object({
+  /*
+    Normaliza antes de validar, como `createAffiliateSchema`: quem se cadastrou
+    digitando com maiúscula não pode ficar de fora ao voltar, e um espaço colado
+    pelo gerenciador de senhas reprovaria o e-mail inteiro.
+  */
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .refine((value) => z.email().safeParse(value).success, 'Informe um e-mail válido.'),
+  password: z.string().min(1, 'Informe a senha.'),
+});
+
+export type AffiliateLoginRequest = z.infer<typeof affiliateLoginSchema>;
+
+export interface AffiliateLoginResponse {
+  accessToken: string;
+  user: {
+    publicId: string;
+    name: string;
+    email: string;
+    status: AffiliateStatusEnum;
+    /** Nulo enquanto a Porto não emitir o cupom do afiliado aprovado. */
+    coupon: string | null;
   };
 }
 
