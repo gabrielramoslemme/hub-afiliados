@@ -33,7 +33,7 @@
   --color-ink-700: #2a3547;
   --color-ink-900: #0b1220;
 
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-open-sans), ui-sans-serif, system-ui, sans-serif;
 
   /*
     Os tamanhos de display crescem com a viewport e fecham o tracking conforme

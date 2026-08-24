@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Open_Sans } from 'next/font/google';
 import type { PropsWithChildren } from 'react';
 import { site } from '@/affiliate/shared/content';
 import { Toaster } from '@/shared/components/ui/toaster';
@@ -9,9 +9,10 @@ import './globals.css';
   Uma família só, servida pelo next/font: sem requisição a terceiro, sem
   flash de fonte e com o subset recortado no build.
 */
-const inter = Inter({
+const openSans = Open_Sans({
   subsets: ['latin'],
-  variable: '--font-inter',
+  weight: 'variable',
+  variable: '--font-open-sans',
   display: 'swap',
 });
 
@@ -35,7 +36,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: PropsWithChildren) {
   return (
-    <html lang="pt-BR" className={inter.variable}>
+    <html lang="pt-BR" className={openSans.variable}>
       <body>
         {children}
         <Toaster />
