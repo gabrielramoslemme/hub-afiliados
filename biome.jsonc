@@ -6,7 +6,9 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/next-env.d.ts", "!package-lock.json"]
+    // public/ guarda ativo estatico, nao fonte: o SVG da marca nao passa por
+    // formatador nem pela regra de a11y de SVG, que espera JSX.
+    "includes": ["**", "!**/next-env.d.ts", "!package-lock.json", "!**/public"]
   },
   "formatter": {
     "enabled": true,
@@ -25,6 +27,12 @@
   "css": {
     "formatter": {
       "quoteStyle": "single"
+    },
+    // O globals.css do apps/web usa @theme, @layer e @custom-variant do Tailwind 4.
+    // Sem isto o Biome trata a diretiva como erro de sintaxe e para de formatar o
+    // arquivo inteiro — em silencio, com o CSS ficando de fora do quality gate.
+    "parser": {
+      "tailwindDirectives": true
     }
   },
   "linter": {

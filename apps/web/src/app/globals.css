@@ -1,0 +1,561 @@
+@import 'tailwindcss';
+
+/*
+  Paleta da Porto. Os valores vêm das campanhas que servem de referência
+  (agoravoceresolve.com.br, aliancasdesucesso.com), reorganizados em duas escalas
+  monotônicas: azul carrega a marca, ciano é o destaque. Misturar os dois numa
+  escala só — que é como as referências fazem — deixa `brand-500` ciano e
+  `brand-700` azul, e ninguém acerta de primeira qual usar.
+*/
+@theme {
+  --color-blue-50: #f0f7ff;
+  --color-blue-100: #dceafd;
+  --color-blue-200: #cce3fc;
+  --color-blue-300: #9cc2f5;
+  --color-blue-400: #5c90e4;
+  --color-blue-500: #2662c9;
+  --color-blue-600: #0046c0;
+  --color-blue-700: #003399;
+  --color-blue-800: #002a7a;
+  --color-blue-900: #081e44;
+
+  --color-cyan-200: #b3e4fd;
+  --color-cyan-300: #66cafc;
+  --color-cyan-500: #00a1fc;
+
+  /* Neutros levemente azulados: cinza puro ao lado do azul da marca fica sujo. */
+  --color-ink-50: #f8fafc;
+  --color-ink-100: #f1f4f9;
+  --color-ink-200: #e3e8ef;
+  --color-ink-300: #cdd5e0;
+  --color-ink-400: #98a2b3;
+  --color-ink-500: #5a6579;
+  --color-ink-700: #2a3547;
+  --color-ink-900: #0b1220;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /*
+    Os tamanhos de display crescem com a viewport e fecham o tracking conforme
+    crescem — texto grande com tracking de corpo é o tell tipográfico mais comum
+    de página montada às pressas.
+  */
+  --text-display: clamp(2.5rem, 1.4rem + 3.4vw, 4.25rem);
+  --text-display--line-height: 1.02;
+  --text-display--letter-spacing: -0.035em;
+  --text-display--font-weight: 800;
+
+  --text-title: clamp(1.875rem, 1.4rem + 1.5vw, 2.75rem);
+  --text-title--line-height: 1.1;
+  --text-title--letter-spacing: -0.025em;
+  --text-title--font-weight: 700;
+
+  --text-lead: clamp(1.0625rem, 1rem + 0.35vw, 1.25rem);
+  --text-lead--line-height: 1.6;
+
+  /* Sobrelinha em caixa alta precisa de tracking positivo para não empastar. */
+  --text-eyebrow: 0.75rem;
+  --text-eyebrow--line-height: 1;
+  --text-eyebrow--letter-spacing: 0.12em;
+  --text-eyebrow--font-weight: 600;
+
+  --radius-card: 0.75rem;
+  /* Painel é o card grande da página — cupom, extrato, formulário. */
+  --radius-panel: 1.25rem;
+  --radius-pill: 9999px;
+
+  /*
+    Quatro degraus de elevação, do mais raso ao mais alto. Todos tingidos com o
+    azul da marca: sombra em cinza puro ao lado de uma superfície azul lê como
+    sujeira, não como profundidade.
+  */
+  --shadow-card: 0 4px 20px -8px rgb(8 30 68 / 0.14), 0 1px 3px -1px rgb(8 30 68 / 0.07);
+  --shadow-pop: 0 12px 32px -12px rgb(8 30 68 / 0.18), 0 2px 8px -4px rgb(8 30 68 / 0.1);
+  --shadow-float: 0 28px 64px -20px rgb(8 30 68 / 0.3), 0 8px 20px -12px rgb(8 30 68 / 0.16);
+  --shadow-overlay: 0 24px 64px -24px rgb(8 30 68 / 0.35);
+
+  /*
+    Gradientes de marca. Ficam como token e não como utilitário arbitrário
+    porque são superfície, não decoração: quem troca a marca reescreve estas
+    duas linhas.
+  */
+  --gradient-brand: linear-gradient(152deg, var(--color-blue-700) 0%, var(--color-blue-900) 100%);
+  --gradient-card: linear-gradient(160deg, #ffffff 0%, var(--color-blue-50) 100%);
+
+  /*
+    Uma curva só para tudo que se move. `ease-out` genérico faz interface parecer
+    lenta no fim; esta desacelera cedo e assenta seco.
+  */
+  --ease-out-quint: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --animate-rise: rise 0.5s var(--ease-out-quint) backwards;
+  --animate-fade-in: fade-in 0.15s ease-out;
+  --animate-fade-out: fade-out 0.12s ease-in;
+  --animate-pop-in: pop-in 0.16s var(--ease-out-quint);
+  --animate-pop-out: pop-out 0.12s ease-in;
+  --animate-accordion-down: accordion-down 0.24s var(--ease-out-quint);
+  --animate-accordion-up: accordion-up 0.2s ease-in;
+  --animate-caret: caret 1s steps(2, jump-none) infinite;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-sparkle: sparkle 2.8s ease-in-out infinite;
+  --animate-shimmer: shimmer 2.6s linear infinite;
+  --animate-shake: shake 0.36s ease-in-out;
+  /*
+    Entrada e negativa numa animação só. Duas classes `animate-*` no mesmo
+    elemento não funcionariam: as duas escrevem `animation`, e a última vence.
+  */
+  --animate-alert: pop-in 0.16s var(--ease-out-quint), shake 0.36s ease-in-out 0.14s;
+  --animate-draw: draw 0.7s var(--ease-out-quint) both;
+}
+
+/*
+  Tokens semânticos do shadcn. O componente lê daqui e nunca de um valor
+  literal: trocar a marca é reescrever este bloco, não caçar hex no JSX.
+*/
+:root {
+  --radius: 0.5rem;
+
+  --background: #ffffff;
+  --foreground: var(--color-ink-900);
+
+  --card: #ffffff;
+  --card-foreground: var(--color-ink-900);
+
+  --popover: #ffffff;
+  --popover-foreground: var(--color-ink-900);
+
+  --primary: var(--color-blue-600);
+  --primary-foreground: #ffffff;
+
+  --secondary: var(--color-blue-50);
+  --secondary-foreground: var(--color-blue-700);
+
+  --muted: var(--color-ink-100);
+  --muted-foreground: var(--color-ink-500);
+
+  --accent: var(--color-blue-50);
+  --accent-foreground: var(--color-blue-700);
+
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+
+  --border: var(--color-ink-200);
+  --input: var(--color-ink-300);
+  --ring: var(--color-blue-600);
+
+  /* Status do afiliado. Um par por estado, para o Badge não decidir cor sozinho. */
+  --status-pending: #b45309;
+  --status-pending-surface: #fef3c7;
+  --status-approved: #15803d;
+  --status-approved-surface: #dcfce7;
+  --status-rejected: #b91c1c;
+  --status-rejected-surface: #fee2e2;
+  --status-suspended: #475569;
+  --status-suspended-surface: var(--color-ink-100);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    /* O header fixo tem 4rem; sem isto a âncora encosta o título nele. */
+    scroll-padding-top: 5.5rem;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Número em tabela e em métrica alinha por coluna, não por forma da glifo. */
+  table,
+  [data-tabular] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /*
+    Entrada por rolagem sem uma linha de JavaScript, com a `view()` timeline
+    nativa. A degradação é a parte importante: onde o navegador não suporta,
+    o bloco `@supports` inteiro é ignorado e o conteúdo simplesmente aparece —
+    nenhum `opacity: 0` fica preso esperando um observer que nunca rodou, que é
+    como toda biblioteca de scroll-reveal esconde conteúdo quando o JS falha.
+  */
+  .reveal {
+    --reveal-delay: 0s;
+  }
+
+  .reveal-stagger > * {
+    --reveal-delay: 0s;
+  }
+
+  /* Entrada com escala, para objeto que se apresenta: cartão, painel, cupom. */
+  .reveal-pop {
+    --reveal-delay: 0s;
+  }
+
+  /*
+    Superfície de marca. Vem como utilitário e não como `bg-[image:var(...)]`
+    solto no JSX porque a faixa escura aparece em três lugares — topo, passos e
+    rodapé — e as três precisam mudar juntas.
+  */
+  .surface-brand {
+    background-image: var(--gradient-brand);
+  }
+
+  /*
+    Malha de luz do hero. Dois focos de luz suaves em vez do blob flutuante da
+    referência: o blob chama atenção para si, a malha só tira o gradiente da
+    chapa lisa. Fica atrás do conteúdo e nunca captura ponteiro.
+  */
+  /*
+    Uma usa `::before` e a outra `::after` de propósito: cada elemento só tem um
+    de cada, e as duas no mesmo pseudo-elemento fariam a última regra do arquivo
+    apagar a primeira — sem erro em lugar nenhum, só a luz sumindo.
+
+    O `z-index: -1` conta com o `isolate` de quem aplica: a camada fica acima do
+    gradiente da seção e abaixo do conteúdo, em vez de por cima do texto.
+  */
+  .surface-mesh::before,
+  .surface-grid::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .surface-mesh::before {
+    background-image:
+      radial-gradient(60% 50% at 18% 12%, rgb(102 202 252 / 0.22) 0%, transparent 70%),
+      radial-gradient(50% 45% at 88% 78%, rgb(0 161 252 / 0.18) 0%, transparent 70%);
+  }
+
+  /* Grade de 1px, quase invisível: dá escala ao fundo sem virar textura. */
+  .surface-grid::after {
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+    background-size: 72px 72px;
+    mask-image: radial-gradient(75% 65% at 50% 40%, black 0%, transparent 100%);
+  }
+
+  /*
+    Traço que se desenha. `transform-origin` fica aqui e a animação no bloco
+    `@supports`: sem suporte, o traço nasce inteiro em vez de nascer em zero.
+  */
+  .draw-line {
+    transform-origin: left center;
+  }
+
+  .draw-line-y {
+    transform-origin: top center;
+  }
+
+  /*
+    Check de SVG que se risca. O comprimento do traço entra por `--draw-length`
+    porque cada ícone tem o seu; sem valor, o padrão cobre um check de 24px.
+  */
+  .draw-check {
+    stroke-dasharray: var(--draw-length, 32);
+  }
+}
+
+/*
+  Barra de progresso da leitura, presa à rolagem do documento. Onde `scroll()`
+  não existe ela fica em `scale-x-0` e some — não há fallback com ouvinte de
+  scroll, porque o custo de um re-render por frame não se paga num enfeite.
+*/
+@supports (animation-timeline: scroll()) {
+  .scroll-progress {
+    animation: scroll-progress linear;
+    animation-timeline: scroll(root block);
+  }
+}
+
+@keyframes scroll-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal,
+    .reveal-stagger > * {
+      animation: rise linear both;
+      animation-timeline: view();
+      animation-range: entry 4% cover 22%;
+    }
+
+    /*
+      Escalonamento por posição, também em CSS: o segundo item entra um pouco
+      depois do primeiro porque a faixa dele começa mais tarde, não porque
+      alguém agendou um timer.
+    */
+    .reveal-stagger > *:nth-child(2) {
+      animation-range: entry 4% cover 26%;
+    }
+
+    .reveal-stagger > *:nth-child(3) {
+      animation-range: entry 4% cover 30%;
+    }
+
+    .reveal-stagger > *:nth-child(n + 4) {
+      animation-range: entry 4% cover 34%;
+    }
+
+    .reveal-pop {
+      animation: pop-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 2% cover 26%;
+    }
+
+    .draw-line,
+    .draw-line-y {
+      animation: draw-line linear both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 45%;
+    }
+
+    .draw-check {
+      animation: draw linear both;
+      animation-timeline: view();
+      animation-range: entry 12% cover 30%;
+    }
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pop-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+/* O Radix mede o conteúdo e publica a altura nesta variável. */
+@keyframes accordion-down {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+    opacity: 1;
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes caret {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes pop-rise {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.965);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* `.draw-line` escala em X, `.draw-line-y` em Y — o eixo vem do próprio nome. */
+@keyframes draw-line {
+  from {
+    transform: scale3d(0, 0, 1);
+  }
+  to {
+    transform: scale3d(1, 1, 1);
+  }
+}
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: var(--draw-length, 32);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Deriva de poucos pixels: o cartão respira, não flutua. */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes sparkle {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Brilho que atravessa o elemento uma vez por ciclo. */
+@keyframes shimmer {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(220%);
+  }
+}
+
+/* Erro de formulário: curto e de baixa amplitude, senão vira reclamação. */
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-4px);
+  }
+  40% {
+    transform: translateX(4px);
+  }
+  60% {
+    transform: translateX(-2px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  /*
+    O `!important` aqui é o padrão da regra e não uma escapatória: quem pediu
+    menos movimento no sistema operacional precisa vencer qualquer utilitário de
+    animação aplicado no componente, e utilitário de Tailwind tem especificidade
+    igual ou maior que este seletor.
+  */
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: honrar prefers-reduced-motion exige vencer o utilitário */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: honrar prefers-reduced-motion exige vencer o utilitário */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: honrar prefers-reduced-motion exige vencer o utilitário */
+    transition-duration: 0.01ms !important;
+  }
+}
