@@ -1,15 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import {
-  IsBoolean,
-  IsEmail,
-  IsEnum,
-  IsNotEmpty,
-  IsString,
-  Length,
-  Matches,
-  MaxLength,
-} from 'class-validator';
+import { IsEmail, IsEnum, IsNotEmpty, IsString, Length, Matches, MaxLength } from 'class-validator';
 import { PixKeyTypeEnum } from '@porto/contracts';
 import { CreateAffiliateInput } from '@Application/affiliates/create-affiliate.use-case';
 
@@ -46,19 +37,4 @@ export class CreateAffiliateRequestDto implements CreateAffiliateInput {
   @MaxLength(140, { message: 'Informe a chave PIX.' })
   @Transform(({ value }: { value: string }) => value?.trim())
   pixKey: string;
-
-  @ApiProperty({ example: '1.0-homolog' })
-  @IsString({ message: 'Informe a versão dos termos aceita.' })
-  @IsNotEmpty({ message: 'Informe a versão dos termos aceita.' })
-  @MaxLength(30, { message: 'Informe a versão dos termos aceita.' })
-  termsVersion: string;
-
-  /**
-   * A borda cobra só o tipo. Exigir `true` aqui esconderia o
-   * `TERMS_NOT_ACCEPTED` do use case atrás de um erro de validação sem `code`,
-   * e é por esse código que o app decide o que dizer.
-   */
-  @ApiProperty({ example: true })
-  @IsBoolean({ message: 'Informe o aceite dos termos.' })
-  termsAccepted: boolean;
 }

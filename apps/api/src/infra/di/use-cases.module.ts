@@ -1,10 +1,8 @@
 import { FactoryProvider, Module } from '@nestjs/common';
 import { CreateAffiliateUseCase } from '@Application/affiliates/create-affiliate.use-case';
-import { GetCurrentTermsUseCase } from '@Application/terms/get-current-terms.use-case';
 import { AFFILIATE_REPOSITORY } from '@Domain/affiliates/affiliate.repository';
 import { MAILER } from '@Domain/notifications/mailer';
 import { Token } from '@Domain/shared/token';
-import { TERMS_VERSION_REPOSITORY } from '@Domain/terms/terms-version.repository';
 import { USER_REPOSITORY } from '@Domain/users/user.repository';
 import { RepositoriesModule } from '@Infra/database/typeorm/repositories/repositories.module';
 
@@ -28,13 +26,7 @@ function provideUseCase<TDependencies extends unknown[], TUseCase>(
 }
 
 const USE_CASES = [
-  provideUseCase(CreateAffiliateUseCase, [
-    USER_REPOSITORY,
-    AFFILIATE_REPOSITORY,
-    TERMS_VERSION_REPOSITORY,
-    MAILER,
-  ]),
-  provideUseCase(GetCurrentTermsUseCase, [TERMS_VERSION_REPOSITORY]),
+  provideUseCase(CreateAffiliateUseCase, [USER_REPOSITORY, AFFILIATE_REPOSITORY, MAILER]),
 ];
 
 @Module({

@@ -20,8 +20,6 @@ export interface CreateAffiliateWithUserInput {
   cpf: string;
   pixKeyType: PixKeyTypeEnum;
   pixKey: string;
-  termsVersionId: number;
-  termsAcceptedAt: Date;
 }
 
 export interface AffiliateRepository {

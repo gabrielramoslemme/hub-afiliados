@@ -50,7 +50,7 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
   findByPublicId(publicId: string): Promise<AffiliateDetail | null> {
     return this.repository.findOne({
       where: { publicId },
-      relations: { user: true, termsVersion: true, approvedBy: true },
+      relations: { user: true, approvedBy: true },
     });
   }
 
@@ -114,8 +114,6 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
             pixKeyType: input.pixKeyType,
             pixKey: input.pixKey,
             status: AffiliateStatusEnum.PENDING_APPROVAL,
-            termsVersionId: input.termsVersionId,
-            termsAcceptedAt: input.termsAcceptedAt,
           }),
         );
 

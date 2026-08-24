@@ -10,7 +10,7 @@ async function generate(): Promise<void> {
 
   const config = new DocumentBuilder()
     .setTitle('Hub de Afiliados — API')
-    .setDescription('Canais: /v1/mobile (app do afiliado), /v1/admin (painel), /v1/webhooks')
+    .setDescription('Canais: /v1/affiliate (portal do afiliado), /v1/admin (painel), /v1/webhooks')
     .setVersion(process.env.OPENAPI_VERSION ?? '1.0.0')
     .addBearerAuth()
     .build();

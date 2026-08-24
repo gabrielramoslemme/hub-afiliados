@@ -33,11 +33,7 @@ describe('AffiliateRepository (integration)', () => {
 
   beforeEach(async () => {
     await dataSource.query(
-      'TRUNCATE affiliate_status_history, password_reset_tokens, affiliates, users, terms_versions RESTART IDENTITY CASCADE',
-    );
-    await dataSource.query(
-      `INSERT INTO terms_versions (version, content_url, published_at, is_current)
-       VALUES ('1.0-test', 'https://example.com/termos/1.0', now(), true)`,
+      'TRUNCATE affiliate_status_history, password_reset_tokens, affiliates, users RESTART IDENTITY CASCADE',
     );
     const owner = await users.save({
       name: 'Marina Ferraz',
@@ -57,8 +53,6 @@ describe('AffiliateRepository (integration)', () => {
       pixKeyType: PixKeyTypeEnum.EMAIL,
       pixKey: 'marina@example.com',
       status: AffiliateStatusEnum.PENDING_APPROVAL,
-      termsVersionId: 1,
-      termsAcceptedAt: new Date(),
     });
     affiliateId = affiliate.id;
   });
@@ -173,8 +167,6 @@ describe('AffiliateRepository (integration)', () => {
       cpf: '11144477735',
       pixKeyType: PixKeyTypeEnum.EMAIL,
       pixKey: 'bruno@example.com',
-      termsVersionId: 1,
-      termsAcceptedAt: new Date('2026-08-18T10:00:00Z'),
     };
 
     it('creates user, affiliate and the first history row atomically', async () => {

@@ -19,19 +19,20 @@ const STATUS_BY_KIND: Record<DomainErrorKindEnum, HttpStatus> = {
 };
 
 /**
- * O contrato declara `message` como texto, e o `ValidationPipe` manda uma lista
- * com um item por campo. Sem juntar aqui, a mesma rota responderia ora string,
- * ora array, e o app teria de adivinhar qual das duas chegou.
+ * O `ValidationPipe` manda uma lista com um item por campo inválido; um
+ * `DomainError` manda uma frase só. Juntar os dois num texto único obrigaria
+ * o cliente a separar de novo — melhor preservar a forma: array quando há
+ * vários problemas para listar, string quando é uma sentença só.
  */
-function joinMessages(message: unknown): string | undefined {
-  if (Array.isArray(message)) return message.join(' ');
+function normalizeMessage(message: unknown): string | string[] | undefined {
+  if (Array.isArray(message)) return message;
   return typeof message === 'string' ? message : undefined;
 }
 
 interface ErrorDescription {
   status: number;
   code: ApiErrorCode | null;
-  message: string;
+  message: string | string[];
 }
 
 @Catch()
@@ -72,7 +73,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return {
         status: exception.getStatus(),
         code: (body.code as ApiErrorCode | undefined) ?? null,
-        message: joinMessages(body.message) ?? 'Erro',
+        message: normalizeMessage(body.message) ?? 'Erro',
       };
     }
 

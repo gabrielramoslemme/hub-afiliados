@@ -12,12 +12,6 @@ const OPERATORS = [
 async function seed(): Promise<void> {
   await dataSource.initialize();
 
-  await dataSource.query(
-    `INSERT INTO terms_versions (version, content_url, published_at, is_current)
-     VALUES ('1.0-homolog', 'https://afiliados.porto.example/termos/1.0-homolog', now(), true)
-     ON CONFLICT (version) DO NOTHING`,
-  );
-
   const password = await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD ?? 'MudarAgora!2026', 10);
 
   for (const operator of OPERATORS) {

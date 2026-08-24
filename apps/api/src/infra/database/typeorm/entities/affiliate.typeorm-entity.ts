@@ -13,7 +13,6 @@ import {
 } from 'typeorm';
 import { AffiliateStatusEnum, type PixKeyTypeEnum } from '@porto/contracts';
 import { AffiliateEntity } from '@Domain/affiliates/affiliate.entity';
-import { TermsVersionTypeormEntity } from './terms-version.typeorm-entity';
 import { UserTypeormEntity } from './user.typeorm-entity';
 
 @Entity('affiliates')
@@ -66,19 +65,6 @@ export class AffiliateTypeormEntity implements AffiliateEntity {
 
   @Column({ name: 'rejection_reason', type: 'text', nullable: true })
   rejectionReason: string | null;
-
-  @Column({ name: 'terms_version_id', type: 'int' })
-  termsVersionId: number;
-
-  @ManyToOne(() => TermsVersionTypeormEntity)
-  @JoinColumn({
-    name: 'terms_version_id',
-    foreignKeyConstraintName: 'affiliates_terms_version_id_fkey',
-  })
-  termsVersion: TermsVersionTypeormEntity;
-
-  @Column({ name: 'terms_accepted_at', type: 'timestamptz' })
-  termsAcceptedAt: Date;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

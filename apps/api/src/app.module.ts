@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AdminModule } from '@Http/admin/admin.module';
+import { AffiliateChannelModule } from '@Http/affiliate/affiliate.module';
 import { HealthModule } from '@Http/health/health.module';
-import { MobileModule } from '@Http/mobile/mobile.module';
 import { WebhookModule } from '@Http/webhooks/webhook.module';
 import { AppConfigModule } from '@Infra/config/config.module';
 import { DatabaseModule } from '@Infra/database/typeorm/typeorm.module';
@@ -13,7 +13,7 @@ import { MailModule } from '@Infra/services/email/mail.module';
     DatabaseModule,
     MailModule,
     HealthModule,
-    MobileModule,
+    AffiliateChannelModule,
     AdminModule,
     WebhookModule,
   ],

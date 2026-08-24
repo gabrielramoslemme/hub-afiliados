@@ -1,6 +1,6 @@
 ---
 name: create-api-endpoint
-description: Use ao criar rota HTTP na API do porto-hub-afiliados — "cria o endpoint", "nova rota", "expõe no admin", "adiciona o controller", "cria o use case" — em qualquer um dos canais /v1/mobile, /v1/admin ou /v1/webhooks.
+description: Use ao criar rota HTTP na API do porto-hub-afiliados — "cria o endpoint", "nova rota", "expõe no admin", "adiciona o controller", "cria o use case" — em qualquer um dos canais /v1/affiliate, /v1/admin ou /v1/webhooks.
 ---
 
 # Criar endpoint da API
@@ -13,7 +13,7 @@ Enquanto não existirem, uma rota autenticada nasce aberta — não há o que a 
 
 ## Ordem
 
-1. **Fechar o contrato antes de escrever.** Em qual dos três canais a rota entra (`mobile`, `admin`, `webhooks`), método e path, corpo de entrada e corpo de resposta. Se o pedido deixar algo em aberto, pergunte — não arbitre.
+1. **Fechar o contrato antes de escrever.** Em qual dos três canais a rota entra (`affiliate`, `admin`, `webhooks`), método e path, corpo de entrada e corpo de resposta. Se o pedido deixar algo em aberto, pergunte — não arbitre.
 
 2. **Tipos compartilhados**, se o painel consome a resposta: `@porto/contracts` primeiro — skill `create-contract`.
 
@@ -73,7 +73,7 @@ Esquecer o segmento publica a rota do painel em `/v1/affiliates`, fora do canal,
 
 ## Swagger não é opcional
 
-O `openapi.json` é o contrato do app Flutter. Rota sem decorator vira contrato incompleto e o app não a enxerga — e o erro não aparece em nenhum teste daqui.
+O `openapi.json` é o contrato publicado da API. Rota sem decorator vira contrato incompleto — e o erro não aparece em nenhum teste daqui.
 
 Toda rota precisa de `@ApiTags`, decorator de resposta (`@ApiOkResponse`, `@ApiCreatedResponse`, `@ApiUnauthorizedResponse`) e DTO de classe com `@ApiProperty`.
 

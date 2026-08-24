@@ -26,7 +26,7 @@ describe('HttpExceptionFilter', () => {
   const host = {
     switchToHttp: () => ({
       getResponse: () => ({ status }),
-      getRequest: () => ({ method: 'POST', url: '/v1/mobile/auth/login' }),
+      getRequest: () => ({ method: 'POST', url: '/v1/affiliate/auth/login' }),
     }),
   } as unknown as ArgumentsHost;
 
@@ -67,7 +67,7 @@ describe('HttpExceptionFilter', () => {
     expect(body).toMatchObject({ statusCode: 400, message: 'Campo obrigatório' });
   });
 
-  it('joins the field messages of a validation error into one sentence', () => {
+  it('keeps the field messages of a validation error as a list', () => {
     const body = bodySentFor(
       new BadRequestException({
         statusCode: 400,
@@ -77,7 +77,7 @@ describe('HttpExceptionFilter', () => {
     );
 
     expect(status).toHaveBeenCalledWith(400);
-    expect(body.message).toBe('Informe um e-mail válido. Informe um CPF válido.');
+    expect(body.message).toEqual(['Informe um e-mail válido.', 'Informe um CPF válido.']);
   });
 
   it('reads the code out of an http exception payload', () => {
@@ -101,7 +101,7 @@ describe('HttpExceptionFilter', () => {
   it('reports the path and the moment on every answer', () => {
     const body = bodySentFor(new AffiliateNotFoundError());
 
-    expect(body.path).toBe('/v1/mobile/auth/login');
+    expect(body.path).toBe('/v1/affiliate/auth/login');
     expect(typeof body.timestamp).toBe('string');
   });
 });

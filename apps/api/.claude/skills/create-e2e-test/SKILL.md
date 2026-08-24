@@ -74,7 +74,7 @@ Nunca confie em ordem de execução entre `it`s: cada um monta o próprio estado
 ## O que testar aqui
 
 - **Contrato HTTP:** status, formato do corpo, `code` de erro estável do `AuthErrorCodeEnum`.
-- **Guards:** token de afiliado não entra em `/v1/admin`; token de admin não entra em `/v1/mobile`; rota sem token devolve 401.
+- **Guards:** token de afiliado não entra em `/v1/admin`; token de admin não entra em `/v1/affiliate`; rota sem token devolve 401.
 - **Validação:** campo fora do DTO devolve 400 (`forbidNonWhitelisted`), CPF inválido, chave PIX incoerente com o tipo.
 - **Persistência real:** índice único, `ON DELETE`, índice parcial, transação que grava histórico junto com a mudança de status.
 - **Fluxo ponta a ponta:** cadastro → aprovação → e-mail → definição de senha → login.

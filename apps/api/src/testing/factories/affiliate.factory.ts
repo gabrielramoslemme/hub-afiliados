@@ -19,8 +19,6 @@ export function buildAffiliate(overrides: Partial<AffiliateWithUser> = {}): Affi
     approvedAt: null,
     approvedByUserId: null,
     rejectionReason: null,
-    termsVersionId: 1,
-    termsAcceptedAt: new Date('2026-08-17T12:00:00Z'),
     createdAt: new Date('2026-08-17T12:00:00Z'),
     updatedAt: new Date('2026-08-17T12:00:00Z'),
     ...overrides,

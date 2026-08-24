@@ -8,20 +8,6 @@ export class CreateCoreTables1755400000000 implements MigrationInterface {
     await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
 
     await queryRunner.query(`
-      CREATE TABLE "terms_versions" (
-        "id" SERIAL PRIMARY KEY,
-        "version" varchar(30) NOT NULL UNIQUE,
-        "content_url" varchar(500) NOT NULL,
-        "published_at" timestamptz NOT NULL,
-        "is_current" boolean NOT NULL DEFAULT false,
-        "created_at" timestamptz NOT NULL DEFAULT now()
-      )`);
-
-    await queryRunner.query(`
-      CREATE UNIQUE INDEX "uq_terms_versions_current"
-        ON "terms_versions" ("is_current") WHERE "is_current" = true`);
-
-    await queryRunner.query(`
       CREATE TABLE "users" (
         "id" SERIAL PRIMARY KEY,
         "public_id" uuid NOT NULL UNIQUE DEFAULT gen_random_uuid(),
@@ -53,8 +39,6 @@ export class CreateCoreTables1755400000000 implements MigrationInterface {
         "approved_at" timestamptz,
         "approved_by_user_id" int REFERENCES "users"("id"),
         "rejection_reason" text,
-        "terms_version_id" int NOT NULL REFERENCES "terms_versions"("id"),
-        "terms_accepted_at" timestamptz NOT NULL,
         "created_at" timestamptz NOT NULL DEFAULT now(),
         "updated_at" timestamptz NOT NULL DEFAULT now(),
         CONSTRAINT "ck_affiliates_rejection_reason"
@@ -70,6 +54,5 @@ export class CreateCoreTables1755400000000 implements MigrationInterface {
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP TABLE "affiliates"`);
     await queryRunner.query(`DROP TABLE "users"`);
-    await queryRunner.query(`DROP TABLE "terms_versions"`);
   }
 }

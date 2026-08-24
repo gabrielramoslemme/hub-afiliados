@@ -1,30 +1,12 @@
 import { RegistrationErrorCodeEnum } from '@porto/contracts';
 import { DomainError, DomainErrorKindEnum } from '@Domain/errors/domain.error';
 
-export class TermsNotAcceptedError extends DomainError {
-  readonly kind = DomainErrorKindEnum.INVALID_INPUT;
-  readonly code = RegistrationErrorCodeEnum.TERMS_NOT_ACCEPTED;
-
-  constructor() {
-    super('É obrigatório aceitar os termos e a política de privacidade.');
-  }
-}
-
 export class InvalidCpfError extends DomainError {
   readonly kind = DomainErrorKindEnum.INVALID_INPUT;
   readonly code = RegistrationErrorCodeEnum.INVALID_CPF;
 
   constructor() {
     super('Informe um CPF válido.');
-  }
-}
-
-export class OutdatedTermsError extends DomainError {
-  readonly kind = DomainErrorKindEnum.INVALID_INPUT;
-  readonly code = RegistrationErrorCodeEnum.OUTDATED_TERMS;
-
-  constructor() {
-    super('Os termos foram atualizados. Releia e aceite a versão vigente.');
   }
 }
 

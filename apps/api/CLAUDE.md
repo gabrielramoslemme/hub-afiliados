@@ -6,7 +6,7 @@ NestJS 11 + TypeORM 0.3 + PostgreSQL 16. Uma aplicação, três canais de entrad
 
 | Módulo | Consumidor | Autenticação | Guard |
 |---|---|---|---|
-| `mobile` | App Flutter do afiliado | JWT com audiência `affiliate` | `AffiliateGuard` |
+| `affiliate` | Portal web do afiliado (`apps/web`) | JWT com audiência `affiliate` | `AffiliateGuard` |
 | `admin` | Painel da Porto e da Mesa | JWT com audiência `admin` | `AdminGuard`, com `@Roles(...)` por rota |
 | `webhooks` | Sistemas externos | Assinatura própria, sem JWT | — |
 | `health` | Monitoração | pública | `@Public()` |
@@ -14,6 +14,8 @@ NestJS 11 + TypeORM 0.3 + PostgreSQL 16. Uma aplicação, três canais de entrad
 Identidade unificada em `users`, perfil 1:1 em `affiliates`. **Esquecer de checar a audiência é escalação de privilégio.**
 
 **Só o `/v1` é global** (`setGlobalPrefix`) — não há `RouterModule`. Estar dentro do `AdminModule` **não** prefixa `admin`: o canal vai no path, `@Controller('admin/affiliates')`. Esquecer publica a rota fora do canal, sem o guard de audiência.
+
+**Exceção: rota pública sem guard de audiência não carrega canal no path.** `POST /v1/affiliates` — o cadastro público — é o recurso no plural e nada mais; não há `affiliate/` na frente porque não há audiência a marcar, e prefixar teria só reintroduzido a palavra "affiliate" duas vezes. A ação é sempre o verbo HTTP, nunca um segmento a mais no path.
 
 ## Arquitetura
 
@@ -72,19 +74,13 @@ O terceiro é o menos óbvio, e por isso o mais fácil de deixar passar. `@Injec
 
 ```ts
 const USE_CASES = [
-  provideUseCase(CreateAffiliateUseCase, [
-    USER_REPOSITORY,
-    AFFILIATE_REPOSITORY,
-    TERMS_VERSION_REPOSITORY,
-    MAILER,
-  ]),
-  provideUseCase(GetCurrentTermsUseCase, [TERMS_VERSION_REPOSITORY]),
+  provideUseCase(CreateAffiliateUseCase, [USER_REPOSITORY, AFFILIATE_REPOSITORY, MAILER]),
 ];
 ```
 
 - **Use case novo: uma linha em `USE_CASES`.** O `exports` é derivado da lista, e o token do provider é a própria classe — o controller continua injetando pelo tipo, sem `@Inject`.
 - **Todo use case implementa `UseCase<TInput, TOutput>`** (`src/application/use-case.ts`). Nenhum código trata use case genericamente — o contrato existe para o compilador recusar o próximo que nascer com `handle` ou `run`. Sem entrada é `UseCase<void, T>`, com `execute()` sem parâmetro: TypeScript aceita o método mais curto e deixa omitir o argumento na chamada.
-- **A saída é tipo próprio do use case, nunca a entidade do domínio crua.** `GetCurrentTermsOutput`, não `TermsVersionEntity`: devolver a entidade entrega junto o `id` serial, e contar com o controller para descartá-lo é confiar a regra à camada errada. `Date` sai como `Date` — formatar para o fio é do DTO de resposta.
+- **A saída é tipo próprio do use case, nunca a entidade do domínio crua.** `CreateAffiliateOutput`, não `AffiliateEntity`: devolver a entidade entrega junto o `id` serial, e contar com o controller para descartá-lo é confiar a regra à camada errada. `Date` sai como `Date` — formatar para o fio é do DTO de resposta.
 - **O array é posicional, e o compilador cobra a posição.** O `provideUseCase` é tipado sobre os parâmetros do construtor, e cada token carrega o contrato que promete (`Token<UserRepository>`), então **token a menos e token trocado são erro de type-check** — o segundo aponta o método que falta:
 
   ```
@@ -170,13 +166,12 @@ constructor(@Inject(MAIL_PROVIDER) private readonly mailProvider: MailProvider) 
 | Tipo | Propriedade |
 |---|---|
 | `CreateAffiliateUseCase` | `createAffiliateUseCase` |
-| `TermsVersionRepository` | `termsVersionRepository` |
 | `MailProvider` | `mailProvider` |
 | `EnvironmentVariableService` | `environmentVariableService` |
 | `Mailer` | `mailer` — o port não tem sufixo de categoria, e o nome dele já basta |
 | `Repository<UserTypeormEntity>` | `repository` — dentro do adapter, é o único que existe |
 
-Nada de `users`, `affiliates`, `terms`, `provider`, `env`, `config`. O nome curto some no meio das outras dependências, e num construtor de cinco linhas vira adivinhação.
+Nada de `users`, `affiliates`, `provider`, `env`, `config`. O nome curto some no meio das outras dependências, e num construtor de cinco linhas vira adivinhação.
 
 ## Repositórios
 
@@ -234,7 +229,7 @@ Variável nova entra em **quatro** lugares, sempre os quatro:
 O `HttpExceptionFilter` global normaliza toda resposta de erro:
 
 ```json
-{ "statusCode": 403, "code": "REGISTRATION_UNDER_REVIEW", "message": "...", "path": "/v1/mobile/auth/login", "timestamp": "..." }
+{ "statusCode": 403, "code": "REGISTRATION_UNDER_REVIEW", "message": "...", "path": "/v1/affiliate/auth/login", "timestamp": "..." }
 ```
 
 - **O use case lança `DomainError`, nunca exceção do Nest.** O `biome check` reprova `ForbiddenException` dentro de `src/application/**`: status HTTP não significa nada para um webhook ou um job chamando o mesmo use case.
@@ -258,7 +253,7 @@ O `HttpExceptionFilter` global normaliza toda resposta de erro:
 
 ## Swagger
 
-O `openapi.json` é o contrato do app Flutter — rota sem decorator vira contrato incompleto, o app não a enxerga e nenhum teste daqui acusa.
+O `openapi.json` é o contrato publicado da API — rota sem decorator vira contrato incompleto, e nenhum teste daqui acusa.
 
 - Toda rota precisa de `@ApiTags`, decorator de resposta (`@ApiOkResponse`, `@ApiCreatedResponse`, …) e DTO de **classe** com `@ApiProperty`.
 - DTO de resposta é classe em `src/http/<canal>/<agregado>/dtos/`, nunca a `interface` de `@porto/contracts` — o Swagger precisa do metadado em runtime. Os dois coexistem: a classe descreve, o tipo compartilhado tipa o painel.
@@ -306,7 +301,7 @@ npm run typeorm:create --workspace apps/api --name=X         # nova migration, t
 npm run typeorm:run --workspace apps/api                     # aplica as migrations
 npm run typeorm:revert --workspace apps/api                  # reverte a última
 npm run typeorm:generate --workspace apps/api --name=Drift   # detector de drift, espera "No changes"
-npm run seed --workspace apps/api                            # termos vigentes + operadores
+npm run seed --workspace apps/api                            # operadores
 npm run openapi:generate --workspace apps/api                # gera apps/api/openapi.json
 ```
 

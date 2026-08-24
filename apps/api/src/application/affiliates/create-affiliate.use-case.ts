@@ -5,14 +5,11 @@ import {
   EmailAlreadyRegisteredError,
   InvalidCpfError,
   InvalidPixKeyError,
-  OutdatedTermsError,
   PixKeyMismatchError,
-  TermsNotAcceptedError,
 } from '@Domain/affiliates/affiliates.errors';
 import { isValidCpf, sanitizeCpf } from '@Domain/affiliates/cpf.util';
 import { isValidPixKey, normalizePixKey } from '@Domain/affiliates/pix-key.util';
 import { Mailer } from '@Domain/notifications/mailer';
-import { TermsVersionRepository } from '@Domain/terms/terms-version.repository';
 import { UserRepository } from '@Domain/users/user.repository';
 import { UseCase } from '../use-case';
 
@@ -22,8 +19,6 @@ export interface CreateAffiliateInput {
   cpf: string;
   pixKeyType: PixKeyTypeEnum;
   pixKey: string;
-  termsVersion: string;
-  termsAccepted: boolean;
 }
 
 export interface CreateAffiliateOutput {
@@ -37,18 +32,12 @@ export class CreateAffiliateUseCase
   constructor(
     private readonly userRepository: UserRepository,
     private readonly affiliateRepository: AffiliateRepository,
-    private readonly termsVersionRepository: TermsVersionRepository,
     private readonly mailer: Mailer,
   ) {}
 
   async execute(input: CreateAffiliateInput): Promise<CreateAffiliateOutput> {
-    if (!input.termsAccepted) throw new TermsNotAcceptedError();
-
     const cpf = sanitizeCpf(input.cpf);
     if (!isValidCpf(cpf)) throw new InvalidCpfError();
-
-    const current = await this.termsVersionRepository.findCurrent();
-    if (!current || current.version !== input.termsVersion) throw new OutdatedTermsError();
 
     if (!isValidPixKey(input.pixKeyType, input.pixKey)) throw new InvalidPixKeyError();
     const pixKey = normalizePixKey(input.pixKeyType, input.pixKey);
@@ -66,8 +55,6 @@ export class CreateAffiliateUseCase
       cpf,
       pixKeyType: input.pixKeyType,
       pixKey,
-      termsVersionId: current.id,
-      termsAcceptedAt: new Date(),
     });
 
     // O port nunca lança: e-mail não enviado é incidente operacional, não deve

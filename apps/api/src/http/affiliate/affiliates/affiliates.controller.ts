@@ -9,9 +9,9 @@ import { CreateAffiliateUseCase } from '@Application/affiliates/create-affiliate
 import { CreateAffiliateRequestDto } from './dtos/create-affiliate.request.dto';
 import { CreateAffiliateResponseDto } from './dtos/create-affiliate.response.dto';
 
-@ApiTags('mobile/affiliates')
-@Controller('mobile/affiliates')
-export class MobileAffiliatesController {
+@ApiTags('affiliates')
+@Controller('affiliates')
+export class AffiliatesController {
   constructor(private readonly createAffiliateUseCase: CreateAffiliateUseCase) {}
 
   @Post()

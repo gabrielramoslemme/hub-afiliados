@@ -4,14 +4,10 @@ import {
   EmailAlreadyRegisteredError,
   InvalidCpfError,
   InvalidPixKeyError,
-  OutdatedTermsError,
   PixKeyMismatchError,
-  TermsNotAcceptedError,
 } from '@Domain/affiliates/affiliates.errors';
-import { TermsVersionEntity } from '@Domain/terms/terms-version.entity';
 import { buildAffiliate } from '@Testing/factories/affiliate.factory';
 import { affiliateRepositoryMock } from '@Testing/mocks/repositories/affiliate.repository.mock';
-import { termsVersionRepositoryMock } from '@Testing/mocks/repositories/terms-version.repository.mock';
 import { userRepositoryMock } from '@Testing/mocks/repositories/user.repository.mock';
 import { mailerMock } from '@Testing/mocks/services/mailer.mock';
 import { CreateAffiliateInput, CreateAffiliateUseCase } from './create-affiliate.use-case';
@@ -23,35 +19,17 @@ describe('CreateAffiliateUseCase', () => {
     cpf: '529.982.247-25',
     pixKeyType: PixKeyTypeEnum.EMAIL,
     pixKey: 'marina@email.com',
-    termsVersion: '1.0-homolog',
-    termsAccepted: true,
-  };
-
-  const currentTerms: TermsVersionEntity = {
-    id: 1,
-    version: '1.0-homolog',
-    contentUrl: 'https://example.com/termos/1.0',
-    publishedAt: new Date('2026-08-17T12:00:00Z'),
-    isCurrent: true,
-    createdAt: new Date('2026-08-17T12:00:00Z'),
   };
 
   function buildUseCase() {
     const userRepository = userRepositoryMock();
     const affiliateRepository = affiliateRepositoryMock();
-    const termsVersionRepository = termsVersionRepositoryMock();
     const mailer = mailerMock();
-    termsVersionRepository.findCurrent.mockResolvedValue(currentTerms);
     affiliateRepository.createWithUser.mockResolvedValue(
       buildAffiliate({ publicId: 'affiliate-public-id' }),
     );
-    const useCase = new CreateAffiliateUseCase(
-      userRepository,
-      affiliateRepository,
-      termsVersionRepository,
-      mailer,
-    );
-    return { useCase, userRepository, affiliateRepository, termsVersionRepository, mailer };
+    const useCase = new CreateAffiliateUseCase(userRepository, affiliateRepository, mailer);
+    return { useCase, userRepository, affiliateRepository, mailer };
   }
 
   it('creates the affiliate pending approval', async () => {
@@ -83,16 +61,6 @@ describe('CreateAffiliateUseCase', () => {
     );
   });
 
-  it('stores the termsVersionRepository version that is current', async () => {
-    const { useCase, affiliateRepository } = buildUseCase();
-
-    await useCase.execute(input);
-
-    expect(affiliateRepository.createWithUser).toHaveBeenCalledWith(
-      expect.objectContaining({ termsVersionId: 1, termsAcceptedAt: expect.any(Date) }),
-    );
-  });
-
   it('sends the registration received email', async () => {
     const { useCase, mailer } = buildUseCase();
 
@@ -106,35 +74,12 @@ describe('CreateAffiliateUseCase', () => {
     );
   });
 
-  it('rejects a registration without the termsVersionRepository acceptance', async () => {
-    const { useCase } = buildUseCase();
-
-    await expect(useCase.execute({ ...input, termsAccepted: false })).rejects.toThrow(
-      TermsNotAcceptedError,
-    );
-  });
-
   it('rejects a cpf with an invalid check digit', async () => {
     const { useCase } = buildUseCase();
 
     await expect(useCase.execute({ ...input, cpf: '529.982.247-26' })).rejects.toThrow(
       InvalidCpfError,
     );
-  });
-
-  it('rejects a termsVersionRepository version that is no longer current', async () => {
-    const { useCase } = buildUseCase();
-
-    await expect(useCase.execute({ ...input, termsVersion: '0.9-homolog' })).rejects.toThrow(
-      OutdatedTermsError,
-    );
-  });
-
-  it('rejects a registration when no termsVersionRepository version is published', async () => {
-    const { useCase, termsVersionRepository } = buildUseCase();
-    termsVersionRepository.findCurrent.mockResolvedValue(null);
-
-    await expect(useCase.execute(input)).rejects.toThrow(OutdatedTermsError);
   });
 
   it('rejects a pix key of type cpf that differs from the informed cpf', async () => {
