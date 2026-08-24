@@ -84,15 +84,18 @@ O ganho não é cosmético: com `src/app/(admin)/**` e `src/app/(affiliate)/**` 
 a casca de rota entra na mesma regra de lint das fatias. Hoje ela escapa de tudo, e é
 exatamente de lá que sai um dos três vazamentos.
 
-### `data.ts` é entrada própria, fora do barrel
+### `data.ts` e `session.ts` são entrada própria, fora do barrel
 
 `data.ts` importa `api-client`, que importa `server-only`. Um barrel que reexportasse
 `data.ts` ao lado de um componente `'use client'` quebraria o build no primeiro cliente que
 importasse a feature — e a mensagem de erro não apontaria para o barrel.
 
-Então `index.ts` fica client-safe: componentes, tipos e actions `'use server'`. A leitura
-de servidor entra por `@/<fatia>/features/<nome>/data`, e a regra de deep-import abre
-exceção só para esse caminho. Dentro da feature, import relativo — nunca o próprio barrel.
+`session.ts` tem exatamente o mesmo problema, e a implementação mostrou que ele é
+consumido de fora tanto quanto o `data.ts`: o layout de `(shell)`, o de `(account)` e o
+`admin-topbar` chamam `readSessionUser`. São **dois** nomes na exceção, não um.
+
+`index.ts` fica client-safe: componentes, tipos e actions `'use server'`. Dentro da
+feature, import relativo — nunca o próprio barrel.
 
 ### `shared/` não importa feature, então o topbar fica na feature
 
@@ -143,12 +146,20 @@ Alias continua sendo só `@/*`. O caminho já nomeia o dono — `@/affiliate/fea
 | Destino | Vem de |
 |---|---|
 | `features/landing/components/` | `hero-section`, `pitch-section`, `benefits-section`, `audience-section`, `steps-section`, `requirements-section`, `faq-section`, `coupon-card`, `earnings-card`, `typewriter`, `tilt` |
-| `features/landing/content.ts` | `core/content/landing.ts` |
+| `shared/content.ts` | `core/content/landing.ts` |
 | `features/registration/` | `components/{registration-form,registration-section}`, `errors.ts`, `result.ts`, `register-affiliate.action.ts` |
 | `features/auth/` | `components/sign-in-form`, `errors.ts`, `session.ts`, `sign-in.action.ts`, `sign-out.action.ts` |
 | `features/area/` | `components/{account-nav,account-topbar,page-heading,statement-list,wallet-card}`, `data.ts` ← `queries.ts` |
 | `shared/components/` | `section`, `site-header`, `site-footer`, `count-up`, `copy-coupon` |
 | `shared/routes.ts` | `core/affiliate-routes.ts` |
+
+**A copy não é da landing, é da fatia.** O desenho original mandava
+`core/content/landing.ts` para `features/landing/content.ts`. Os imports desmentem: além da
+landing, consomem o arquivo o `site-header` e o `site-footer` — que moram em
+`affiliate/shared/components/` —, o formulário de cadastro, três telas de rota e o
+`app/layout.tsx`. Deixá-lo na feature recriaria a inversão `shared → feature` que esta
+mudança existe para matar. Vai para `affiliate/shared/content.ts`, e continua sendo um
+arquivo só.
 
 **`src/admin/`**
 
@@ -187,7 +198,15 @@ as camadas — `noRestrictedImports` com `patterns`, mensagem em inglês, `level
 | `src/admin/**`, `src/app/(admin)/**` | `@/affiliate/**` | o painel não conhece o portal; o que é dos dois vai para `src/shared/` |
 | `src/affiliate/**`, `src/app/(affiliate)/**` | `@/admin/**` | espelho da anterior |
 | `src/shared/**` | `@/admin/**`, `@/affiliate/**`, `@/app/**` | a seta aponta para dentro |
-| `src/**` | `@/*/features/*/**`, exceto `!@/*/features/*/data` | de fora da feature, só pelo `index.ts` |
+| `src/**` | `@/*/features/*/**`, exceto `data` e `session` | de fora da feature, só pelo `index.ts` |
+
+**O padrão de barrel é repetido nos quatro blocos, e isso não é descuido.** Quando dois
+overrides alcançam o mesmo arquivo, o Biome **substitui** a configuração da regra em vez de
+somar a ela. Um override amplo com o padrão de barrel apagaria a regra de fatia de todo
+arquivo de `apps/web/src`, e o lint passaria limpo sem checar cruzamento nenhum — foi
+exatamente o que aconteceu na primeira tentativa, e só apareceu porque as regras foram
+testadas com arquivos de sonda em vez de confiadas pelo "0 erros". Padrão novo entra nos
+quatro.
 
 **`src/middleware.ts` enxerga as duas fatias, e não precisa de exceção escrita.** Ele mora
 na raiz de `src/`, fora dos globs `src/admin/**` e `src/affiliate/**`, então nenhuma das
