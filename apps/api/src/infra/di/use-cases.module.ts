@@ -1,7 +1,11 @@
 import { FactoryProvider, Module } from '@nestjs/common';
 import { CreateAffiliateUseCase } from '@Application/affiliates/create-affiliate.use-case';
+import { GetAffiliateUseCase } from '@Application/affiliates/get-affiliate.use-case';
+import { ListAffiliateStatusHistoryUseCase } from '@Application/affiliates/list-affiliate-status-history.use-case';
+import { ListAffiliatesUseCase } from '@Application/affiliates/list-affiliates.use-case';
 import { AdminLoginUseCase } from '@Application/auth/admin-login.use-case';
 import { AFFILIATE_REPOSITORY } from '@Domain/affiliates/affiliate.repository';
+import { AFFILIATE_STATUS_HISTORY_REPOSITORY } from '@Domain/affiliates/affiliate-status-history.repository';
 import { ACCESS_TOKEN_ISSUER } from '@Domain/auth/access-token';
 import { PASSWORD_HASHER } from '@Domain/auth/password-hasher';
 import { MAILER } from '@Domain/notifications/mailer';
@@ -32,6 +36,12 @@ function provideUseCase<TDependencies extends unknown[], TUseCase>(
 const USE_CASES = [
   provideUseCase(CreateAffiliateUseCase, [USER_REPOSITORY, AFFILIATE_REPOSITORY, MAILER]),
   provideUseCase(AdminLoginUseCase, [USER_REPOSITORY, PASSWORD_HASHER, ACCESS_TOKEN_ISSUER, CLOCK]),
+  provideUseCase(ListAffiliatesUseCase, [AFFILIATE_REPOSITORY]),
+  provideUseCase(GetAffiliateUseCase, [AFFILIATE_REPOSITORY]),
+  provideUseCase(ListAffiliateStatusHistoryUseCase, [
+    AFFILIATE_REPOSITORY,
+    AFFILIATE_STATUS_HISTORY_REPOSITORY,
+  ]),
 ];
 
 @Module({

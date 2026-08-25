@@ -37,6 +37,23 @@ export class EmailAlreadyRegisteredError extends DomainError {
   }
 }
 
+/** Sem `code`: o painel não escolhe mensagem por ele, só mostra a que veio. */
+export class AffiliateNotFoundError extends DomainError {
+  readonly kind = DomainErrorKindEnum.NOT_FOUND;
+
+  constructor() {
+    super('Afiliado não encontrado.');
+  }
+}
+
+export class AffiliateAlreadyDecidedError extends DomainError {
+  readonly kind = DomainErrorKindEnum.CONFLICT;
+
+  constructor() {
+    super('Este cadastro já foi decidido e não pode ser decidido de novo.');
+  }
+}
+
 export class CpfAlreadyRegisteredError extends DomainError {
   readonly kind = DomainErrorKindEnum.CONFLICT;
   readonly code = RegistrationErrorCodeEnum.CPF_ALREADY_REGISTERED;
