@@ -24,6 +24,12 @@ const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
   year: 'numeric',
 });
 
+const timeFormatter = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: TIME_ZONE,
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 /*
   Dinheiro entra e sai em centavos, nunca em reais fracionários: somar `0.1` com
   `0.2` em ponto flutuante dá `0.30000000000000004`, e um extrato que erra o
@@ -44,6 +50,11 @@ export function formatDateTime(iso: string): string {
 
 export function formatDate(iso: string): string {
   return dateFormatter.format(new Date(iso));
+}
+
+/** A hora sozinha: na fila, dia e hora empilhados leem melhor que a linha inteira. */
+export function formatTime(iso: string): string {
+  return timeFormatter.format(new Date(iso));
 }
 
 /** O CPF mascarado já vem pontuado da API; o completo vem só com dígitos. */

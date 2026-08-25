@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, Inbox } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Inbox } from 'lucide-react';
 import Link from 'next/link';
 import { QUEUE_PATH } from '@/admin/shared/routes';
 import {
@@ -9,12 +9,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/components/ui/table';
-import { formatDateTime } from '@/shared/lib/format';
+import { formatDate, formatTime } from '@/shared/lib/format';
 import { fetchAffiliates } from '../data';
 import { type QueueParams, type QueueSortBy, queueHref } from '../queue-params';
 import { AffiliateStatusBadge } from './affiliate-status';
 import { QueueFilters } from './queue-filters';
 import { QueuePagination } from './queue-pagination';
+import { RowActions } from './row-actions';
 
 function SortableHead({
   params,
@@ -40,9 +41,21 @@ function SortableHead({
         className="inline-flex items-center gap-1.5 transition-colors hover:text-ink-900"
       >
         {children}
-        <Icon className="size-3.5" aria-hidden />
+        <Icon className={active ? 'size-3.5 text-blue-600' : 'size-3.5 text-ink-300'} aria-hidden />
       </Link>
     </TableHead>
+  );
+}
+
+/** Inicial em disco: dá âncora visual à linha sem inventar foto que não existe. */
+function Avatar({ name }: { name: string }) {
+  return (
+    <span
+      className="flex size-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-[0.8125rem] font-bold text-blue-700"
+      aria-hidden
+    >
+      {name.slice(0, 1).toUpperCase()}
+    </span>
   );
 }
 
@@ -50,83 +63,85 @@ export async function AffiliatesQueue({ params }: { params: QueueParams }) {
   const { data, total } = await fetchAffiliates(params);
 
   return (
-    <div className="flex flex-col gap-6">
-      <QueueFilters params={params} />
+    <div className="overflow-hidden rounded-panel border border-ink-200 bg-white shadow-card">
+      <QueueFilters params={params} total={total} />
 
-      <div className="overflow-hidden rounded-card border border-ink-200 bg-white">
-        {data.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 px-6 py-20 text-center">
-            <Inbox className="size-8 text-ink-300" aria-hidden />
-            <p className="font-semibold text-ink-900">Nenhum cadastro neste recorte</p>
-            <p className="max-w-sm text-sm text-ink-500">
-              {params.search
-                ? `Nada encontrado para “${params.search}”. Revise o termo ou limpe a busca.`
-                : 'Assim que um cadastro chegar por este filtro, ele aparece aqui.'}
-            </p>
-            {(params.search || params.status) && (
-              <Link href={QUEUE_PATH} className="mt-2 text-sm font-semibold text-blue-600">
-                Limpar filtros
-              </Link>
-            )}
-          </div>
-        ) : (
-          <>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <SortableHead params={params} column="name">
-                    Afiliado
-                  </SortableHead>
-                  <TableHead>CPF</TableHead>
-                  <TableHead>Situação</TableHead>
-                  <SortableHead params={params} column="createdAt">
-                    Enviado em
-                  </SortableHead>
-                  <TableHead>
-                    <span className="sr-only">Ações</span>
-                  </TableHead>
+      {data.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 px-6 py-24 text-center">
+          <span className="flex size-12 items-center justify-center rounded-full bg-ink-100">
+            <Inbox className="size-6 text-ink-400" aria-hidden />
+          </span>
+          <p className="font-semibold text-ink-900">Nenhum cadastro neste recorte</p>
+          <p className="max-w-sm text-sm text-ink-500">
+            {params.search
+              ? `Nada encontrado para “${params.search}”. Revise o termo ou limpe a busca.`
+              : 'Assim que um cadastro chegar por este filtro, ele aparece aqui.'}
+          </p>
+          {(params.search || params.status) && (
+            <Link href={QUEUE_PATH} className="mt-2 text-sm font-semibold text-blue-600">
+              Limpar filtros
+            </Link>
+          )}
+        </div>
+      ) : (
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-ink-50/60 hover:bg-ink-50/60">
+                <SortableHead params={params} column="name">
+                  Afiliado
+                </SortableHead>
+                <TableHead>E-mail</TableHead>
+                <TableHead>CPF</TableHead>
+                <TableHead>Situação</TableHead>
+                <SortableHead params={params} column="createdAt">
+                  Enviado em
+                </SortableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+
+            <TableBody>
+              {data.map((affiliate) => (
+                <TableRow key={affiliate.publicId}>
+                  <TableCell className="py-3">
+                    <Link
+                      href={`${QUEUE_PATH}/${affiliate.publicId}`}
+                      className="flex items-center gap-3 font-medium text-ink-900 transition-colors hover:text-blue-600"
+                    >
+                      <Avatar name={affiliate.name} />
+                      {affiliate.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-ink-500">{affiliate.email}</TableCell>
+                  {/* Listagem mostra CPF mascarado; completo só no detalhe. */}
+                  <TableCell className="whitespace-nowrap text-ink-500" data-tabular>
+                    {affiliate.maskedCpf}
+                  </TableCell>
+                  <TableCell>
+                    <AffiliateStatusBadge status={affiliate.status} />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap" data-tabular>
+                    <span className="block text-ink-700">{formatDate(affiliate.createdAt)}</span>
+                    <span className="block text-[0.8125rem] text-ink-400">
+                      {formatTime(affiliate.createdAt)}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <RowActions
+                      publicId={affiliate.publicId}
+                      name={affiliate.name}
+                      status={affiliate.status}
+                    />
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
+              ))}
+            </TableBody>
+          </Table>
 
-              <TableBody>
-                {data.map((affiliate) => (
-                  <TableRow key={affiliate.publicId}>
-                    <TableCell className="py-3">
-                      <span className="block font-medium text-ink-900">{affiliate.name}</span>
-                      <span className="block text-[0.8125rem] text-ink-500">{affiliate.email}</span>
-                    </TableCell>
-                    {/* Listagem mostra CPF mascarado; completo só no detalhe. */}
-                    <TableCell className="whitespace-nowrap text-ink-500">
-                      {affiliate.maskedCpf}
-                    </TableCell>
-                    <TableCell>
-                      <AffiliateStatusBadge status={affiliate.status} />
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-ink-500">
-                      {formatDateTime(affiliate.createdAt)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Link
-                        href={`${QUEUE_PATH}/${affiliate.publicId}`}
-                        className="group inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:underline"
-                      >
-                        Analisar
-                        <span className="sr-only"> o cadastro de {affiliate.name}</span>
-                        <ArrowRight
-                          className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
-                          aria-hidden
-                        />
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-
-            <QueuePagination params={params} total={total} />
-          </>
-        )}
-      </div>
+          <QueuePagination params={params} total={total} />
+        </>
+      )}
     </div>
   );
 }

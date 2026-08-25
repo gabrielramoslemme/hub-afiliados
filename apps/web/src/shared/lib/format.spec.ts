@@ -5,6 +5,7 @@ import {
   formatDate,
   formatDateTime,
   formatPixKeyDisplay,
+  formatTime,
 } from './format';
 
 describe('formatDateTime', () => {
@@ -25,6 +26,21 @@ describe('formatDateTime', () => {
 describe('formatDate', () => {
   it('renders the day without the time', () => {
     expect(formatDate('2026-08-19T14:24:00.000Z')).toBe('19/08/2026');
+  });
+});
+
+describe('formatTime', () => {
+  it('renders the time without the day, in são paulo', () => {
+    expect(formatTime('2026-08-19T14:24:00.000Z')).toBe('11:24');
+  });
+
+  it('does not drift with the timezone of the machine running it', () => {
+    const original = process.env.TZ;
+    process.env.TZ = 'UTC';
+
+    expect(formatTime('2026-08-19T14:24:00.000Z')).toBe('11:24');
+
+    process.env.TZ = original;
   });
 });
 

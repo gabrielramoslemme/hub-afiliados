@@ -12,24 +12,20 @@ const ROLE_LABELS: Record<UserRoleEnum, string> = {
   [UserRoleEnum.MESA_ADMIN]: 'Administrador · Mesa',
 };
 
+/**
+ * A barra não repete a navegação: quem navega é a `AdminSidebar`. Aqui ficam a
+ * identidade de quem está logado e a saída — e, abaixo de `lg`, onde a faixa
+ * escura some, a assinatura da marca que devolve para a fila.
+ */
 export function AdminTopbar({ user }: { user: SessionUser }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-ink-200 bg-white">
-      <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between gap-6 px-6">
-        <div className="flex items-center gap-8">
-          <Link href={QUEUE_PATH} aria-label="Painel do Hub de Afiliados">
-            <PortoLogo />
-          </Link>
+    <header className="sticky top-0 z-30 border-b border-ink-200 bg-white/85 backdrop-blur">
+      <div className="flex h-16 items-center justify-between gap-6 px-6 lg:px-8">
+        <Link href={QUEUE_PATH} aria-label="Painel do Hub de Afiliados" className="lg:hidden">
+          <PortoLogo />
+        </Link>
 
-          <nav>
-            <Link
-              href={QUEUE_PATH}
-              className="text-sm font-medium text-ink-700 transition-colors hover:text-blue-600"
-            >
-              Afiliados
-            </Link>
-          </nav>
-        </div>
+        <span className="hidden text-sm font-medium text-ink-500 lg:inline">Painel de análise</span>
 
         <UserMenu name={user.name} email={user.email} roleLabel={ROLE_LABELS[user.role]} />
       </div>
