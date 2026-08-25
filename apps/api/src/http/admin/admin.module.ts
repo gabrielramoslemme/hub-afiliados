@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
-import { RepositoriesModule } from '@Infra/database/typeorm/repositories/repositories.module';
+import { UseCasesModule } from '@Infra/di/use-cases.module';
+import { AdminAuthController } from './auth/admin-auth.controller';
 
-@Module({ imports: [RepositoriesModule] })
+@Module({
+  imports: [UseCasesModule],
+  controllers: [AdminAuthController],
+})
 export class AdminModule {}

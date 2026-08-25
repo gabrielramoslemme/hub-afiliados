@@ -1,7 +1,11 @@
 import { FactoryProvider, Module } from '@nestjs/common';
 import { CreateAffiliateUseCase } from '@Application/affiliates/create-affiliate.use-case';
+import { AdminLoginUseCase } from '@Application/auth/admin-login.use-case';
 import { AFFILIATE_REPOSITORY } from '@Domain/affiliates/affiliate.repository';
+import { ACCESS_TOKEN_ISSUER } from '@Domain/auth/access-token';
+import { PASSWORD_HASHER } from '@Domain/auth/password-hasher';
 import { MAILER } from '@Domain/notifications/mailer';
+import { CLOCK } from '@Domain/shared/clock';
 import { Token } from '@Domain/shared/token';
 import { USER_REPOSITORY } from '@Domain/users/user.repository';
 import { RepositoriesModule } from '@Infra/database/typeorm/repositories/repositories.module';
@@ -27,6 +31,7 @@ function provideUseCase<TDependencies extends unknown[], TUseCase>(
 
 const USE_CASES = [
   provideUseCase(CreateAffiliateUseCase, [USER_REPOSITORY, AFFILIATE_REPOSITORY, MAILER]),
+  provideUseCase(AdminLoginUseCase, [USER_REPOSITORY, PASSWORD_HASHER, ACCESS_TOKEN_ISSUER, CLOCK]),
 ];
 
 @Module({
