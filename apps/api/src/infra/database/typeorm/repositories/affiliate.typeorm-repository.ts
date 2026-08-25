@@ -9,18 +9,48 @@ import {
 } from '@Domain/affiliates/affiliate.entity';
 import {
   AffiliateRepository,
+  AffiliateSortBy,
   ChangeAffiliateStatusInput,
   CreateAffiliateWithUserInput,
+  SearchAffiliatesInput,
+  SearchAffiliatesResult,
 } from '@Domain/affiliates/affiliate.repository';
 import {
   CpfAlreadyRegisteredError,
   EmailAlreadyRegisteredError,
 } from '@Domain/affiliates/affiliates.errors';
+import { sanitizeCpf } from '@Domain/affiliates/cpf.util';
 import { AffiliateTypeormEntity } from '@Infra/database/typeorm/entities/affiliate.typeorm-entity';
 import { AffiliateStatusHistoryTypeormEntity } from '@Infra/database/typeorm/entities/affiliate-status-history.typeorm-entity';
 import { UserTypeormEntity } from '@Infra/database/typeorm/entities/user.typeorm-entity';
 
 const UNIQUE_VIOLATION = '23505';
+
+/**
+ * O contrato só admite estes dois. É caminho de propriedade, não nome de coluna:
+ * com `skip`/`take` o TypeORM monta uma subconsulta de ids e resolve o `ORDER BY`
+ * pelo metadado — nome de coluna cru quebra ali, em runtime.
+ */
+const SORT_COLUMNS: Record<AffiliateSortBy, string> = {
+  createdAt: 'affiliate.createdAt',
+  name: 'user.name',
+};
+
+const DIGITS_AND_PUNCTUATION = /^[\d.\s-]+$/;
+
+/**
+ * A busca decide pelo conteúdo: entrada só de dígitos e pontuação procura CPF,
+ * o resto procura pessoa. É a mesma regra que a analista já usa no painel.
+ */
+function criteriaFor(search: string): [string, Record<string, string>] {
+  const digits = sanitizeCpf(search);
+
+  if (digits.length > 0 && DIGITS_AND_PUNCTUATION.test(search)) {
+    return ['affiliate.cpf LIKE :cpf', { cpf: `${digits}%` }];
+  }
+
+  return ['(user.name ILIKE :term OR user.email ILIKE :term)', { term: `%${search}%` }];
+}
 
 /**
  * A checagem prévia do use case dá a mensagem boa no caso comum; o índice único
@@ -56,6 +86,29 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
 
   findByUserId(userId: number): Promise<AffiliateWithUser | null> {
     return this.repository.findOne({ where: { userId }, relations: { user: true } });
+  }
+
+  async search(input: SearchAffiliatesInput): Promise<SearchAffiliatesResult> {
+    const query = this.repository
+      .createQueryBuilder('affiliate')
+      // A lista mostra nome e e-mail; resolvê-los depois seria N+1 numa tela
+      // paginada de dez em dez.
+      .innerJoinAndSelect('affiliate.user', 'user');
+
+    if (input.status) query.andWhere('affiliate.status = :status', { status: input.status });
+
+    if (input.search) query.andWhere(...criteriaFor(input.search));
+
+    const [rows, total] = await query
+      .orderBy(SORT_COLUMNS[input.sortBy], input.sortOrder === 'asc' ? 'ASC' : 'DESC')
+      // O `id` desempata cadastros gravados no mesmo instante: sem ele a
+      // paginação repete uma linha numa página e some com ela na outra.
+      .addOrderBy('affiliate.id', 'DESC')
+      .skip((input.page - 1) * input.limit)
+      .take(input.limit)
+      .getManyAndCount();
+
+    return { rows, total };
   }
 
   save(affiliate: Partial<AffiliateEntity>): Promise<AffiliateEntity> {

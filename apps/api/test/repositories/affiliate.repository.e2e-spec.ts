@@ -160,6 +160,100 @@ describe('AffiliateRepository (integration)', () => {
     expect(await history.listByAffiliateId(affiliateId)).toHaveLength(0);
   });
 
+  describe('search', () => {
+    const defaults = {
+      page: 1,
+      limit: 10,
+      status: null,
+      search: null,
+      sortBy: 'createdAt' as const,
+      sortOrder: 'desc' as const,
+    };
+
+    beforeEach(async () => {
+      const rogerio = await affiliates.createWithUser({
+        fullName: 'Rogério Bastos',
+        email: 'rogerio.bastos@email.com',
+        cpf: '11144477735',
+        pixKeyType: PixKeyTypeEnum.EMAIL,
+        pixKey: 'rogerio.bastos@email.com',
+      });
+      await affiliates.createWithUser({
+        fullName: 'Cleide Nakamura',
+        email: 'cleide.nakamura@email.com',
+        cpf: '39053344705',
+        pixKeyType: PixKeyTypeEnum.EMAIL,
+        pixKey: 'cleide.nakamura@email.com',
+      });
+      await affiliates.changeStatus({
+        affiliateId: rogerio.id,
+        toStatus: AffiliateStatusEnum.APPROVED,
+        actorUserId: analystId,
+      });
+    });
+
+    it('loads the user the list needs', async () => {
+      const { rows, total } = await affiliates.search(defaults);
+
+      expect(total).toBe(3);
+      expect(rows[0].user.name).toEqual(expect.any(String));
+    });
+
+    it('filters by status', async () => {
+      const { rows, total } = await affiliates.search({
+        ...defaults,
+        status: AffiliateStatusEnum.PENDING_APPROVAL,
+      });
+
+      expect(total).toBe(2);
+      expect(rows.every((row) => row.status === AffiliateStatusEnum.PENDING_APPROVAL)).toBe(true);
+    });
+
+    it('searches by part of the name', async () => {
+      const { rows, total } = await affiliates.search({ ...defaults, search: 'nakam' });
+
+      expect(total).toBe(1);
+      expect(rows[0].user.name).toBe('Cleide Nakamura');
+    });
+
+    it('searches by email regardless of case', async () => {
+      const { rows } = await affiliates.search({ ...defaults, search: 'ROGERIO.BASTOS@EMAIL' });
+
+      expect(rows[0].user.email).toBe('rogerio.bastos@email.com');
+    });
+
+    it('searches by cpf even when the caller types the punctuation', async () => {
+      const { rows, total } = await affiliates.search({ ...defaults, search: '111.444.777-35' });
+
+      expect(total).toBe(1);
+      expect(rows[0].cpf).toBe('11144477735');
+    });
+
+    it('sorts by name ascending', async () => {
+      const { rows } = await affiliates.search({ ...defaults, sortBy: 'name', sortOrder: 'asc' });
+
+      expect(rows.map((row) => row.user.name)).toEqual([
+        'Cleide Nakamura',
+        'Marina Ferraz',
+        'Rogério Bastos',
+      ]);
+    });
+
+    it('paginates without losing the total', async () => {
+      const { rows, total } = await affiliates.search({
+        ...defaults,
+        page: 2,
+        limit: 1,
+        sortBy: 'name',
+        sortOrder: 'asc',
+      });
+
+      expect(total).toBe(3);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].user.name).toBe('Marina Ferraz');
+    });
+  });
+
   describe('createWithUser', () => {
     const createInput = {
       fullName: 'Bruno Alves',
