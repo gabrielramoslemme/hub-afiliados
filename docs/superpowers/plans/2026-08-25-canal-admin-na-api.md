@@ -270,18 +270,18 @@ Expected: PASS.
 
 - [ ] **Step 7: Registrar a variável de ambiente nos quatro lugares**
 
-`env.validation.ts`: `JWT_EXPIRES_IN: Joi.string().default('8h'),`
+`env.validation.ts`: `JWT_EXPIRES_IN_SECONDS: Joi.number().default(28800),`
 `environment-variable.service.ts`:
 
 ```ts
   /** Casado com o cookie de sessão do Next: token que morre antes vira 401 numa tela logada. */
-  get jwtExpiresIn(): string {
-    return this.configService.get<string>('JWT_EXPIRES_IN') ?? '8h';
+  get jwtExpiresInSeconds(): number {
+    return Number(this.configService.get('JWT_EXPIRES_IN_SECONDS') ?? 28800);
   }
 ```
 
-`.env.example`: `JWT_EXPIRES_IN=8h` logo abaixo de `JWT_SECRET`.
-`.github/workflows/ci.yml`, bloco `env:`: `JWT_EXPIRES_IN: 8h`.
+`.env.example`: `JWT_EXPIRES_IN_SECONDS=28800` logo abaixo de `JWT_SECRET`.
+`.github/workflows/ci.yml`, bloco `env:`: `JWT_EXPIRES_IN_SECONDS: 28800`.
 
 - [ ] **Step 8: Escrever os módulos de wiring**
 

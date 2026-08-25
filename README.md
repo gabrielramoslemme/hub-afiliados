@@ -45,16 +45,26 @@ npm run dev                                   # sobe API e web juntos
 Se a porta 3000 já estiver em uso na sua máquina, mude `PORT` no `apps/api/.env`
 e ajuste `API_BASE_URL` no `apps/web/.env.local`.
 
-### O painel roda contra dublê
+### O painel fala com a API
 
-As rotas `/v1/admin` ainda não existem na API. Com `API_MOCKING=enabled` no
-`apps/web/.env.local`, um dublê em memória responde no lugar dela e o painel
-funciona inteiro — fila, detalhe, aprovação e reprovação. Entre em
-http://localhost:3005/admin/login com **qualquer e-mail** e a senha
-`MudarAgora!2026`; só a senha é conferida.
+Entre em http://localhost:3005/admin/login com um dos operadores do seed abaixo.
+A fila, o detalhe, o histórico, a aprovação e a reprovação passam pelo canal
+`/v1/admin`, então a API precisa estar no ar, com as migrations aplicadas e o
+seed rodado.
 
-O dublê cobre apenas o canal `/v1/admin`. O cadastro da landing page continua
-indo para a API de verdade com a mesma flag ligada. Quando as rotas nascerem,
+Aprovar um cadastro dispara o e-mail `REGISTRATION_APPROVED` com o link de
+definir senha, válido por 48 horas. Em desenvolvimento o provider é o `logger`:
+o link sai no console da API, e a tela `/definir-senha` ainda não existe.
+
+### A área do afiliado ainda roda contra dublê
+
+As rotas `/v1/affiliate/auth` e `/v1/affiliate/me` não existem na API. Com
+`API_MOCKING=enabled` no `apps/web/.env.local`, um dublê em memória responde no
+lugar delas: entre em http://localhost:3005/entrar com **qualquer e-mail** e a
+senha `MudarAgora!2026`; só a senha é conferida.
+
+O dublê cobre apenas esses dois prefixos. O painel e o cadastro da landing page
+vão para a API de verdade com a mesma flag ligada. Quando as rotas nascerem,
 tire a flag.
 
 ### Operadores criados pelo seed

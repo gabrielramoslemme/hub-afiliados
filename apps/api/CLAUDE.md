@@ -17,6 +17,18 @@ Identidade unificada em `users`, perfil 1:1 em `affiliates`. **Esquecer de checa
 
 **Exceção: rota pública sem guard de audiência não carrega canal no path.** `POST /v1/affiliates` — o cadastro público — é o recurso no plural e nada mais; não há `affiliate/` na frente porque não há audiência a marcar, e prefixar teria só reintroduzido a palavra "affiliate" duas vezes. A ação é sempre o verbo HTTP, nunca um segmento a mais no path.
 
+### Dois guards, duas perguntas
+
+`AuthenticatedGuard` é global, registrado como `APP_GUARD` no `AppModule`: **sem `@Public()` explícito, requisição sem token válido é 401** — inclusive a rota que alguém criar amanhã e esquecer de proteger. Ele verifica a assinatura uma vez e deixa os claims em `request.auth`.
+
+`AdminGuard` fica nos controllers do canal e responde a outra pergunta: este token é **deste** canal. Confere `aud`, aplica o `@Roles(...)` quando a rota declara, e publica `request.actor` — que chega ao handler pelo decorator de parâmetro `@Actor()`, nunca por `@Req()`. Ele lê o que o primeiro deixou, então a assinatura não é verificada duas vezes.
+
+Hoje `@Public()` marca exatamente três rotas: `GET /v1/health`, `POST /v1/affiliates` e `POST /v1/admin/auth/login`. Acrescentar uma quarta é decisão de segurança, não de conveniência.
+
+**O claim `sub` é o `public_id`.** O token viaja para fora da API, e o id serial não sai daqui; quando o use case precisa do id interno — `approved_by_user_id` é FK —, ele resolve pelo `UserRepository.findByPublicId`.
+
+O tempo de vida vem de `JWT_EXPIRES_IN_SECONDS` (oito horas), casado com o cookie de sessão do painel: token que morre antes do cookie vira 401 numa tela que se acha logada.
+
 ## Arquitetura
 
 **A dependência aponta para dentro.** O núcleo — domínio e application — não sabe que Nest, TypeORM ou HTTP existem; cada camada de fora conhece só as de dentro. O que o domínio precisa do mundo, ele **declara** como contrato — quem implementa é infra. Inverter isso não é questão de estilo: é o bug que este desenho existe para impedir.
@@ -31,18 +43,25 @@ Identidade unificada em `users`, perfil 1:1 em `affiliates`. **Esquecer de checa
 
 ### Como uma requisição atravessa
 
-Aprovar um afiliado pelo painel. **Os arquivos de `http/` e `application/` abaixo são ilustrativos** — a Onda 1 ainda não tem nenhuma dessas rotas; o resto existe.
+Aprovar um afiliado pelo painel — o caminho real, arquivo por arquivo.
 
 ```
 POST /v1/admin/affiliates/:publicId/approve
 │
+├─ http/shared/guards/authenticated.guard.ts
+│     guard global: sem @Public(), token inválido é 401. Publica os claims em request.auth.
+│
 ├─ http/admin/affiliates/admin-affiliates.controller.ts
-│     guard de audiência, ValidationPipe no DTO, chama o use case. Sem regra.
+│     AdminGuard confere a audiência e publica o ator, ValidationPipe no DTO,
+│     @Actor() entrega quem decidiu, chama o use case. Sem regra.
 │
 ├─ application/affiliates/approve-affiliate.use-case.ts
 │     a regra: só PENDING_APPROVAL vira APPROVED; senão lança DomainError.
-│     Classe pura — sem decorator, sem Nest, sem infra. Conhece duas interfaces:
+│     Classe pura — sem decorator, sem Nest, sem infra. Conhece sete interfaces,
+│     entre elas:
 │       AffiliateRepository → domain/affiliates/affiliate.repository.ts
+│       TokenGenerator      → domain/auth/token-generator.ts
+│       Clock               → domain/shared/clock.ts
 │       Mailer              → domain/notifications/mailer.ts
 │
 ├─ infra/di/use-cases.module.ts
@@ -68,7 +87,14 @@ Quem liga token a implementação é `*.module.ts`, em dois passos: o `Repositor
 |---|---|---|
 | Postgres, via TypeORM | `AffiliateRepository` (`src/domain/affiliates/`) | `AffiliateTypeormRepository` |
 | MailerSend | `Mailer` (`src/domain/notifications/`) | `MailService` e os providers |
+| `@nestjs/jwt` | `AccessTokenIssuer` e `AccessTokenVerifier` (`src/domain/auth/`) | `JwtAccessTokenService` |
+| bcrypt | `PasswordHasher` (`src/domain/auth/`) | `BcryptPasswordHasher` |
+| `node:crypto` | `TokenGenerator` (`src/domain/auth/`) | `CryptoTokenGenerator` |
+| O relógio | `Clock` (`src/domain/shared/`) | `SystemClock` |
+| `APP_BASE_URL` | `LinkBuilder` (`src/domain/notifications/`) | `AppLinkBuilder` |
 | Nest, como container de DI | nada — o use case é classe comum | `src/infra/di/use-cases.module.ts` |
+
+**O relógio está na tabela pelo mesmo motivo que o ORM.** `approvedAt` e o vencimento do token de 48h são decisão de regra, e um `new Date()` dentro do use case torna a asserção impossível sem congelar o relógio global do Jest.
 
 O terceiro é o menos óbvio, e por isso o mais fácil de deixar passar. `@Injectable` e `@Inject` parecem anotação, mas emitem `require('@nestjs/common')` no arquivo compilado: um use case decorado carrega o framework junto, e passa a só existir dentro do container. Sem decorator, quem monta o use case é o wiring — em infra, porque o container é infraestrutura como qualquer outra:
 
@@ -141,6 +167,8 @@ Token trocado de posição no `provideUseCase` **era** a quarta, e a pior: dois 
 | Controller | `src/http/<canal>/<agregado>/<canal>-<agregado>.controller.ts` |
 | DTO de request/response | `src/http/<canal>/<agregado>/dtos/<nome>.request.dto.ts` |
 | Módulo do canal | `src/http/<canal>/<canal>.module.ts` |
+| Guard e decorator transversais | `src/http/shared/guards/`, `src/http/shared/decorators/` |
+| Adapter de serviço (auth, relógio, link) | `src/infra/services/<assunto>/` |
 | Variável de ambiente | `src/infra/config/` |
 | Factory e mock de teste | `src/testing/` |
 | Teste unitário | ao lado do arquivo, `.spec.ts` |

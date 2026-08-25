@@ -1,14 +1,11 @@
 import {
   type AffiliateDetail,
-  type AffiliateListItem,
   type AffiliateMeResponse,
   type AffiliateStatementEntry,
   AffiliateStatusEnum,
-  type AffiliateStatusHistoryItem,
   type AffiliateWalletResponse,
   PixKeyTypeEnum,
   StatementEntryKindEnum,
-  UserRoleEnum,
 } from '@porto/contracts';
 
 /**
@@ -129,9 +126,7 @@ function createdAtFor(index: number): string {
   return `2026-08-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:24:00.000Z`;
 }
 
-export interface MockAffiliate extends AffiliateDetail {
-  history: AffiliateStatusHistoryItem[];
-}
+export type MockAffiliate = AffiliateDetail;
 
 function build(index: number): MockAffiliate {
   const [name, email, cpf, status] = SEED[index];
@@ -139,37 +134,6 @@ function build(index: number): MockAffiliate {
   const createdAt = createdAtFor(index);
   const decidedAt = `2026-08-20T14:${String(10 + index).padStart(2, '0')}:00.000Z`;
   const actorName = ANALYSTS[index % ANALYSTS.length];
-  const decided = status !== AffiliateStatusEnum.PENDING_APPROVAL;
-
-  const history: AffiliateStatusHistoryItem[] = [
-    {
-      fromStatus: null,
-      toStatus: AffiliateStatusEnum.PENDING_APPROVAL,
-      reason: null,
-      actorName: null,
-      createdAt,
-    },
-  ];
-
-  if (decided) {
-    history.push({
-      fromStatus: AffiliateStatusEnum.PENDING_APPROVAL,
-      toStatus: status === AffiliateStatusEnum.SUSPENDED ? AffiliateStatusEnum.APPROVED : status,
-      reason: status === AffiliateStatusEnum.REJECTED ? REJECTION_REASONS[index % 3] : null,
-      actorName,
-      createdAt: decidedAt,
-    });
-  }
-
-  if (status === AffiliateStatusEnum.SUSPENDED) {
-    history.push({
-      fromStatus: AffiliateStatusEnum.APPROVED,
-      toStatus: AffiliateStatusEnum.SUSPENDED,
-      reason: 'Suspensão preventiva a pedido de compliance.',
-      actorName,
-      createdAt: `2026-08-20T18:${String(10 + index).padStart(2, '0')}:00.000Z`,
-    });
-  }
 
   return {
     publicId,
@@ -184,30 +148,10 @@ function build(index: number): MockAffiliate {
     approvedAt: status === AffiliateStatusEnum.PENDING_APPROVAL ? null : decidedAt,
     approvedByName: status === AffiliateStatusEnum.PENDING_APPROVAL ? null : actorName,
     rejectionReason: status === AffiliateStatusEnum.REJECTED ? REJECTION_REASONS[index % 3] : null,
-    history,
   };
 }
 
 export const mockAffiliates: MockAffiliate[] = SEED.map((_, index) => build(index));
-
-export function toListItem(affiliate: MockAffiliate): AffiliateListItem {
-  return {
-    publicId: affiliate.publicId,
-    name: affiliate.name,
-    email: affiliate.email,
-    maskedCpf: affiliate.maskedCpf,
-    status: affiliate.status,
-    createdAt: affiliate.createdAt,
-  };
-}
-
-export const mockOperator = {
-  publicId: '20000000-0000-4000-8000-000000000001',
-  name: 'Camila Prestes',
-  email: 'analista@porto.example',
-  role: UserRoleEnum.PORTO_ANALYST,
-  shouldChangePassword: false,
-};
 
 /*
   A conta que o dublê autentica na área do afiliado. Sai de `mockAffiliates`,

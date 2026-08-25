@@ -10,11 +10,11 @@ type Transport = (input: string, init: RequestInit) => Promise<Response>;
 let announced = false;
 
 /**
- * Em desenvolvimento, enquanto as rotas `/v1/admin` não existirem na API, o
- * transporte é trocado por um dublê em memória. Trocar a **função**, e não
- * remendar o `fetch` global: o Next reaplica o próprio patch de cache sobre o
- * `globalThis.fetch` a cada recompilação, e um interceptador instalado no boot
- * some no primeiro Fast Refresh, levando o painel junto sem nada no log.
+ * Em desenvolvimento, enquanto as rotas da área do afiliado não existirem na
+ * API, o transporte é trocado por um dublê em memória. Trocar a **função**, e
+ * não remendar o `fetch` global: o Next reaplica o próprio patch de cache sobre
+ * o `globalThis.fetch` a cada recompilação, e um interceptador instalado no
+ * boot some no primeiro Fast Refresh, levando a tela junto sem nada no log.
  *
  * O import é dinâmico para o dublê não entrar no bundle de quem não o liga.
  */
@@ -23,9 +23,9 @@ async function transport(): Promise<Transport> {
     if (!announced) {
       announced = true;
       console.warn(
-        '[web] API_MOCKING não está "enabled": o painel e a área do afiliado vão ' +
-          'falhar ao entrar, porque /v1/admin e /v1/affiliate/auth ainda não ' +
-          'existem na API.',
+        '[web] API_MOCKING não está "enabled": a área do afiliado vai falhar ao ' +
+          'entrar, porque /v1/affiliate/auth ainda não existe na API. O painel ' +
+          'não depende disso — ele fala com o canal /v1/admin de verdade.',
       );
     }
 
@@ -34,14 +34,14 @@ async function transport(): Promise<Transport> {
 
   if (!announced) {
     announced = true;
-    console.warn('[web] Dublê ativo: /v1/admin e a área do afiliado são respondidos em memória.');
+    console.warn('[web] Dublê ativo: só a área do afiliado é respondida em memória.');
   }
 
   const { mockApiFetch } = await import('@/shared/http/mocks/mock-api');
 
-  // O dublê responde só o canal `/admin`. O cadastro público continua indo para
-  // a API de verdade com a mesma flag ligada — é por isso que ele devolve
-  // `null` em vez de 404 para o que não é dele.
+  // O dublê responde só a área do afiliado. O cadastro público e o painel
+  // continuam indo para a API de verdade com a mesma flag ligada — é por isso
+  // que ele devolve `null` em vez de 404 para o que não é dele.
   return async (input, init) => (await mockApiFetch(input, init)) ?? fetch(input, init);
 }
 

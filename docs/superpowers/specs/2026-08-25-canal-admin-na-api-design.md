@@ -60,8 +60,9 @@ API, e é a mesma regra que vale para rota, resposta e log. Quando o use case pr
 interno (`approved_by_user_id` é FK), ele resolve pelo `UserRepository.findByPublicId`.
 
 Expiração de **8 horas**, casando com o `SESSION_MAX_AGE_SECONDS` do cookie do Next: token
-que morre antes do cookie vira 401 numa tela que se acha logada. Vem de `JWT_EXPIRES_IN`,
-variável nova nos quatro lugares de sempre.
+que morre antes do cookie vira 401 numa tela que se acha logada. Vem de
+`JWT_EXPIRES_IN_SECONDS`, variável nova nos quatro lugares de sempre — em segundos, e não
+`'8h'`, para ser a mesma unidade do cookie que ela precisa acompanhar.
 
 ### Negar por omissão é do guard global; a audiência é do canal
 
