@@ -81,7 +81,7 @@ Tokens no `@theme` de `src/app/globals.css`: escala `blue-*` para a marca, `cyan
 
 Oito regras que mantêm a página com cara de projetada:
 
-1. Uma família tipográfica (Inter, por `next/font`), escala rígida, numeral tabular nos dados.
+1. Uma família tipográfica (Open Sans, por `next/font`, no peso variável — o token de display pede 800, que o conjunto estático 400/600/700 não cobre), escala rígida, numeral tabular nos dados.
 2. **Quatro degraus de elevação e nada além.** `shadow-card` no card que responde ao ponteiro, `shadow-pop` no menu suspenso, `shadow-float` no objeto que paira sobre a faixa escura, `shadow-overlay` no diálogo. Bloco que não se destaca de nada continua com fio de 1px.
 3. **Uma faixa escura por documento, e ela é o topo.** `surface-brand` veste o hero e o rodapé; o miolo alterna branco, `ink-50` e `blue-50`.
 4. Nenhuma seção repete o fundo da anterior.
