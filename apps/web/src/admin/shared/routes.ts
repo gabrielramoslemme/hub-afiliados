@@ -6,5 +6,13 @@
 export const LOGIN_PATH = '/admin/login';
 export const QUEUE_PATH = '/admin/afiliados';
 
+/**
+ * Para onde a leitura manda quem a API recusou. Não é o login direto: o cookie
+ * ainda está lá, e o `middleware` devolveria a pessoa para a fila — um laço de
+ * redirecionamento. Quem apaga o cookie é o route handler deste caminho, que
+ * então manda para o login.
+ */
+export const SESSION_EXPIRED_PATH = '/admin/sessao-expirada';
+
 /** Query string que carrega o destino original através do login. */
 export const REDIRECT_PARAM = 'next';

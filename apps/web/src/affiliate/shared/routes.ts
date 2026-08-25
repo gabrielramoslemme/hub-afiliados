@@ -5,3 +5,10 @@
  */
 export const AFFILIATE_LOGIN_PATH = '/entrar';
 export const AFFILIATE_AREA_PATH = '/minha-conta';
+
+/**
+ * Mesma razão do caminho equivalente no painel: mandar direto para o login com
+ * o cookie vencido ainda no navegador faria o `middleware` devolver a pessoa
+ * para a área, em laço. O route handler daqui apaga o cookie primeiro.
+ */
+export const AFFILIATE_SESSION_EXPIRED_PATH = '/minha-conta/sessao-expirada';
