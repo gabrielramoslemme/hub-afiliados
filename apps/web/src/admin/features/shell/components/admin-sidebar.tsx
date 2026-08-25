@@ -4,9 +4,12 @@ import { Megaphone, Users, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ComponentType } from 'react';
+import type { SessionUser } from '@/admin/features/auth/session';
 import { QUEUE_PATH } from '@/admin/shared/routes';
 import { PortoLogo } from '@/shared/components/porto-logo';
 import { cn } from '@/shared/lib/cn';
+import { roleLabel } from '../role-label';
+import { UserMenu } from './user-menu';
 
 interface NavItem {
   label: string;
@@ -34,12 +37,12 @@ const NAV: NavItem[] = [
  * Some abaixo de `lg`: a única seção que existe hoje é a fila, e o logotipo do
  * topo já leva até ela.
  */
-export function AdminSidebar() {
+export function AdminSidebar({ user }: { user: SessionUser }) {
   const pathname = usePathname();
 
   return (
     <aside className="surface-brand sticky top-0 hidden h-svh w-60 shrink-0 flex-col lg:flex">
-      <div className="flex h-16 items-center px-6">
+      <div className="flex h-16 shrink-0 items-center px-6">
         <Link href={QUEUE_PATH} aria-label="Painel do Hub de Afiliados">
           <PortoLogo tone="dark" />
         </Link>
@@ -94,6 +97,17 @@ export function AdminSidebar() {
           })}
         </ul>
       </nav>
+
+      {/* `mt-auto` prende o bloco no rodapé: quem está logado e a saída ficam
+          onde a mão já está, e não competem com a navegação pelo topo. */}
+      <div className="mt-auto border-t border-white/10 p-3">
+        <UserMenu
+          name={user.name}
+          email={user.email}
+          roleLabel={roleLabel(user.role)}
+          tone="dark"
+        />
+      </div>
     </aside>
   );
 }

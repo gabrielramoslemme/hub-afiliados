@@ -15,7 +15,7 @@ export default async function AdminShellLayout({ children }: PropsWithChildren) 
 
   return (
     <div className="flex min-h-svh bg-ink-50">
-      <AdminSidebar />
+      <AdminSidebar user={user} />
 
       {/* `min-w-0` na coluna: sem ele a tabela larga estica o flex e a página
           inteira ganha rolagem horizontal, em vez de a tabela rolar sozinha. */}
