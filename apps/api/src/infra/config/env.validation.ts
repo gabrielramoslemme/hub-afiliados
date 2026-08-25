@@ -9,6 +9,7 @@ export const envValidationSchema = Joi.object({
     .uri({ scheme: ['postgres', 'postgresql'] })
     .required(),
   JWT_SECRET: Joi.string().min(32).required(),
+  JWT_EXPIRES_IN_SECONDS: Joi.number().default(28800),
   APP_BASE_URL: Joi.string().uri().required(),
   PANEL_BASE_URL: Joi.string().uri().required(),
   MAIL_PROVIDER: Joi.string().valid('mailersend', 'logger').default('logger'),

@@ -26,6 +26,13 @@ export class EnvironmentVariableService {
   get jwtSecret(): string {
     return this.required('JWT_SECRET');
   }
+  /**
+   * Em segundos, a mesma unidade do cookie de sessão do painel, e o mesmo valor:
+   * token que morre antes do cookie vira 401 numa tela que se acha logada.
+   */
+  get jwtExpiresInSeconds(): number {
+    return Number(this.configService.get('JWT_EXPIRES_IN_SECONDS') ?? 28800);
+  }
   get appBaseUrl(): string {
     return this.required('APP_BASE_URL');
   }

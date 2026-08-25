@@ -24,6 +24,7 @@ jobs:
       NODE_ENV: test
       DATABASE_URL: postgres://porto:porto@localhost:5432/hub_afiliados_test
       JWT_SECRET: ci-secret-with-at-least-32-characters-here
+      JWT_EXPIRES_IN_SECONDS: 28800
       APP_BASE_URL: http://localhost:3000
       PANEL_BASE_URL: http://localhost:3005
       NEXT_PUBLIC_API_BASE_URL: http://localhost:3000/v1
