@@ -21,9 +21,11 @@ Identidade unificada em `users`, perfil 1:1 em `affiliates`. **Esquecer de checa
 
 `AuthenticatedGuard` é global, registrado como `APP_GUARD` no `AppModule`: **sem `@Public()` explícito, requisição sem token válido é 401** — inclusive a rota que alguém criar amanhã e esquecer de proteger. Ele verifica a assinatura uma vez e deixa os claims em `request.auth`.
 
-`AdminGuard` fica nos controllers do canal e responde a outra pergunta: este token é **deste** canal. Confere `aud`, aplica o `@Roles(...)` quando a rota declara, e publica `request.actor` — que chega ao handler pelo decorator de parâmetro `@Actor()`, nunca por `@Req()`. Ele lê o que o primeiro deixou, então a assinatura não é verificada duas vezes.
+`AdminGuard` e `AffiliateGuard` ficam nos controllers dos canais e respondem a outra pergunta: este token é **deste** canal. Conferem `aud`, o do painel aplica o `@Roles(...)` quando a rota declara, e os dois publicam `request.actor` — que chega ao handler pelo decorator de parâmetro `@Actor()`, nunca por `@Req()`. Eles leem o que o primeiro deixou, então a assinatura não é verificada duas vezes.
 
-Hoje `@Public()` marca exatamente três rotas: `GET /v1/health`, `POST /v1/affiliates` e `POST /v1/admin/auth/login`. Acrescentar uma quarta é decisão de segurança, não de conveniência.
+**Trocar de canal é 403, nos dois sentidos**, e há e2e para isso: token de afiliado em `/v1/admin/affiliates` e token de operador em `/v1/affiliate/me`.
+
+Hoje `@Public()` marca exatamente cinco rotas: `GET /v1/health`, `POST /v1/affiliates`, `POST /v1/admin/auth/login`, `POST /v1/affiliate/auth/login` e `POST /v1/affiliate/auth/set-password`. A última é pública porque é o que a pessoa tem **antes** de ter senha: quem autentica a chamada é o token de uso único no corpo. Acrescentar uma sexta é decisão de segurança, não de conveniência.
 
 **O claim `sub` é o `public_id`.** O token viaja para fora da API, e o id serial não sai daqui; quando o use case precisa do id interno — `approved_by_user_id` é FK —, ele resolve pelo `UserRepository.findByPublicId`.
 

@@ -33,6 +33,49 @@ export class AccountInactiveError extends DomainError {
   }
 }
 
+/**
+ * Cadastro ainda em análise não entra. É 403 e não 401 de propósito: a
+ * credencial está certa, o que falta é a decisão da Porto — e a tela precisa
+ * distinguir "errei a senha" de "espere o e-mail".
+ */
+export class RegistrationUnderReviewError extends DomainError {
+  readonly kind = DomainErrorKindEnum.FORBIDDEN;
+  readonly code = AuthErrorCodeEnum.REGISTRATION_UNDER_REVIEW;
+
+  constructor() {
+    super('Cadastro em análise.');
+  }
+}
+
+export class RegistrationRejectedError extends DomainError {
+  readonly kind = DomainErrorKindEnum.FORBIDDEN;
+  readonly code = AuthErrorCodeEnum.REGISTRATION_REJECTED;
+
+  constructor() {
+    super('Cadastro não aprovado.');
+  }
+}
+
+/** Link de definir senha usado, vencido ou adulterado — os três dão o mesmo. */
+export class InvalidResetTokenError extends DomainError {
+  readonly kind = DomainErrorKindEnum.INVALID_INPUT;
+  readonly code = AuthErrorCodeEnum.INVALID_TOKEN;
+
+  constructor() {
+    super('Este link não vale mais. Peça um novo para quem administra o programa.');
+  }
+}
+
+/** Token de afiliado cujo usuário sumiu, ou que nunca teve perfil de afiliado. */
+export class UnknownAffiliateError extends DomainError {
+  readonly kind = DomainErrorKindEnum.UNAUTHORIZED;
+  readonly code = AuthErrorCodeEnum.INVALID_CREDENTIALS;
+
+  constructor() {
+    super('Sessão inválida. Entre novamente.');
+  }
+}
+
 /** Token válido de um operador que sumiu do banco: a sessão não vale mais. */
 export class UnknownOperatorError extends DomainError {
   readonly kind = DomainErrorKindEnum.UNAUTHORIZED;

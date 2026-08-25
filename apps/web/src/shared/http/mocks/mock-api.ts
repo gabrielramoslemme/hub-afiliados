@@ -1,9 +1,9 @@
-import { AuthErrorCodeEnum } from '@porto/contracts';
-import { mockAffiliateAccount, mockWallet } from './fixtures';
+import { mockWallet } from './fixtures';
 
 /**
- * Dublê da área do afiliado, que ainda não existe na API — cards 4.x. O canal
- * `/v1/admin` saiu daqui: o painel fala com a API de verdade.
+ * O que sobrou do dublê: a carteira do afiliado, que depende de extrato e
+ * pagamento — tabelas que a Onda 1 não tem. Login, conta e o canal `/v1/admin`
+ * saíram daqui: as três pontas falam com a API de verdade.
  *
  * É uma função que devolve `Response`, e **não** um interceptador de `fetch`
  * global. A diferença não é de estilo: o Next reaplica o próprio patch de cache
@@ -15,8 +15,6 @@ import { mockAffiliateAccount, mockWallet } from './fixtures';
  * exercitados o cabeçalho montado, o 204 sem corpo e a tradução do corpo de erro
  * em `ApiError`. O que deixa de ser exercitado é só o trecho de rede.
  */
-const PASSWORD = 'MudarAgora!2026';
-
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -45,35 +43,6 @@ interface MockRoute {
 
 const routes: MockRoute[] = [
   {
-    method: 'POST',
-    pattern: /^\/affiliate\/auth\/login$/,
-    handle({ path, body }) {
-      if (body.password !== PASSWORD) {
-        return fail(401, AuthErrorCodeEnum.INVALID_CREDENTIALS, 'E-mail ou senha inválidos.', path);
-      }
-
-      return json({
-        accessToken: 'mock.affiliate.token',
-        user: {
-          publicId: mockAffiliateAccount.publicId,
-          name: mockAffiliateAccount.name,
-          email: String(body.email ?? mockAffiliateAccount.email),
-          status: mockAffiliateAccount.status,
-          coupon: mockAffiliateAccount.coupon,
-        },
-      });
-    },
-  },
-
-  {
-    method: 'GET',
-    pattern: /^\/affiliate\/me$/,
-    handle() {
-      return json(mockAffiliateAccount);
-    },
-  },
-
-  {
     method: 'GET',
     pattern: /^\/affiliate\/me\/wallet$/,
     handle() {
@@ -101,7 +70,7 @@ async function readBody(init: RequestInit): Promise<Record<string, unknown>> {
   de qualquer canal, e precisa continuar gravando no Postgres com a mesma flag
   ligada.
 */
-const DUBBED = ['/affiliate/auth', '/affiliate/me'];
+const DUBBED = ['/affiliate/me/wallet'];
 
 /**
  * Recebe a URL absoluta que o `api-client` montaria e devolve o que a API

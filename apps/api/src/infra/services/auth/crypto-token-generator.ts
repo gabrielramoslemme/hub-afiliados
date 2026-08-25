@@ -10,6 +10,10 @@ export class CryptoTokenGenerator implements TokenGenerator {
   generate(): GeneratedToken {
     const token = randomBytes(TOKEN_BYTES).toString('hex');
 
-    return { token, hash: createHash('sha256').update(token).digest('hex') };
+    return { token, hash: this.hash(token) };
+  }
+
+  hash(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 }

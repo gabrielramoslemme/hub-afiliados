@@ -1,5 +1,5 @@
 import { PixKeyTypeEnum } from '@porto/contracts';
-import { isValidPixKey, normalizePixKey } from './pix-key.util';
+import { isValidPixKey, maskPixKey, normalizePixKey } from './pix-key.util';
 
 describe('pix-key.util', () => {
   describe('isValidPixKey', () => {
@@ -55,6 +55,26 @@ describe('pix-key.util', () => {
 
     it('strips punctuation from a phone key', () => {
       expect(normalizePixKey(PixKeyTypeEnum.PHONE, '(11) 99999-9999')).toBe('11999999999');
+    });
+  });
+
+  describe('maskPixKey', () => {
+    it('keeps the domain and the first letters of an email', () => {
+      expect(maskPixKey(PixKeyTypeEnum.EMAIL, 'marina.ferraz@email.com')).toBe(
+        'ma***********@email.com',
+      );
+    });
+
+    it('keeps the area code and the last four digits of a phone', () => {
+      expect(maskPixKey(PixKeyTypeEnum.PHONE, '11999998888')).toBe('(11) *****-8888');
+    });
+
+    it('masks a cpf key the same way the listing masks the cpf', () => {
+      expect(maskPixKey(PixKeyTypeEnum.CPF, '52998224725')).toBe('***.***.247-25');
+    });
+
+    it('does not leak a one letter local part', () => {
+      expect(maskPixKey(PixKeyTypeEnum.EMAIL, 'a@email.com')).toBe('*@email.com');
     });
   });
 });

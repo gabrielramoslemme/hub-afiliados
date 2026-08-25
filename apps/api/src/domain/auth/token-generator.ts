@@ -10,4 +10,10 @@ export interface GeneratedToken {
 
 export interface TokenGenerator {
   generate(): GeneratedToken;
+  /**
+   * O mesmo algoritmo do `generate`, para procurar no banco pelo hash do token
+   * que chegou no link. Se as duas metades morassem em lugares diferentes,
+   * trocar de algoritmo quebraria a busca em silêncio.
+   */
+  hash(token: string): string;
 }

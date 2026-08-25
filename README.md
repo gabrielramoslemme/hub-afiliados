@@ -56,16 +56,25 @@ Aprovar um cadastro dispara o e-mail `REGISTRATION_APPROVED` com o link de
 definir senha, válido por 48 horas. Em desenvolvimento o provider é o `logger`:
 o link sai no console da API, e a tela `/definir-senha` ainda não existe.
 
-### A área do afiliado ainda roda contra dublê
+### O ciclo do afiliado, de ponta a ponta
 
-As rotas `/v1/affiliate/auth` e `/v1/affiliate/me` não existem na API. Com
-`API_MOCKING=enabled` no `apps/web/.env.local`, um dublê em memória responde no
-lugar delas: entre em http://localhost:3005/entrar com **qualquer e-mail** e a
-senha `MudarAgora!2026`; só a senha é conferida.
+Para ver o fluxo inteiro rodando contra a API:
 
-O dublê cobre apenas esses dois prefixos. O painel e o cadastro da landing page
-vão para a API de verdade com a mesma flag ligada. Quando as rotas nascerem,
-tire a flag.
+1. Cadastre-se em http://localhost:3005/cadastro.
+2. Aprove o cadastro no painel, em http://localhost:3005/admin/afiliados.
+3. O e-mail de aprovação sai no **console da API** (`MAIL_PROVIDER=logger` em
+   desenvolvimento). Copie o link de `/definir-senha` — ele vale 48 horas e
+   funciona uma vez só.
+4. Crie a senha e entre em http://localhost:3005/entrar.
+
+### A carteira ainda roda contra dublê
+
+`GET /v1/affiliate/me/wallet` não existe na API — saldo e extrato dependem de
+tabelas que a Onda 1 não tem. Com `API_MOCKING=enabled` no `apps/web/.env.local`,
+um dublê em memória responde no lugar dela.
+
+O dublê cobre apenas esse prefixo; todo o resto vai para a API de verdade com a
+mesma flag ligada. Quando a rota nascer, tire a flag.
 
 ### Operadores criados pelo seed
 

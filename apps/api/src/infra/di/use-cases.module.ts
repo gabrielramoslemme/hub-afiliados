@@ -2,10 +2,13 @@ import { FactoryProvider, Module } from '@nestjs/common';
 import { ApproveAffiliateUseCase } from '@Application/affiliates/approve-affiliate.use-case';
 import { CreateAffiliateUseCase } from '@Application/affiliates/create-affiliate.use-case';
 import { GetAffiliateUseCase } from '@Application/affiliates/get-affiliate.use-case';
+import { GetAffiliateAccountUseCase } from '@Application/affiliates/get-affiliate-account.use-case';
 import { ListAffiliateStatusHistoryUseCase } from '@Application/affiliates/list-affiliate-status-history.use-case';
 import { ListAffiliatesUseCase } from '@Application/affiliates/list-affiliates.use-case';
 import { RejectAffiliateUseCase } from '@Application/affiliates/reject-affiliate.use-case';
 import { AdminLoginUseCase } from '@Application/auth/admin-login.use-case';
+import { AffiliateLoginUseCase } from '@Application/auth/affiliate-login.use-case';
+import { SetPasswordUseCase } from '@Application/auth/set-password.use-case';
 import { AFFILIATE_REPOSITORY } from '@Domain/affiliates/affiliate.repository';
 import { AFFILIATE_STATUS_HISTORY_REPOSITORY } from '@Domain/affiliates/affiliate-status-history.repository';
 import { ACCESS_TOKEN_ISSUER } from '@Domain/auth/access-token';
@@ -57,6 +60,20 @@ const USE_CASES = [
     CLOCK,
   ]),
   provideUseCase(RejectAffiliateUseCase, [AFFILIATE_REPOSITORY, USER_REPOSITORY, MAILER]),
+  provideUseCase(AffiliateLoginUseCase, [
+    USER_REPOSITORY,
+    PASSWORD_HASHER,
+    ACCESS_TOKEN_ISSUER,
+    CLOCK,
+  ]),
+  provideUseCase(SetPasswordUseCase, [
+    USER_REPOSITORY,
+    PASSWORD_RESET_TOKEN_REPOSITORY,
+    PASSWORD_HASHER,
+    TOKEN_GENERATOR,
+    CLOCK,
+  ]),
+  provideUseCase(GetAffiliateAccountUseCase, [USER_REPOSITORY]),
 ];
 
 @Module({

@@ -120,15 +120,15 @@ Cookie `httpOnly`, `sameSite=lax`, `secure` fora de dev, oito horas. Nomes em `s
 
 `middleware.ts` protege `/admin/:path*` e `/minha-conta/:path*` com negação por omissão, cada um conferindo o seu cookie; as exceções são `/admin/login` e `/entrar`, explícitas, e as duas expulsam quem já tem sessão. O layout de `(shell)` e o de `(account)` conferem de novo, porque o middleware só vê que o cookie existe — quem lê o conteúdo é o layout, e cookie corrompido tem que virar login, não tela quebrada.
 
-## O painel fala com a API; só a área do afiliado roda contra dublê
+## Só a carteira roda contra dublê
 
-**O painel não é mais dublado.** `/v1/admin` existe na API, e entrar em `/admin/login` exige a API no ar (`npm run dev`), as migrations aplicadas e `npm run seed --workspace apps/api`, que cria os três operadores com a senha `MudarAgora!2026`.
+**Painel, login do afiliado e a conta dele falam com a API.** Entrar em qualquer um dos dois logins exige a API no ar (`npm run dev`), as migrations aplicadas e `npm run seed --workspace apps/api`, que cria os três operadores com a senha `MudarAgora!2026`. O afiliado nasce sem senha: ele recebe o link de `/definir-senha` no e-mail de aprovação, que vale 48 horas e só funciona uma vez.
 
-As rotas da área do afiliado (`/v1/affiliate/auth` e `/v1/affiliate/me`) continuam por nascer — cards 4.x. Com `API_MOCKING=enabled`, o `api-client` troca o **transporte** por `src/shared/http/mocks/mock-api.ts`, que devolve `Response` a partir das fixtures. Senha do dublê: `MudarAgora!2026`, com qualquer e-mail.
+O que sobrou por nascer é `GET /v1/affiliate/me/wallet` — saldo e extrato dependem de tabelas que a Onda 1 não tem. Com `API_MOCKING=enabled`, o `api-client` troca o **transporte** por `src/shared/http/mocks/mock-api.ts`, que devolve `Response` a partir das fixtures.
 
-**O dublê responde por prefixo, não por canal inteiro.** A constante `DUBBED` lista `/affiliate/auth` e `/affiliate/me`. Caminho fora deles devolve `null` e o `api-client` cai no `fetch` de verdade — é isso que mantém o painel e `POST /affiliates`, o cadastro público, indo para o Postgres com a mesma flag ligada. Caminho *dentro* de um prefixo dublado e fora da tabela devolve 404, não `null`: escapar para a API trocaria um erro claro por um `ECONNREFUSED`.
+**O dublê responde por prefixo, não por canal inteiro.** Hoje `DUBBED` é só `/affiliate/me/wallet`. Caminho fora dele devolve `null` e o `api-client` cai no `fetch` de verdade — é isso que mantém tudo o mais indo para o Postgres com a flag ligada. Caminho *dentro* de um prefixo dublado e fora da tabela devolve 404, não `null`: escapar para a API trocaria um erro claro por um `ECONNREFUSED`.
 
-A conta que o dublê autentica sai de `mockAffiliates[2]`, e não de um objeto solto — duas verdades sobre a mesma pessoa é como a fila do painel e a área do afiliado passam a discordar. Saldo e total pago são **somados a partir do extrato**, com teste que trava a invariante em `mock-api.spec.ts`.
+Saldo e total pago são **somados a partir do extrato**, com teste que trava a invariante em `mock-api.spec.ts`.
 
 A resposta volta pelo mesmo `request()`, então cabeçalho montado, 204 sem corpo e tradução do corpo de erro em `ApiError` continuam exercitados. Quando as rotas nascerem, tire a flag e nenhuma tela muda.
 

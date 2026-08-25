@@ -32,6 +32,12 @@ describe('signInMessageFor', () => {
     );
   });
 
+  it('offers a way out when the set-password link no longer works', () => {
+    expect(signInMessageFor(AuthErrorCodeEnum.INVALID_TOKEN, 'ignorada')).toBe(
+      'Este link não vale mais. Ele expira em 48 horas e só pode ser usado uma vez — escreva para afiliados@portoservico.com.br para receber outro.',
+    );
+  });
+
   it('falls back to the message the api sent for a code it does not know', () => {
     expect(signInMessageFor(RegistrationErrorCodeEnum.INVALID_CPF, 'Mensagem da API.')).toBe(
       'Mensagem da API.',

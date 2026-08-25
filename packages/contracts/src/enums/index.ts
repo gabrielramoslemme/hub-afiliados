@@ -38,6 +38,8 @@ export enum AuthErrorCodeEnum {
   REGISTRATION_REJECTED = 'AUTH-003',
   PASSWORD_NOT_SET = 'AUTH-004',
   ACCOUNT_INACTIVE = 'AUTH-005',
+  /** Link de definir senha usado, vencido ou adulterado — a tela oferece um novo. */
+  INVALID_TOKEN = 'AUTH-006',
 }
 
 /** O que uma linha do extrato do afiliado é: entrada de incentivo ou pagamento. */

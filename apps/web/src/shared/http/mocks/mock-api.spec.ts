@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { AffiliateStatusEnum, AuthErrorCodeEnum, StatementEntryKindEnum } from '@porto/contracts';
+import { StatementEntryKindEnum } from '@porto/contracts';
 
 const BASE = 'http://localhost:3000/v1';
 
@@ -34,47 +34,18 @@ describe('mockApiFetch', () => {
   });
 
   describe('affiliate channel', () => {
-    it('answers an unmapped account route instead of letting it escape', async () => {
+    it('lets login and the account through to the real api', async () => {
       const send = await api();
-      const response = await send(`${BASE}/affiliate/me/extrato`);
+
+      await expect(send(`${BASE}/affiliate/auth/login`, { method: 'POST' })).resolves.toBeNull();
+      await expect(send(`${BASE}/affiliate/me`)).resolves.toBeNull();
+    });
+
+    it('answers an unmapped wallet route instead of letting it escape', async () => {
+      const send = await api();
+      const response = await send(`${BASE}/affiliate/me/wallet/extrato`);
 
       expect(response?.status).toBe(404);
-    });
-
-    it('refuses the wrong password with the auth code the screen maps', async () => {
-      const send = await api();
-      const response = await send(`${BASE}/affiliate/auth/login`, {
-        method: 'POST',
-        body: JSON.stringify({ email: 'cleide.nakamura@email.com', password: 'errada' }),
-      });
-
-      const body = await response?.json();
-
-      expect(response?.status).toBe(401);
-      expect(body.code).toBe(AuthErrorCodeEnum.INVALID_CREDENTIALS);
-    });
-
-    it('signs in an approved affiliate with a coupon', async () => {
-      const send = await api();
-      const response = await send(`${BASE}/affiliate/auth/login`, {
-        method: 'POST',
-        body: JSON.stringify({ email: 'cleide.nakamura@email.com', password: 'MudarAgora!2026' }),
-      });
-
-      const body = await response?.json();
-
-      expect(body.user).toMatchObject({
-        status: AffiliateStatusEnum.APPROVED,
-        coupon: 'CLEIDE25',
-      });
-    });
-
-    it('never exposes the full cpf of the account', async () => {
-      const send = await api();
-      const account = await (await send(`${BASE}/affiliate/me`))?.json();
-
-      expect(account.maskedCpf).toContain('*');
-      expect(account).not.toHaveProperty('cpf');
     });
 
     /*
