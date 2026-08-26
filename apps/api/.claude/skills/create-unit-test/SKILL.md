@@ -35,7 +35,7 @@ describe('MailService', () => {
   const input = { template: MailTemplateEnum.REGISTRATION_APPROVED, to: 'marina@example.com', toName: 'Marina Ferraz', variables: {} };
 
   it('does not propagate the error when the provider fails', async () => {
-    const provider: MailProvider = { send: jest.fn().mockRejectedValue(new Error('MailerSend fora do ar')) };
+    const provider: MailProvider = { send: jest.fn().mockRejectedValue(new Error('Resend fora do ar')) };
     await expect(new MailService(provider).send(input)).resolves.toBeUndefined();
   });
 });

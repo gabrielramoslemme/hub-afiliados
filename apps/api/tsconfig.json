@@ -2,6 +2,7 @@
   "extends": "@porto/tsconfig/nest.json",
   "compilerOptions": {
     "baseUrl": "./",
+    "jsx": "react-jsx",
     "outDir": "./dist",
     "paths": {
       "@Domain/*": ["src/domain/*"],

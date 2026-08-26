@@ -40,19 +40,17 @@ export class EnvironmentVariableService {
     return this.required('PANEL_BASE_URL');
   }
 
-  get mailProvider(): 'mailersend' | 'logger' {
-    return (this.configService.get<string>('MAIL_PROVIDER') ?? 'logger') as 'mailersend' | 'logger';
+  get mailProvider(): 'resend' | 'logger' {
+    return (this.configService.get<string>('MAIL_PROVIDER') ?? 'logger') as 'resend' | 'logger';
   }
-  get mailerSendApiKey(): string {
-    return this.configService.get<string>('MAILERSEND_API_KEY') ?? '';
+  get resendApiKey(): string {
+    return this.configService.get<string>('RESEND_API_KEY') ?? '';
   }
+  /** Remetente e nome de exibição não são do fornecedor: valem em qualquer um. */
   get mailFromEmail(): string {
-    return this.required('MAILERSEND_FROM_EMAIL');
+    return this.required('MAIL_FROM_EMAIL');
   }
   get mailFromName(): string {
-    return this.required('MAILERSEND_FROM_NAME');
-  }
-  mailTemplateId(key: string): string {
-    return this.configService.get<string>(key) ?? '';
+    return this.required('MAIL_FROM_NAME');
   }
 }

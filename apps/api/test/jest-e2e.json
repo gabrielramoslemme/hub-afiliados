@@ -1,9 +1,9 @@
 {
-  "moduleFileExtensions": ["js", "json", "ts"],
+  "moduleFileExtensions": ["js", "json", "ts", "tsx"],
   "rootDir": "..",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
-  "transform": { "^.+\\.ts$": "ts-jest" },
+  "transform": { "^.+\\.tsx?$": "ts-jest" },
   "moduleNameMapper": {
     "^@Domain/(.*)$": "<rootDir>/src/domain/$1",
     "^@Infra/(.*)$": "<rootDir>/src/infra/$1",

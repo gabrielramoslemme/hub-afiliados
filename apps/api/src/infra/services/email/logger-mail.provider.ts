@@ -1,14 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { SendMailInput } from '@Domain/notifications/mailer';
-import { MailProvider } from './mail-provider.interface';
+import { MailProvider, SendRenderedMailInput } from './mail-provider.interface';
 
 @Injectable()
 export class LoggerMailProvider implements MailProvider {
   private readonly logger = new Logger(LoggerMailProvider.name);
 
-  async send(input: SendMailInput): Promise<void> {
+  async send(input: SendRenderedMailInput): Promise<void> {
+    // O corpo em texto vai junto porque é ele que deixa o link à mão em
+    // desenvolvimento, onde nenhum e-mail chega a sair.
     this.logger.log(
-      `[email simulado] template=${input.template} variáveis=${JSON.stringify(input.variables)}`,
+      `[email simulado] para=${input.toName} <${input.to}> assunto=${input.subject}\n${input.text}`,
     );
     return Promise.resolve();
   }

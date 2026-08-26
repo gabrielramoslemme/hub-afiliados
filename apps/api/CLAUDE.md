@@ -88,7 +88,8 @@ Quem liga token a implementação é `*.module.ts`, em dois passos: o `Repositor
 | Dependência externa | O que o núcleo declara | Quem importa a biblioteca |
 |---|---|---|
 | Postgres, via TypeORM | `AffiliateRepository` (`src/domain/affiliates/`) | `AffiliateTypeormRepository` |
-| MailerSend | `Mailer` (`src/domain/notifications/`) | `MailService` e os providers |
+| Resend | `Mailer` (`src/domain/notifications/`) | `MailService` e o `ResendProvider` |
+| React Email | `Mailer` (`src/domain/notifications/`) | `ReactEmailRenderer` e os templates |
 | `@nestjs/jwt` | `AccessTokenIssuer` e `AccessTokenVerifier` (`src/domain/auth/`) | `JwtAccessTokenService` |
 | bcrypt | `PasswordHasher` (`src/domain/auth/`) | `BcryptPasswordHasher` |
 | `node:crypto` | `TokenGenerator` (`src/domain/auth/`) | `CryptoTokenGenerator` |
@@ -294,7 +295,7 @@ O use case recebe o port `Mailer` (`src/domain/notifications/mailer.ts`) pelo co
 
 `Mailer.send` **nunca lança** — falha vira log e o fluxo segue. Deliberado: e-mail não enviado é incidente operacional; aprovação revertida por causa dele seria incidente de negócio. Não embrulhe em `try/catch`.
 
-Dentro de infra, `MAIL_PROVIDER` escolhe o fornecedor concreto (`logger` em dev e teste, `mailersend` fora) — dois ports em camadas diferentes, de propósito: o domínio quer enviar, infra sabe por onde. IDs de template vêm de variável de ambiente, nunca de código. Templates, gatilhos e variáveis em [`docs/EMAILS.md`](docs/EMAILS.md).
+Dentro de infra o trabalho se parte em dois contratos: `MailRenderer` monta o conteúdo e `MailProvider` despacha. `MAIL_PROVIDER` escolhe o fornecedor concreto (`logger` em dev e teste, `resend` fora) — três ports em camadas diferentes, de propósito: o domínio quer enviar, infra sabe o que escrever e por onde mandar. **O template mora em código**, como componente React Email em `services/email/templates/`, nunca no painel do fornecedor: o registry é um `Record<MailTemplateEnum, …>`, então template novo sem entrada ali é erro de type-check. Templates, gatilhos e variáveis em [`docs/EMAILS.md`](docs/EMAILS.md).
 
 ## Testes
 

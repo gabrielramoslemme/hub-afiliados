@@ -6,16 +6,21 @@ import { AppLinkBuilder } from '@Infra/services/links/app-link-builder';
 import { LoggerMailProvider } from './logger-mail.provider';
 import { MailService } from './mail.service';
 import { MAIL_PROVIDER } from './mail-provider.interface';
-import { MailerSendProvider } from './mailersend.provider';
+import { MAIL_RENDERER } from './mail-renderer.interface';
+import { ReactEmailRenderer } from './react-email.renderer';
+import { ResendProvider } from './resend.provider';
 
 @Global()
 @Module({
   providers: [
+    // Renderizar e despachar são portes separados de propósito: o conteúdo é o
+    // mesmo em qualquer fornecedor, e trocar de fornecedor não pode reescrevê-lo.
+    { provide: MAIL_RENDERER, useClass: ReactEmailRenderer },
     {
       provide: MAIL_PROVIDER,
       inject: [EnvironmentVariableService],
       useFactory: (env: EnvironmentVariableService) =>
-        env.mailProvider === 'mailersend' ? new MailerSendProvider(env) : new LoggerMailProvider(),
+        env.mailProvider === 'resend' ? new ResendProvider(env) : new LoggerMailProvider(),
     },
     { provide: MAILER, useClass: MailService },
     // O link mora aqui porque é o que a gente manda para as pessoas: quem

@@ -120,7 +120,9 @@ timestamp vem da CLI do TypeORM — nunca escreva o nome do arquivo à mão.
 
 Em desenvolvimento e teste, `MAIL_PROVIDER=logger` simula o envio e imprime o
 conteúdo no log — sem custo e sem risco de disparar para endereço real. Em
-homologação e produção, use `mailersend`. Detalhes em
+homologação e produção, use `resend`. Os templates são componentes React Email
+versionados em `apps/api/src/infra/services/email/templates/`, não ficam no
+painel do fornecedor. Detalhes em
 [`apps/api/docs/EMAILS.md`](apps/api/docs/EMAILS.md).
 
 ## Contrato da API

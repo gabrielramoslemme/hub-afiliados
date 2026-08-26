@@ -88,6 +88,11 @@
     {
       "includes": ["apps/api/**"],
       "linter": {
+        // Os templates de e-mail tornaram o react dependencia da API, e com isso
+        // o Biome liga o dominio React no pacote inteiro: app.useGlobalPipes()
+        // passa a ser lido como hook. Nenhum componente daqui usa hook — sao
+        // quatro funcoes de apresentacao —, entao o dominio nao tem o que checar.
+        "domains": { "react": "none" },
         "rules": {
           "style": {
             "useImportType": "off"

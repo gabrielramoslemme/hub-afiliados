@@ -1,7 +1,7 @@
 # E-mails transacionais
 
 Provider selecionado por `MAIL_PROVIDER`: `logger` em desenvolvimento e teste,
-`mailersend` em homologação e produção.
+`resend` em homologação e produção.
 
 | Template | Gatilho | Variáveis |
 |---|---|---|
@@ -10,8 +10,55 @@ Provider selecionado por `MAIL_PROVIDER`: `logger` em desenvolvimento e teste,
 | `REGISTRATION_REJECTED` | Operador reprova o cadastro | `name`, `reason` |
 | `PASSWORD_RECOVERY` | Pedido de recuperação | `name`, `link` (2h) |
 
-Os IDs de template do MailerSend vêm por variável de ambiente
-(`MAILERSEND_TEMPLATE_*`) — nenhum ID fica em código.
+`PASSWORD_RECOVERY` ainda não tem use case que o dispare — o template existe
+para o fluxo de recuperação, que é trabalho à parte.
 
-`MailService.send` nunca lança. Falha de envio vira log de erro, e o fluxo de
-negócio segue. Reenvio é operação manual pelo painel (backlog).
+## Onde o conteúdo mora
+
+Em código, não no painel do fornecedor. Cada template é um componente React
+Email em `src/infra/services/email/templates/`, e o
+[`template-registry.tsx`](../src/infra/services/email/templates/template-registry.tsx)
+liga cada `MailTemplateEnum` ao assunto, às variáveis obrigatórias e ao
+componente. Template novo entra nos dois lugares: um arquivo `.tsx` e uma linha
+no registry — sendo o registry um `Record<MailTemplateEnum, …>`, esquecer a
+segunda é erro de type-check.
+
+O visual compartilhado (cabeçalho, cores da marca, botão, rodapé) está em
+[`layout.tsx`](../src/infra/services/email/templates/layout.tsx). A paleta
+espelha os tokens de `apps/web/src/app/globals.css` com valor literal, porque
+cliente de e-mail não lê variável CSS.
+
+## Dois portes, um serviço
+
+`MailService` implementa o port `Mailer` do domínio compondo dois contratos de
+infra, separados de propósito:
+
+| Contrato | Implementação | Responsabilidade |
+|---|---|---|
+| `MailRenderer` | `ReactEmailRenderer` | `SendMailInput` → `{ subject, html, text }` |
+| `MailProvider` | `ResendProvider`, `LoggerMailProvider` | despachar o já renderizado |
+
+O conteúdo é o mesmo em qualquer fornecedor, então trocar de fornecedor mexe só
+no adapter de envio, e trocar de motor de template mexe só no renderer.
+
+`MailService.send` **nunca lança**. Falha de envio — e variável obrigatória
+ausente — vira log de erro, e o fluxo de negócio segue. Reenvio é operação
+manual pelo painel (backlog).
+
+## Configuração
+
+```
+MAIL_PROVIDER=resend
+RESEND_API_KEY=
+MAIL_FROM_EMAIL=nao-responda@afiliados.porto.example
+MAIL_FROM_NAME=Hub de Afiliados
+```
+
+`MAIL_FROM_*` não leva o nome do fornecedor porque remetente e nome de exibição
+valem em qualquer um.
+
+## Pendência conhecida
+
+O cabeçalho usa wordmark tipográfico, não o `porto-logo.svg`: Gmail não
+renderiza SVG em e-mail. Trocar por imagem exige um PNG em URL absoluta e
+pública.

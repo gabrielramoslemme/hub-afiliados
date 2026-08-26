@@ -95,4 +95,4 @@ Mexeu em rota, DTO ou migration: `npm run test:e2e --workspace apps/api` também
 
 ## Stack
 
-TypeScript strict · npm workspaces · Turborepo · NestJS 11 · TypeORM 0.3 · PostgreSQL 16 · Jest 30 · Next.js 15 · React 19 · shadcn/ui sobre Radix · Tailwind 4 · react-hook-form · zod · bcrypt · Joi · MailerSend · Biome 2 · lefthook · commitlint
+TypeScript strict · npm workspaces · Turborepo · NestJS 11 · TypeORM 0.3 · PostgreSQL 16 · Jest 30 · Next.js 15 · React 19 · shadcn/ui sobre Radix · Tailwind 4 · react-hook-form · zod · bcrypt · Joi · Resend · React Email · Biome 2 · lefthook · commitlint
