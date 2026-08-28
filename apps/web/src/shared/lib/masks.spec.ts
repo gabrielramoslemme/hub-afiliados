@@ -1,5 +1,5 @@
 import { PixKeyTypeEnum } from '@porto/contracts';
-import { formatCpf, formatPhone, formatPixKey, onlyDigits } from './masks';
+import { formatCpf, formatPhone, formatPixKey, formatRg, onlyDigits } from './masks';
 
 describe('masks', () => {
   describe('onlyDigits', () => {
@@ -9,6 +9,49 @@ describe('masks', () => {
 
     it('returns an empty string when there is no digit', () => {
       expect(onlyDigits('abc')).toBe('');
+    });
+  });
+
+  describe('formatRg', () => {
+    it('formats the shape most states issue', () => {
+      expect(formatRg('123456789')).toBe('12.345.678-9');
+    });
+
+    it('formats an rg whose last character is a letter', () => {
+      expect(formatRg('12345678X')).toBe('12.345.678-X');
+    });
+
+    it('uppercases the letter as the person types it', () => {
+      expect(formatRg('12345678x')).toBe('12.345.678-X');
+    });
+
+    it('formats while the person is still typing', () => {
+      expect(formatRg('1234')).toBe('12.34');
+    });
+
+    it('does not add a separator before it is due', () => {
+      expect(formatRg('12')).toBe('12');
+    });
+
+    it('is idempotent over an already formatted rg', () => {
+      expect(formatRg('12.345.678-X')).toBe('12.345.678-X');
+    });
+
+    /*
+      Estado que emite RG mais longo continua legível: o agrupamento para no
+      hífen e o resto segue depois, em vez de a pontuação sumir de uma vez
+      quando o décimo caractere é digitado.
+    */
+    it('keeps a longer rg grouped instead of dropping the punctuation', () => {
+      expect(formatRg('1234567890123')).toBe('12.345.678-90123');
+    });
+
+    it('stops at the twenty characters the column holds', () => {
+      expect(formatRg('1'.repeat(30)).replace(/\D/g, '')).toHaveLength(20);
+    });
+
+    it('drops what is not part of an rg', () => {
+      expect(formatRg('12 345 678')).toBe('12.345.678');
     });
   });
 
