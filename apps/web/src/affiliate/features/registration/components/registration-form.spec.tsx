@@ -65,6 +65,28 @@ describe('RegistrationForm', () => {
     expect(screen.getByLabelText('CPF')).toHaveValue('529.982.247-25');
   });
 
+  it('masks the rg as the person types', async () => {
+    const user = userEvent.setup();
+    render(<RegistrationForm />);
+
+    await user.type(screen.getByLabelText('RG'), '12345678x');
+
+    expect(screen.getByLabelText('RG')).toHaveValue('12.345.678-X');
+  });
+
+  /*
+    A máscara come o que não é do RG, então quem digita o órgão emissor junto
+    veria `12.345.678-SP` sem perceber que o SP virou parte do número. A dica
+    no campo é o que evita a confusão antes dela acontecer.
+  */
+  it('says the rg carries no issuing body', () => {
+    render(<RegistrationForm />);
+
+    expect(screen.getByLabelText('RG')).toHaveAccessibleDescription(
+      'Só o número, sem o órgão emissor.',
+    );
+  });
+
   it('refuses an incomplete name without reaching the api', async () => {
     const user = userEvent.setup();
     render(<RegistrationForm />);

@@ -2,6 +2,7 @@ import { PixKeyTypeEnum } from '@porto/contracts';
 
 const CPF_DIGITS = 11;
 const PHONE_DIGITS = 11;
+const RG_CHARS = 20;
 
 export function onlyDigits(value: string): string {
   return value.replace(/\D/g, '');
@@ -20,6 +21,29 @@ export function formatCpf(value: string): string {
   if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
 
   return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+/**
+ * O RG não tem formato nacional: cada estado emite o seu, o comprimento varia e
+ * há UF que usa letra como dígito verificador. Por isso a máscara agrupa no
+ * padrão mais comum — 2.3.3-1 — sem impor tamanho: documento mais longo mantém
+ * o agrupamento e continua depois do hífen, em vez de perder a pontuação toda
+ * quando o décimo caractere chega.
+ *
+ * Ela insere só `.` e `-`, que é exatamente o que a API tira ao normalizar, então
+ * o que aparece no campo é o que vai ficar gravado.
+ */
+export function formatRg(value: string): string {
+  const chars = value
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toUpperCase()
+    .slice(0, RG_CHARS);
+
+  if (chars.length <= 2) return chars;
+  if (chars.length <= 5) return `${chars.slice(0, 2)}.${chars.slice(2)}`;
+  if (chars.length <= 8) return `${chars.slice(0, 2)}.${chars.slice(2, 5)}.${chars.slice(5)}`;
+
+  return `${chars.slice(0, 2)}.${chars.slice(2, 5)}.${chars.slice(5, 8)}-${chars.slice(8)}`;
 }
 
 /** Fixo (10 dígitos) e celular (11) usam corte diferente antes do hífen. */

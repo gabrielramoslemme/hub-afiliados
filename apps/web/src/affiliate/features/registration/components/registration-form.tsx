@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 import { socialNetworkName } from '@/shared/lib/format';
-import { formatCpf, formatPixKey } from '@/shared/lib/masks';
+import { formatCpf, formatPixKey, formatRg } from '@/shared/lib/masks';
 import { registerAffiliate } from '../register-affiliate.action';
 
 const PIX_KEY_LABELS: Record<PixKeyTypeEnum, string> = {
@@ -32,6 +32,8 @@ const PIX_KEY_LABELS: Record<PixKeyTypeEnum, string> = {
   [PixKeyTypeEnum.PHONE]: 'Telefone',
   [PixKeyTypeEnum.CPF]: 'CPF',
 };
+
+const RG_HINT = 'Só o número, sem o órgão emissor.';
 
 const PIX_KEY_PLACEHOLDERS: Record<PixKeyTypeEnum, string> = {
   [PixKeyTypeEnum.EMAIL]: 'voce@email.com',
@@ -118,6 +120,7 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
   }
 
   const cpfField = register('cpf');
+  const rgField = register('rg');
   const pixKeyField = register('pixKey');
 
   return (
@@ -172,14 +175,25 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
           />
         </Field>
 
-        {/* O RG não tem formato nacional: sem máscara, para não recusar na
-            digitação o documento que o estado emitiu de outro jeito. */}
-        <Field id="rg" label="RG" required error={errors.rg?.message}>
+        {/*
+          A máscara agrupa sem impor tamanho — o RG varia por estado. Ela come o
+          que não é do documento, e é daí que vem a dica: quem digitasse o órgão
+          emissor junto veria o `SP` virar parte do número sem perceber.
+        */}
+        <Field id="rg" label="RG" required error={errors.rg?.message} hint={RG_HINT}>
           <Input
-            {...register('rg')}
-            {...fieldAria('rg', { error: errors.rg?.message, required: true })}
+            {...rgField}
+            {...fieldAria('rg', {
+              error: errors.rg?.message,
+              hint: RG_HINT,
+              required: true,
+            })}
             autoComplete="off"
             placeholder="00.000.000-0"
+            onChange={(event) => {
+              event.target.value = formatRg(event.target.value);
+              return rgField.onChange(event);
+            }}
           />
         </Field>
       </div>
