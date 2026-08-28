@@ -1,6 +1,6 @@
 import { LogOut } from 'lucide-react';
 import { signOut } from '@/affiliate/features/auth';
-import { PortoLogo } from '@/shared/components/porto-logo';
+import { SiteLogo } from '@/affiliate/shared/components/site-logo';
 import { Button } from '@/shared/components/ui/button';
 import { AccountNav } from './account-nav';
 
@@ -13,7 +13,7 @@ export function AccountTopbar({ name }: { name: string }) {
   return (
     <header className="sticky top-0 z-40 border-b border-ink-200 bg-white/85 backdrop-blur-md">
       <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between gap-4 px-5 lg:px-8">
-        <PortoLogo />
+        <SiteLogo />
 
         <AccountNav variant="inline" />
 

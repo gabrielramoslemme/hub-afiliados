@@ -1,6 +1,10 @@
 import { act, render, screen } from '@testing-library/react';
 import { SiteHeader } from './site-header';
 
+// A barra monta o logotipo, e ele lê a rota atual — fora do App Router não há
+// nenhuma para ler. O destino do logotipo tem teste próprio em `site-logo.spec`.
+jest.mock('next/navigation', () => ({ usePathname: () => '/' }));
+
 /**
  * O observer é dublado para o teste controlar a intersecção de cada seção
  * individualmente — inclusive quando NENHUMA está na faixa, que é o cenário
