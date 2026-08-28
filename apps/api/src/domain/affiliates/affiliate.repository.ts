@@ -1,4 +1,4 @@
-import { AffiliateStatusEnum, PixKeyTypeEnum } from '@porto/contracts';
+import { AffiliateStatusEnum, PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
 import { createToken } from '@Domain/shared/token';
 import { AffiliateDetail, AffiliateEntity, AffiliateWithUser } from './affiliate.entity';
 
@@ -42,12 +42,16 @@ export interface CreateAffiliateWithUserInput {
   fullName: string;
   email: string;
   cpf: string;
+  rg: string;
   pixKeyType: PixKeyTypeEnum;
   pixKey: string;
+  socialNetwork: SocialNetworkEnum | null;
+  socialHandle: string | null;
 }
 
 export interface AffiliateRepository {
   findByCpf(cpf: string): Promise<AffiliateEntity | null>;
+  findByRg(rg: string): Promise<AffiliateEntity | null>;
   findByPublicId(publicId: string): Promise<AffiliateDetail | null>;
   findByUserId(userId: number): Promise<AffiliateWithUser | null>;
   /** A fila do painel: filtra, busca, ordena e pagina numa consulta só. */

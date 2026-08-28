@@ -25,10 +25,18 @@ export async function registerAffiliate(input: unknown): Promise<RegistrationRes
     return { status: 'invalid', fieldErrors };
   }
 
+  /*
+    O `select` da rede começa vazio e chega aqui como `''`. Mandar isso adiante
+    gravaria uma rede em branco ao lado de um `@` nulo — metade de um par que o
+    banco recusa. Sem rede, os dois campos simplesmente não são enviados.
+  */
+  const { socialNetwork, socialHandle, ...registration } = parsed.data;
+  const body = socialNetwork ? { ...registration, socialNetwork, socialHandle } : registration;
+
   try {
     await publicApiFetch<CreateAffiliateResponse>('/affiliates', {
       method: 'POST',
-      body: JSON.stringify(parsed.data),
+      body: JSON.stringify(body),
     });
 
     return { status: 'success' };

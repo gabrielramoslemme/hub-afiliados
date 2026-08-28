@@ -14,6 +14,14 @@ describe('fieldForErrorCode', () => {
     expect(fieldForErrorCode(RegistrationErrorCodeEnum.EMAIL_ALREADY_REGISTERED)).toBe('email');
   });
 
+  it('points an invalid rg at the rg field', () => {
+    expect(fieldForErrorCode(RegistrationErrorCodeEnum.INVALID_RG)).toBe('rg');
+  });
+
+  it('points a duplicated rg at the rg field', () => {
+    expect(fieldForErrorCode(RegistrationErrorCodeEnum.RG_ALREADY_REGISTERED)).toBe('rg');
+  });
+
   it('points an invalid pix key at the pix key field', () => {
     expect(fieldForErrorCode(RegistrationErrorCodeEnum.PIX_KEY_INVALID)).toBe('pixKey');
   });

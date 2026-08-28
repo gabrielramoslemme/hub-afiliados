@@ -1,4 +1,4 @@
-import { AffiliateStatusEnum, PixKeyTypeEnum } from '@porto/contracts';
+import { AffiliateStatusEnum, PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
 import { UnknownAffiliateError } from '@Domain/auth/auth.errors';
 import { buildAffiliate } from '@Testing/factories/affiliate.factory';
 import { buildUser } from '@Testing/factories/user.factory';
@@ -13,9 +13,12 @@ describe('GetAffiliateAccountUseCase', () => {
   const affiliate = buildAffiliate({
     user,
     cpf: '52998224725',
+    rg: '12345678X',
     pixKeyType: PixKeyTypeEnum.EMAIL,
     pixKey: 'marina.ferraz@email.com',
     status: AffiliateStatusEnum.APPROVED,
+    socialNetwork: SocialNetworkEnum.TIKTOK,
+    socialHandle: 'marina.ferraz',
   });
 
   beforeEach(() => {
@@ -30,6 +33,9 @@ describe('GetAffiliateAccountUseCase', () => {
       name: 'Marina Ferraz',
       email: 'marina@email.com',
       maskedCpf: '***.***.247-25',
+      maskedRg: '*****678X',
+      socialNetwork: SocialNetworkEnum.TIKTOK,
+      socialHandle: 'marina.ferraz',
       pixKeyType: PixKeyTypeEnum.EMAIL,
       maskedPixKey: 'ma***********@email.com',
       status: AffiliateStatusEnum.APPROVED,
@@ -38,10 +44,11 @@ describe('GetAffiliateAccountUseCase', () => {
     });
   });
 
-  it('never carries the whole cpf or the whole pix key', async () => {
+  it('never carries the whole cpf, the whole rg or the whole pix key', async () => {
     const account = await useCase.execute(user.publicId);
 
     expect(JSON.stringify(account)).not.toContain('52998224725');
+    expect(JSON.stringify(account)).not.toContain('12345678X');
     expect(JSON.stringify(account)).not.toContain('marina.ferraz@email.com');
   });
 

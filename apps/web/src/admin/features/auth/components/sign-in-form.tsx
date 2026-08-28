@@ -46,20 +46,20 @@ export function SignInForm({ target }: { target?: string }) {
         </div>
       )}
 
-      <Field id="email" label="E-mail" error={errors.email?.message}>
+      <Field id="email" label="E-mail" required error={errors.email?.message}>
         <Input
           {...register('email')}
-          {...fieldAria('email', { error: errors.email?.message })}
+          {...fieldAria('email', { error: errors.email?.message, required: true })}
           type="email"
           autoComplete="username"
           placeholder="voce@porto.example"
         />
       </Field>
 
-      <Field id="password" label="Senha" error={errors.password?.message}>
+      <Field id="password" label="Senha" required error={errors.password?.message}>
         <Input
           {...register('password')}
-          {...fieldAria('password', { error: errors.password?.message })}
+          {...fieldAria('password', { error: errors.password?.message, required: true })}
           type="password"
           autoComplete="current-password"
         />

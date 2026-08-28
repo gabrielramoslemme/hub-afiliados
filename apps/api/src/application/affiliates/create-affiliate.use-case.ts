@@ -1,14 +1,23 @@
-import { AffiliateStatusEnum, MailTemplateEnum, PixKeyTypeEnum } from '@porto/contracts';
+import {
+  AffiliateStatusEnum,
+  MailTemplateEnum,
+  PixKeyTypeEnum,
+  SocialNetworkEnum,
+} from '@porto/contracts';
 import { AffiliateRepository } from '@Domain/affiliates/affiliate.repository';
 import {
   CpfAlreadyRegisteredError,
   EmailAlreadyRegisteredError,
   InvalidCpfError,
   InvalidPixKeyError,
+  InvalidRgError,
   PixKeyMismatchError,
+  RgAlreadyRegisteredError,
 } from '@Domain/affiliates/affiliates.errors';
 import { isValidCpf, sanitizeCpf } from '@Domain/affiliates/cpf.util';
 import { isValidPixKey, normalizePixKey } from '@Domain/affiliates/pix-key.util';
+import { isValidRg, sanitizeRg } from '@Domain/affiliates/rg.util';
+import { sanitizeSocialHandle } from '@Domain/affiliates/social-handle.util';
 import { Mailer } from '@Domain/notifications/mailer';
 import { UserRepository } from '@Domain/users/user.repository';
 import { UseCase } from '../use-case';
@@ -17,8 +26,11 @@ export interface CreateAffiliateInput {
   fullName: string;
   email: string;
   cpf: string;
+  rg: string;
   pixKeyType: PixKeyTypeEnum;
   pixKey: string;
+  socialNetwork?: SocialNetworkEnum | null;
+  socialHandle?: string | null;
 }
 
 export interface CreateAffiliateOutput {
@@ -39,6 +51,9 @@ export class CreateAffiliateUseCase
     const cpf = sanitizeCpf(input.cpf);
     if (!isValidCpf(cpf)) throw new InvalidCpfError();
 
+    const rg = sanitizeRg(input.rg);
+    if (!isValidRg(rg)) throw new InvalidRgError();
+
     if (!isValidPixKey(input.pixKeyType, input.pixKey)) throw new InvalidPixKeyError();
     const pixKey = normalizePixKey(input.pixKeyType, input.pixKey);
     if (input.pixKeyType === PixKeyTypeEnum.CPF && pixKey !== cpf) throw new PixKeyMismatchError();
@@ -49,12 +64,23 @@ export class CreateAffiliateUseCase
     const existingAffiliate = await this.affiliateRepository.findByCpf(cpf);
     if (existingAffiliate) throw new CpfAlreadyRegisteredError();
 
+    const affiliateWithRg = await this.affiliateRepository.findByRg(rg);
+    if (affiliateWithRg) throw new RgAlreadyRegisteredError();
+
+    // O `@` sozinho não abre perfil nenhum: sem a rede, o par inteiro é
+    // descartado — e rede em branco é ausência de rede, não valor.
+    const socialNetwork = input.socialNetwork || null;
+    const socialHandle = socialNetwork ? sanitizeSocialHandle(input.socialHandle ?? '') : null;
+
     const affiliate = await this.affiliateRepository.createWithUser({
       fullName: input.fullName,
       email: input.email,
       cpf,
+      rg,
       pixKeyType: input.pixKeyType,
       pixKey,
+      socialNetwork,
+      socialHandle,
     });
 
     // O port nunca lança: e-mail não enviado é incidente operacional, não deve

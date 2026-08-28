@@ -120,10 +120,10 @@ export function RejectDialog({ publicId, name, open, onOpenChange }: DecisionDia
             </DialogDescription>
           </DialogHeader>
 
-          <Field id="reason" label="Motivo da reprovação" error={errors.reason?.message}>
+          <Field id="reason" label="Motivo da reprovação" required error={errors.reason?.message}>
             <Textarea
               {...register('reason')}
-              {...fieldAria('reason', { error: errors.reason?.message })}
+              {...fieldAria('reason', { error: errors.reason?.message, required: true })}
               rows={4}
               placeholder="Descreva o que impediu a aprovação."
             />

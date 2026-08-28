@@ -14,6 +14,8 @@ export type RegistrationField = keyof CreateAffiliateRequest;
 const FIELD_BY_CODE: Record<RegistrationErrorCodeEnum, RegistrationField> = {
   [RegistrationErrorCodeEnum.INVALID_CPF]: 'cpf',
   [RegistrationErrorCodeEnum.CPF_ALREADY_REGISTERED]: 'cpf',
+  [RegistrationErrorCodeEnum.INVALID_RG]: 'rg',
+  [RegistrationErrorCodeEnum.RG_ALREADY_REGISTERED]: 'rg',
   [RegistrationErrorCodeEnum.EMAIL_ALREADY_REGISTERED]: 'email',
   [RegistrationErrorCodeEnum.PIX_KEY_INVALID]: 'pixKey',
   [RegistrationErrorCodeEnum.PIX_KEY_MISMATCH]: 'pixKey',

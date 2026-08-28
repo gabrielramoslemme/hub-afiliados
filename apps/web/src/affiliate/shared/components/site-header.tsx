@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { nav, site } from '@/affiliate/shared/content';
 import { AFFILIATE_LOGIN_PATH } from '@/affiliate/shared/routes';
-import { PortoLogo } from '@/shared/components/porto-logo';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/lib/cn';
+import { SiteLogo, TOP_ANCHOR_ID } from './site-logo';
 
 const SECTION_IDS = nav.map((item) => item.href.replace('#', ''));
 
@@ -92,6 +92,7 @@ export function SiteHeader() {
 
   return (
     <header
+      id={TOP_ANCHOR_ID}
       /*
         A barra é opaca desde o topo, e não transparente até a primeira rolagem.
         Transparente ela herdaria o fundo de quem está atrás — e o que está atrás
@@ -106,13 +107,7 @@ export function SiteHeader() {
       )}
     >
       <div className="container-site flex h-16 items-center justify-between">
-        <Link
-          href="/"
-          aria-label="Hub de Afiliados da Porto Serviços"
-          className="rounded-sm transition-opacity hover:opacity-80"
-        >
-          <PortoLogo />
-        </Link>
+        <SiteLogo />
 
         <nav className="hidden items-center gap-1 md:flex">
           {nav.map((item) => {

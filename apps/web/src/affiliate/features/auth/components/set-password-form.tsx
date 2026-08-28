@@ -68,10 +68,10 @@ export function SetPasswordForm({ token }: { token: string }) {
         </div>
       )}
 
-      <Field id="password" label="Nova senha" error={errors.password?.message}>
+      <Field id="password" label="Nova senha" required error={errors.password?.message}>
         <Input
           {...register('password')}
-          {...fieldAria('password', { error: errors.password?.message })}
+          {...fieldAria('password', { error: errors.password?.message, required: true })}
           type="password"
           autoComplete="new-password"
           placeholder="Ao menos 8 caracteres"
@@ -81,11 +81,15 @@ export function SetPasswordForm({ token }: { token: string }) {
       <Field
         id="passwordConfirmation"
         label="Repita a senha"
+        required
         error={errors.passwordConfirmation?.message}
       >
         <Input
           {...register('passwordConfirmation')}
-          {...fieldAria('passwordConfirmation', { error: errors.passwordConfirmation?.message })}
+          {...fieldAria('passwordConfirmation', {
+            error: errors.passwordConfirmation?.message,
+            required: true,
+          })}
           type="password"
           autoComplete="new-password"
         />

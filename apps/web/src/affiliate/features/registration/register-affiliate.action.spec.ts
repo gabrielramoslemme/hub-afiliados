@@ -1,4 +1,9 @@
-import { AffiliateStatusEnum, PixKeyTypeEnum, RegistrationErrorCodeEnum } from '@porto/contracts';
+import {
+  AffiliateStatusEnum,
+  PixKeyTypeEnum,
+  RegistrationErrorCodeEnum,
+  SocialNetworkEnum,
+} from '@porto/contracts';
 import { publicApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
 import { registerAffiliate } from './register-affiliate.action';
@@ -11,9 +16,16 @@ const validInput = {
   fullName: 'Marina Ferraz',
   email: 'marina@email.com',
   cpf: '529.982.247-25',
+  rg: '12.345.678-X',
   pixKeyType: PixKeyTypeEnum.EMAIL,
   pixKey: 'marina@email.com',
 };
+
+function sentBody(): Record<string, unknown> {
+  const [, init] = apiFetch.mock.calls[0];
+
+  return JSON.parse(String(init?.body));
+}
 
 beforeEach(() => {
   apiFetch.mockReset();
@@ -95,6 +107,51 @@ describe('registerAffiliate', () => {
     expect(result).toEqual({
       status: 'failed',
       message: 'Não foi possível enviar seu cadastro agora. Tente novamente em instantes.',
+    });
+  });
+
+  it('sends the rg already normalized', async () => {
+    await registerAffiliate({ ...validInput, rg: '12.345.678-x' });
+
+    expect(sentBody()).toMatchObject({ rg: '12345678X' });
+  });
+
+  it('sends the social profile the person filled in', async () => {
+    await registerAffiliate({
+      ...validInput,
+      socialNetwork: SocialNetworkEnum.INSTAGRAM,
+      socialHandle: '@marina.ferraz',
+    });
+
+    expect(sentBody()).toMatchObject({
+      socialNetwork: SocialNetworkEnum.INSTAGRAM,
+      socialHandle: 'marina.ferraz',
+    });
+  });
+
+  /*
+    O `select` começa vazio e manda `''`. Mandar isso adiante gravaria uma rede
+    em branco ao lado de um `@` nulo — metade de um par que o banco recusa.
+  */
+  it('sends no social profile when the person chose no network', async () => {
+    await registerAffiliate(validInput);
+
+    expect(sentBody()).not.toHaveProperty('socialNetwork');
+    expect(sentBody()).not.toHaveProperty('socialHandle');
+  });
+
+  it('turns a duplicated rg into an error on the rg field', async () => {
+    apiFetch.mockRejectedValue(
+      new ApiError(
+        409,
+        RegistrationErrorCodeEnum.RG_ALREADY_REGISTERED,
+        'Este RG já está cadastrado.',
+      ),
+    );
+
+    await expect(registerAffiliate(validInput)).resolves.toEqual({
+      status: 'invalid',
+      fieldErrors: { rg: 'Este RG já está cadastrado.' },
     });
   });
 });

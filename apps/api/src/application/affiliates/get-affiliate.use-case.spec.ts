@@ -1,4 +1,4 @@
-import { AffiliateStatusEnum, PixKeyTypeEnum } from '@porto/contracts';
+import { AffiliateStatusEnum, PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
 import { AffiliateDetail } from '@Domain/affiliates/affiliate.entity';
 import { AffiliateNotFoundError } from '@Domain/affiliates/affiliates.errors';
 import { buildAffiliate } from '@Testing/factories/affiliate.factory';
@@ -21,8 +21,11 @@ describe('GetAffiliateUseCase', () => {
       ...buildAffiliate({
         user,
         cpf: '52998224725',
+        rg: '12345678X',
         pixKeyType: PixKeyTypeEnum.CPF,
         pixKey: '52998224725',
+        socialNetwork: SocialNetworkEnum.INSTAGRAM,
+        socialHandle: 'marina.ferraz',
       }),
       approvedBy: null,
     };
@@ -34,6 +37,9 @@ describe('GetAffiliateUseCase', () => {
       email: 'marina@email.com',
       maskedCpf: '***.***.247-25',
       cpf: '52998224725',
+      rg: '12345678X',
+      socialNetwork: SocialNetworkEnum.INSTAGRAM,
+      socialHandle: 'marina.ferraz',
       pixKeyType: PixKeyTypeEnum.CPF,
       pixKey: '52998224725',
       status: AffiliateStatusEnum.PENDING_APPROVAL,

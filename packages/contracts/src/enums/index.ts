@@ -22,6 +22,16 @@ export enum PixKeyTypeEnum {
   CPF = 'CPF',
 }
 
+/** Onde o afiliado divulga o cupom. Opcional no cadastro, sempre com o `@`. */
+export enum SocialNetworkEnum {
+  INSTAGRAM = 'INSTAGRAM',
+  TIKTOK = 'TIKTOK',
+  YOUTUBE = 'YOUTUBE',
+  FACEBOOK = 'FACEBOOK',
+  X = 'X',
+  KWAI = 'KWAI',
+}
+
 export enum TokenPurposeEnum {
   SET_PASSWORD = 'SET_PASSWORD',
   RESET_PASSWORD = 'RESET_PASSWORD',
@@ -61,6 +71,8 @@ export enum RegistrationErrorCodeEnum {
   CPF_ALREADY_REGISTERED = 'REG-003',
   PIX_KEY_MISMATCH = 'REG-004',
   PIX_KEY_INVALID = 'REG-005',
+  RG_ALREADY_REGISTERED = 'REG-006',
+  INVALID_RG = 'REG-007',
 }
 
 /** Todo `code` que o corpo de erro da API pode carregar. */

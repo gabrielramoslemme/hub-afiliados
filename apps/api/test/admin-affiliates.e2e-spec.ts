@@ -3,7 +3,12 @@ import { Test } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
-import { AffiliateStatusEnum, MailTemplateEnum, PixKeyTypeEnum } from '@porto/contracts';
+import {
+  AffiliateStatusEnum,
+  MailTemplateEnum,
+  PixKeyTypeEnum,
+  SocialNetworkEnum,
+} from '@porto/contracts';
 import { AppModule } from '../src/app.module';
 import {
   AFFILIATE_REPOSITORY,
@@ -43,15 +48,21 @@ describe('Admin affiliates (e2e)', () => {
       fullName: 'Marina Ferraz',
       email: 'marina.ferraz@email.com',
       cpf: '52998224725',
+      rg: '12345678X',
       pixKeyType: PixKeyTypeEnum.EMAIL,
       pixKey: 'marina.ferraz@email.com',
+      socialNetwork: SocialNetworkEnum.INSTAGRAM,
+      socialHandle: 'marina.ferraz',
     });
     const cleide = await affiliates.createWithUser({
       fullName: 'Cleide Nakamura',
       email: 'cleide.nakamura@email.com',
       cpf: '39053344705',
+      rg: '98765432',
       pixKeyType: PixKeyTypeEnum.CPF,
       pixKey: '39053344705',
+      socialNetwork: null,
+      socialHandle: null,
     });
     await affiliates.changeStatus({
       affiliateId: cleide.id,
@@ -175,6 +186,9 @@ describe('Admin affiliates (e2e)', () => {
         name: 'Marina Ferraz',
         cpf: '52998224725',
         maskedCpf: '***.***.247-25',
+        rg: '12345678X',
+        socialNetwork: SocialNetworkEnum.INSTAGRAM,
+        socialHandle: 'marina.ferraz',
         status: AffiliateStatusEnum.PENDING_APPROVAL,
         approvedByName: null,
       });

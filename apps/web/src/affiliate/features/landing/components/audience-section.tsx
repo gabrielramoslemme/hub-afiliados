@@ -1,8 +1,8 @@
-import { Building2, Home, Users, Video } from 'lucide-react';
+import { Building2, Home, UserRoundPlus, Users, Video } from 'lucide-react';
 import { Container, SectionHeading } from '@/affiliate/shared/components/section';
 import { audience } from '@/affiliate/shared/content';
 
-const ICONS = [Building2, Video, Home, Users];
+const ICONS = [Video, Users, Building2, Home, UserRoundPlus];
 
 export function AudienceSection() {
   return (
@@ -25,7 +25,12 @@ export function AudienceSection() {
             const Icon = ICONS[index];
 
             return (
-              <li key={profile.title} className="border-b border-ink-200 py-8">
+              /*
+                O último perfil é o que abre o programa para todo mundo: ocupa a
+                linha inteira, e é o que fecha o fio de 1px na largura cheia em
+                vez de deixá-lo parar no meio.
+              */
+              <li key={profile.title} className="border-b border-ink-200 py-8 sm:last:col-span-2">
                 <div className="flex items-start gap-4">
                   <Icon className="mt-0.5 size-5 shrink-0 text-blue-600" aria-hidden />
                   <div>

@@ -1,5 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { AffiliateDetail, AffiliateStatusEnum, PixKeyTypeEnum } from '@porto/contracts';
+import {
+  AffiliateDetail,
+  AffiliateStatusEnum,
+  PixKeyTypeEnum,
+  SocialNetworkEnum,
+} from '@porto/contracts';
 import { AffiliateDetailOutput } from '@Application/affiliates/get-affiliate.use-case';
 
 export class AffiliateDetailResponseDto implements AffiliateDetail {
@@ -17,6 +22,15 @@ export class AffiliateDetailResponseDto implements AffiliateDetail {
 
   @ApiProperty({ example: '52998224725', description: 'Completo: só o detalhe o expõe' })
   cpf: string;
+
+  @ApiProperty({ example: '12345678X', description: 'Completo: só o detalhe o expõe' })
+  rg: string;
+
+  @ApiProperty({ enum: SocialNetworkEnum, nullable: true })
+  socialNetwork: SocialNetworkEnum | null;
+
+  @ApiProperty({ nullable: true, example: 'marina.ferraz' })
+  socialHandle: string | null;
 
   @ApiProperty({ enum: PixKeyTypeEnum })
   pixKeyType: PixKeyTypeEnum;

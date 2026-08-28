@@ -1,14 +1,14 @@
 import Link from 'next/link';
 import { footer, site } from '@/affiliate/shared/content';
-import { PortoLogo } from '@/shared/components/porto-logo';
 import { Container } from './section';
+import { SiteLogo } from './site-logo';
 
 export function SiteFooter() {
   return (
     <footer className="surface-brand py-14 text-blue-200">
       <Container className="flex flex-col gap-10 md:flex-row md:items-start md:justify-between">
         <div className="max-w-sm">
-          <PortoLogo tone="dark" />
+          <SiteLogo tone="dark" />
           <p className="mt-4 text-sm leading-relaxed">{footer.tagline}</p>
         </div>
 

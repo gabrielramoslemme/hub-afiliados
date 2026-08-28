@@ -1,6 +1,12 @@
 import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
-import { AffiliateStatusEnum, PixKeyTypeEnum, UserRoleEnum, UserTypeEnum } from '@porto/contracts';
+import {
+  AffiliateStatusEnum,
+  PixKeyTypeEnum,
+  SocialNetworkEnum,
+  UserRoleEnum,
+  UserTypeEnum,
+} from '@porto/contracts';
 import { AppModule } from '../../src/app.module';
 import {
   AFFILIATE_REPOSITORY,
@@ -10,7 +16,10 @@ import {
   AFFILIATE_STATUS_HISTORY_REPOSITORY,
   AffiliateStatusHistoryRepository,
 } from '../../src/domain/affiliates/affiliate-status-history.repository';
-import { CpfAlreadyRegisteredError } from '../../src/domain/affiliates/affiliates.errors';
+import {
+  CpfAlreadyRegisteredError,
+  RgAlreadyRegisteredError,
+} from '../../src/domain/affiliates/affiliates.errors';
 import { USER_REPOSITORY, UserRepository } from '../../src/domain/users/user.repository';
 
 describe('AffiliateRepository (integration)', () => {
@@ -50,6 +59,7 @@ describe('AffiliateRepository (integration)', () => {
     const affiliate = await affiliates.save({
       userId: owner.id,
       cpf: '52998224725',
+      rg: '12345678X',
       pixKeyType: PixKeyTypeEnum.EMAIL,
       pixKey: 'marina@example.com',
       status: AffiliateStatusEnum.PENDING_APPROVAL,
@@ -175,15 +185,21 @@ describe('AffiliateRepository (integration)', () => {
         fullName: 'Rogério Bastos',
         email: 'rogerio.bastos@email.com',
         cpf: '11144477735',
+        rg: '22334455',
         pixKeyType: PixKeyTypeEnum.EMAIL,
         pixKey: 'rogerio.bastos@email.com',
+        socialNetwork: null,
+        socialHandle: null,
       });
       await affiliates.createWithUser({
         fullName: 'Cleide Nakamura',
         email: 'cleide.nakamura@email.com',
         cpf: '39053344705',
+        rg: '33445566',
         pixKeyType: PixKeyTypeEnum.EMAIL,
         pixKey: 'cleide.nakamura@email.com',
+        socialNetwork: null,
+        socialHandle: null,
       });
       await affiliates.changeStatus({
         affiliateId: rogerio.id,
@@ -259,8 +275,11 @@ describe('AffiliateRepository (integration)', () => {
       fullName: 'Bruno Alves',
       email: 'bruno@example.com',
       cpf: '11144477735',
+      rg: '11223344',
       pixKeyType: PixKeyTypeEnum.EMAIL,
       pixKey: 'bruno@example.com',
+      socialNetwork: SocialNetworkEnum.YOUTUBE,
+      socialHandle: 'brunoalves',
     };
 
     it('creates user, affiliate and the first history row atomically', async () => {
@@ -276,6 +295,24 @@ describe('AffiliateRepository (integration)', () => {
           toStatus: AffiliateStatusEnum.PENDING_APPROVAL,
         }),
       ]);
+    });
+
+    it('translates the rg unique index into a domain conflict', async () => {
+      await affiliates.createWithUser(createInput);
+
+      await expect(
+        affiliates.createWithUser({
+          ...createInput,
+          email: 'outro@example.com',
+          cpf: '39053344705',
+        }),
+      ).rejects.toThrow(RgAlreadyRegisteredError);
+    });
+
+    it('finds an affiliate by the rg', async () => {
+      await affiliates.createWithUser(createInput);
+
+      await expect(affiliates.findByRg('11223344')).resolves.toMatchObject({ rg: '11223344' });
     });
 
     it('rolls back the user when the affiliate insert fails', async () => {
