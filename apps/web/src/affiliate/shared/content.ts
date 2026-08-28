@@ -85,24 +85,29 @@ export const audience = {
   lead: 'O programa é aberto: qualquer pessoa pode se candidatar. Estes são os perfis em que ele costuma render mais.',
   profiles: [
     {
-      title: 'Síndicos e administradoras',
-      description:
-        'Você é a primeira pessoa que o condomínio procura quando algo quebra. A indicação já acontece — agora ela é remunerada.',
-    },
-    {
-      title: 'Creators de casa, reforma e organização',
+      title: 'Creators e criadores de conteúdo',
       description:
         'Sua audiência pede indicação de serviço toda semana. O cupom transforma a resposta que você já dá em receita.',
-    },
-    {
-      title: 'Corretores e profissionais do mercado imobiliário',
-      description:
-        'Quem acabou de mudar de casa contrata serviço no mesmo mês. É a janela mais curta entre a indicação e a venda.',
     },
     {
       title: 'Clubes de compra e comunidades',
       description:
         'Um benefício a mais para a sua base, sem custo para você e sem nada para operar.',
+    },
+    {
+      title: 'Síndicos e condôminos',
+      description:
+        'Você é a primeira pessoa que o condomínio procura quando algo quebra. A indicação já acontece — agora ela é remunerada.',
+    },
+    {
+      title: 'Profissionais do mercado imobiliário',
+      description:
+        'Quem acabou de mudar de casa contrata serviço no mesmo mês. É a janela mais curta entre a indicação e a venda.',
+    },
+    {
+      title: 'E qualquer pessoa que indica',
+      description:
+        'Não é preciso audiência nem carteira de clientes. Quem responde o vizinho no grupo do prédio já pode se candidatar.',
     },
   ],
 };
@@ -114,7 +119,7 @@ export const steps = {
     {
       title: 'Cadastre-se',
       description:
-        'Nome, e-mail, CPF e a chave PIX em que você quer receber. Leva menos de dois minutos e nem senha pede.',
+        'Nome, e-mail, RG, CPF e a chave PIX em que você quer receber. Leva menos de dois minutos e nem senha pede.',
     },
     {
       title: 'A Porto analisa',
@@ -129,7 +134,7 @@ export const steps = {
     {
       title: 'Divulgue do seu jeito',
       description:
-        'Story, grupo de WhatsApp, mural do condomínio, lista de transmissão. O cupom é o mesmo em qualquer canal.',
+        'Story, grupo de WhatsApp, mural do condomínio, lista de transmissão. O cupom é o mesmo em qualquer lugar.',
     },
     {
       title: 'Acompanhe e receba',

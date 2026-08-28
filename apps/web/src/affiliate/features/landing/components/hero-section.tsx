@@ -14,7 +14,7 @@ import { Tilt } from './tilt';
 export function HeroSection() {
   return (
     <section className="surface-brand surface-mesh surface-grid relative isolate overflow-hidden">
-      <Container className="relative grid items-center gap-16 pb-24 pt-28 lg:grid-cols-12 lg:gap-10 lg:pb-32 lg:pt-36">
+      <Container className="relative grid items-center gap-16 pb-24 pt-12 lg:grid-cols-12 lg:gap-10 lg:pb-32 lg:pt-20">
         <div className="animate-rise lg:col-span-6">
           <p className="inline-flex items-center gap-2 rounded-pill border border-white/20 bg-white/10 px-3 py-1.5 text-eyebrow uppercase text-white">
             <Sparkles className="size-3.5 animate-sparkle text-cyan-300" aria-hidden />
