@@ -68,10 +68,12 @@ export function SetPasswordForm({ token }: { token: string }) {
         </div>
       )}
 
+      {/* A tela existe para este formulário: o cursor já começa nele. */}
       <Field id="password" label="Nova senha" required error={errors.password?.message}>
         <Input
           {...register('password')}
           {...fieldAria('password', { error: errors.password?.message, required: true })}
+          autoFocus
           type="password"
           autoComplete="new-password"
           placeholder="Ao menos 8 caracteres"
