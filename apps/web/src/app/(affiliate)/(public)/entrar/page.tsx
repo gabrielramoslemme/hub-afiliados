@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 export default function AffiliateSignInPage() {
   return (
     <section className="bg-blue-50 py-20 lg:py-28">
-      <Container className="max-w-md">
+      <Container className="max-w-lg">
         <div className="rounded-panel border border-ink-200 bg-white p-8 shadow-card sm:p-9">
           <h1 className="text-xl font-bold tracking-[-0.02em] text-ink-900">Entrar na sua área</h1>
           <p className="mt-1.5 text-[0.9375rem] leading-relaxed text-ink-500">
