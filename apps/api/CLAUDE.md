@@ -333,6 +333,7 @@ npm run typeorm:run --workspace apps/api                     # aplica as migrati
 npm run typeorm:revert --workspace apps/api                  # reverte a última
 npm run typeorm:generate --workspace apps/api --name=Drift   # detector de drift, espera "No changes"
 npm run seed --workspace apps/api                            # operadores
+npm run db:setup --workspace apps/api                        # typeorm:run + seed, nesta ordem
 npm run openapi:generate --workspace apps/api                # gera apps/api/openapi.json
 ```
 

@@ -14,7 +14,8 @@
     "typeorm:run": "typeorm-ts-node-commonjs migration:run -d ormconfig.ts",
     "typeorm:revert": "typeorm-ts-node-commonjs migration:revert -d ormconfig.ts",
     "openapi:generate": "ts-node -r tsconfig-paths/register scripts/generate-openapi.ts",
-    "seed": "ts-node -r tsconfig-paths/register seeds/seed.ts"
+    "seed": "ts-node -r tsconfig-paths/register seeds/seed.ts",
+    "db:setup": "npm run typeorm:run && npm run seed"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

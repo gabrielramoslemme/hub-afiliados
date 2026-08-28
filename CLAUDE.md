@@ -23,6 +23,7 @@ A raiz só carrega o que é do repositório inteiro. **Script que pertence a um 
 
 ```bash
 npm run dev          # API (3000) e web (3005) em watch
+npm run dev:api      # só a API (3000), sem subir a web
 npm run dev:web      # só a web (3005), sem subir a API
 npm run lint         # Biome: lint, formato e ordem de imports
 npm run type-check   # tsc --noEmit em todos os pacotes

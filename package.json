@@ -13,6 +13,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "dev:api": "turbo run dev --filter=@porto/api",
     "dev:web": "turbo run dev --filter=@porto/web",
     "lint": "biome check .",
     "format": "biome check --write .",

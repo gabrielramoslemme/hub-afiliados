@@ -29,8 +29,7 @@ cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
 
 npm run db:up                                 # sobe o Postgres
-npm run typeorm:run --workspace apps/api      # cria e atualiza o schema
-npm run seed --workspace apps/api             # operadores do painel
+npm run db:setup --workspace apps/api         # migrations + operadores do painel
 
 npm run dev                                   # sobe API e web juntos
 ```
@@ -94,6 +93,7 @@ A raiz só tem o que vale para o repositório inteiro:
 | Comando | O que faz |
 |---|---|
 | `npm run dev` | API e web em modo watch |
+| `npm run dev:api` | Só a API (3000), sem subir a web |
 | `npm run dev:web` | Só a web (3005), sem subir a API |
 | `npm run lint` | Biome: lint, formatação e ordem de imports no repositório inteiro |
 | `npm run type-check` | `tsc --noEmit` em todos os pacotes |
@@ -111,6 +111,7 @@ O que pertence a um pacote mora nele:
 | `npm run typeorm:run --workspace apps/api` | Aplica as migrations |
 | `npm run typeorm:revert --workspace apps/api` | Reverte a última migration |
 | `npm run seed --workspace apps/api` | Popula os operadores |
+| `npm run db:setup --workspace apps/api` | Aplica as migrations e popula os operadores |
 | `npm run openapi:generate --workspace apps/api` | Gera `apps/api/openapi.json` |
 
 Migration nova: `npm run typeorm:create --workspace apps/api --name=MinhaMigration`. O
