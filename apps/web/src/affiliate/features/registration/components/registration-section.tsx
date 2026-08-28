@@ -3,7 +3,7 @@ import { Container, SectionHeading } from '@/affiliate/shared/components/section
 import { registration, steps } from '@/affiliate/shared/content';
 import { RegistrationForm } from './registration-form';
 
-export function RegistrationSection() {
+export function RegistrationSection({ autoFocus = false }: { autoFocus?: boolean } = {}) {
   return (
     <section id="cadastro" className="border-t border-blue-200 bg-blue-50 py-24">
       <Container className="grid gap-12 lg:grid-cols-12 lg:gap-16">
@@ -46,7 +46,7 @@ export function RegistrationSection() {
 
         <div className="reveal-pop lg:col-span-7">
           <div className="rounded-panel border border-ink-200 bg-white p-7 shadow-card sm:p-9">
-            <RegistrationForm />
+            <RegistrationForm autoFocus={autoFocus} />
           </div>
         </div>
       </Container>

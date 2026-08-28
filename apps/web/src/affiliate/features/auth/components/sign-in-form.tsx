@@ -46,10 +46,12 @@ export function SignInForm() {
         </div>
       )}
 
+      {/* A tela existe para este formulário: o cursor já começa nele. */}
       <Field id="email" label="E-mail" required error={errors.email?.message}>
         <Input
           {...register('email')}
           {...fieldAria('email', { error: errors.email?.message, required: true })}
+          autoFocus
           type="email"
           inputMode="email"
           autoComplete="username"

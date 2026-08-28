@@ -39,7 +39,12 @@ const PIX_KEY_PLACEHOLDERS: Record<PixKeyTypeEnum, string> = {
   [PixKeyTypeEnum.CPF]: '000.000.000-00',
 };
 
-export function RegistrationForm() {
+/**
+ * `autoFocus` é decisão de quem monta a tela, não do formulário: ele é a seção
+ * no pé da landing e é a página `/cadastro` inteira. Focar na landing arrastaria
+ * quem acabou de abrir a página para o fim dela antes da primeira linha.
+ */
+export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } = {}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
@@ -133,6 +138,7 @@ export function RegistrationForm() {
         <Input
           {...register('fullName')}
           {...fieldAria('fullName', { error: errors.fullName?.message, required: true })}
+          autoFocus={autoFocus}
           autoComplete="name"
           placeholder="Como está no seu documento"
         />

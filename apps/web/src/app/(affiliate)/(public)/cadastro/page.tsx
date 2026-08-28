@@ -9,5 +9,5 @@ export const metadata: Metadata = {
 
 /** Mesma seção da landing, servindo link direto — a tela mora na feature. */
 export default function RegistrationPage() {
-  return <RegistrationSection />;
+  return <RegistrationSection autoFocus />;
 }

@@ -192,4 +192,21 @@ describe('RegistrationForm', () => {
       expect(await screen.findByRole('option', { name })).toBeInTheDocument();
     }
   });
+
+  /*
+    O mesmo formulário é a seção no pé da landing e a página `/cadastro`
+    inteira. Roubar o foco na landing arrastaria quem abriu a página para o
+    fim dela antes de ler a primeira linha — só a página do formulário foca.
+  */
+  it('leaves the focus alone where it is a section of a longer page', () => {
+    render(<RegistrationForm />);
+
+    expect(screen.getByLabelText('Nome completo')).not.toHaveFocus();
+  });
+
+  it('takes the focus where the form is the whole page', () => {
+    render(<RegistrationForm autoFocus />);
+
+    expect(screen.getByLabelText('Nome completo')).toHaveFocus();
+  });
 });
