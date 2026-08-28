@@ -1,11 +1,13 @@
-import { PixKeyTypeEnum } from '@porto/contracts';
+import { PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
 import {
   formatBRL,
   formatCpfDisplay,
   formatDate,
   formatDateTime,
   formatPixKeyDisplay,
+  formatSocialProfile,
   formatTime,
+  socialNetworkName,
 } from './format';
 
 describe('formatDateTime', () => {
@@ -85,5 +87,41 @@ describe('formatBRL', () => {
 
   it('formats zero', () => {
     expect(formatBRL(0)).toBe('R$\u00a00,00');
+  });
+});
+
+describe('formatSocialProfile', () => {
+  it('reads the handle followed by the network', () => {
+    expect(formatSocialProfile(SocialNetworkEnum.INSTAGRAM, 'marina.ferraz')).toBe(
+      '@marina.ferraz no Instagram',
+    );
+  });
+
+  it('names each network the way the brand writes it', () => {
+    expect(formatSocialProfile(SocialNetworkEnum.TIKTOK, 'marina')).toBe('@marina no TikTok');
+    expect(formatSocialProfile(SocialNetworkEnum.YOUTUBE, 'marina')).toBe('@marina no YouTube');
+    expect(formatSocialProfile(SocialNetworkEnum.X, 'marina')).toBe('@marina no X');
+    expect(formatSocialProfile(SocialNetworkEnum.KWAI, 'marina')).toBe('@marina no Kwai');
+  });
+
+  it('names every network the enum carries', () => {
+    for (const network of Object.values(SocialNetworkEnum)) {
+      expect(formatSocialProfile(network, 'marina')).toBe(
+        `@marina no ${socialNetworkName(network)}`,
+      );
+    }
+  });
+
+  it('does not repeat the at the person already typed', () => {
+    expect(formatSocialProfile(SocialNetworkEnum.FACEBOOK, '@marina')).toBe('@marina no Facebook');
+  });
+
+  it('has nothing to show when the affiliate informed no network', () => {
+    expect(formatSocialProfile(null, null)).toBeNull();
+  });
+
+  it('has nothing to show when half of the pair is missing', () => {
+    expect(formatSocialProfile(SocialNetworkEnum.INSTAGRAM, null)).toBeNull();
+    expect(formatSocialProfile(null, 'marina')).toBeNull();
   });
 });

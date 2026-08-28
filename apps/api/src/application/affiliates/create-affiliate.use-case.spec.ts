@@ -1,10 +1,17 @@
-import { AffiliateStatusEnum, MailTemplateEnum, PixKeyTypeEnum } from '@porto/contracts';
+import {
+  AffiliateStatusEnum,
+  MailTemplateEnum,
+  PixKeyTypeEnum,
+  SocialNetworkEnum,
+} from '@porto/contracts';
 import {
   CpfAlreadyRegisteredError,
   EmailAlreadyRegisteredError,
   InvalidCpfError,
   InvalidPixKeyError,
+  InvalidRgError,
   PixKeyMismatchError,
+  RgAlreadyRegisteredError,
 } from '@Domain/affiliates/affiliates.errors';
 import { buildAffiliate } from '@Testing/factories/affiliate.factory';
 import { affiliateRepositoryMock } from '@Testing/mocks/repositories/affiliate.repository.mock';
@@ -17,8 +24,11 @@ describe('CreateAffiliateUseCase', () => {
     fullName: 'Marina Ferraz',
     email: 'marina@email.com',
     cpf: '529.982.247-25',
+    rg: '12.345.678-X',
     pixKeyType: PixKeyTypeEnum.EMAIL,
     pixKey: 'marina@email.com',
+    socialNetwork: null,
+    socialHandle: null,
   };
 
   function buildUseCase() {
@@ -131,6 +141,92 @@ describe('CreateAffiliateUseCase', () => {
     affiliateRepository.findByCpf.mockResolvedValue(buildAffiliate());
 
     await expect(useCase.execute(input)).rejects.toThrow(CpfAlreadyRegisteredError);
+    expect(mailer.send).not.toHaveBeenCalled();
+  });
+
+  it('stores the rg without punctuation and uppercased', async () => {
+    const { useCase, affiliateRepository } = buildUseCase();
+
+    await useCase.execute({ ...input, rg: '12.345.678-x' });
+
+    expect(affiliateRepository.createWithUser).toHaveBeenCalledWith(
+      expect.objectContaining({ rg: '12345678X' }),
+    );
+  });
+
+  it('rejects a malformed rg', async () => {
+    const { useCase } = buildUseCase();
+
+    await expect(useCase.execute({ ...input, rg: '1234' })).rejects.toThrow(InvalidRgError);
+  });
+
+  it('rejects an rg already registered', async () => {
+    const { useCase, affiliateRepository } = buildUseCase();
+    affiliateRepository.findByRg.mockResolvedValue(buildAffiliate());
+
+    await expect(useCase.execute(input)).rejects.toThrow(RgAlreadyRegisteredError);
+  });
+
+  it('looks the rg up already normalized', async () => {
+    const { useCase, affiliateRepository } = buildUseCase();
+
+    await useCase.execute({ ...input, rg: '12.345.678-x' });
+
+    expect(affiliateRepository.findByRg).toHaveBeenCalledWith('12345678X');
+  });
+
+  it('stores the social handle without the at', async () => {
+    const { useCase, affiliateRepository } = buildUseCase();
+
+    await useCase.execute({
+      ...input,
+      socialNetwork: SocialNetworkEnum.INSTAGRAM,
+      socialHandle: '@marina.ferraz',
+    });
+
+    expect(affiliateRepository.createWithUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        socialNetwork: SocialNetworkEnum.INSTAGRAM,
+        socialHandle: 'marina.ferraz',
+      }),
+    );
+  });
+
+  it('stores no social profile when the person informed none', async () => {
+    const { useCase, affiliateRepository } = buildUseCase();
+
+    await useCase.execute(input);
+
+    expect(affiliateRepository.createWithUser).toHaveBeenCalledWith(
+      expect.objectContaining({ socialNetwork: null, socialHandle: null }),
+    );
+  });
+
+  it('drops a handle that came without its network', async () => {
+    const { useCase, affiliateRepository } = buildUseCase();
+
+    await useCase.execute({ ...input, socialNetwork: null, socialHandle: '@marinaferraz' });
+
+    expect(affiliateRepository.createWithUser).toHaveBeenCalledWith(
+      expect.objectContaining({ socialNetwork: null, socialHandle: null }),
+    );
+  });
+
+  it('drops a social network that arrived as a blank string', async () => {
+    const { useCase, affiliateRepository } = buildUseCase();
+
+    await useCase.execute({ ...input, socialNetwork: '' as unknown as SocialNetworkEnum });
+
+    expect(affiliateRepository.createWithUser).toHaveBeenCalledWith(
+      expect.objectContaining({ socialNetwork: null, socialHandle: null }),
+    );
+  });
+
+  it('does not send the email when the rg is already registered', async () => {
+    const { useCase, affiliateRepository, mailer } = buildUseCase();
+    affiliateRepository.findByRg.mockResolvedValue(buildAffiliate());
+
+    await expect(useCase.execute(input)).rejects.toThrow(RgAlreadyRegisteredError);
     expect(mailer.send).not.toHaveBeenCalled();
   });
 });

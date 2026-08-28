@@ -15,6 +15,7 @@ function fillValidForm() {
     fullName: 'Marina Ferraz',
     email: 'marina@email.com',
     cpf: '52998224725',
+    rg: '12.345.678-X',
     pixKey: 'marina@email.com',
   };
 }
@@ -25,6 +26,7 @@ async function submitValidForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('Nome completo'), values.fullName);
   await user.type(screen.getByLabelText('E-mail'), values.email);
   await user.type(screen.getByLabelText('CPF'), values.cpf);
+  await user.type(screen.getByLabelText('RG'), values.rg);
   await user.type(screen.getByLabelText('Chave PIX'), values.pixKey);
   await user.click(screen.getByRole('button', { name: 'Enviar cadastro' }));
 }
@@ -40,7 +42,16 @@ describe('RegistrationForm', () => {
   it('asks for every field the api requires', () => {
     render(<RegistrationForm />);
 
-    for (const label of ['Nome completo', 'E-mail', 'CPF', 'Tipo de chave PIX', 'Chave PIX']) {
+    for (const label of [
+      'Nome completo',
+      'E-mail',
+      'CPF',
+      'RG',
+      'Tipo de chave PIX',
+      'Chave PIX',
+      'Rede social',
+      '@ na rede',
+    ]) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
   });
@@ -105,5 +116,80 @@ describe('RegistrationForm', () => {
     await submitValidForm(user);
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enviando…' })).toBeDisabled());
+  });
+
+  it('marks the required fields and leaves the optional ones unmarked', () => {
+    render(<RegistrationForm />);
+
+    for (const label of ['Nome completo', 'E-mail', 'CPF', 'RG', 'Chave PIX']) {
+      expect(screen.getByLabelText(label)).toHaveAttribute('aria-required', 'true');
+    }
+
+    for (const label of ['Rede social', '@ na rede']) {
+      expect(screen.getByLabelText(label)).not.toHaveAttribute('aria-required', 'true');
+    }
+  });
+
+  it('sends the rg without punctuation and uppercased', async () => {
+    const user = userEvent.setup();
+    render(<RegistrationForm />);
+
+    await submitValidForm(user);
+
+    await waitFor(() =>
+      expect(action).toHaveBeenCalledWith(expect.objectContaining({ rg: '12345678X' })),
+    );
+  });
+
+  it('refuses an rg shorter than five characters without reaching the api', async () => {
+    const user = userEvent.setup();
+    render(<RegistrationForm />);
+
+    await user.type(screen.getByLabelText('RG'), '1234');
+    await user.click(screen.getByRole('button', { name: 'Enviar cadastro' }));
+
+    expect(await screen.findByText('Informe um RG válido.')).toBeInTheDocument();
+    expect(action).not.toHaveBeenCalled();
+  });
+
+  it('refuses a handle without its social network without reaching the api', async () => {
+    const user = userEvent.setup();
+    render(<RegistrationForm />);
+
+    await user.type(screen.getByLabelText('@ na rede'), '@marinaferraz');
+    await user.click(screen.getByRole('button', { name: 'Enviar cadastro' }));
+
+    expect(await screen.findByText('Escolha a rede social do @ informado.')).toBeInTheDocument();
+    expect(action).not.toHaveBeenCalled();
+  });
+
+  it('carries the at as a fixed prefix, so nobody has to type it', () => {
+    render(<RegistrationForm />);
+
+    expect(screen.getByLabelText('@ na rede')).toHaveAttribute('placeholder', 'seuperfil');
+    expect(screen.getByText('@')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('still accepts a handle pasted with the at', async () => {
+    const user = userEvent.setup();
+    render(<RegistrationForm />);
+
+    await user.type(screen.getByLabelText('@ na rede'), '@marinaferraz');
+    await user.click(screen.getByRole('button', { name: 'Enviar cadastro' }));
+
+    // Sem rede escolhida o envio para aqui, e é o par que o schema acusa — não
+    // o formato do `@`, que continua sendo aceito com ou sem arroba.
+    expect(await screen.findByText('Escolha a rede social do @ informado.')).toBeInTheDocument();
+  });
+
+  it('offers every social network the contract carries', async () => {
+    const user = userEvent.setup();
+    render(<RegistrationForm />);
+
+    await user.click(screen.getByLabelText('Rede social'));
+
+    for (const name of ['Instagram', 'TikTok', 'YouTube', 'Facebook', 'X', 'Kwai']) {
+      expect(await screen.findByRole('option', { name })).toBeInTheDocument();
+    }
   });
 });

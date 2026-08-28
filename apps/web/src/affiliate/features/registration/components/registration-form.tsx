@@ -6,15 +6,16 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
+  type CreateAffiliateFormValues,
   type CreateAffiliateRequest,
   createAffiliateSchema,
   PixKeyTypeEnum,
+  SocialNetworkEnum,
 } from '@porto/contracts';
 import { registration } from '@/affiliate/shared/content';
 import { Button } from '@/shared/components/ui/button';
 import { Field, fieldAria } from '@/shared/components/ui/field';
 import { Input } from '@/shared/components/ui/input';
-import { Label } from '@/shared/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -22,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import { socialNetworkName } from '@/shared/lib/format';
 import { formatCpf, formatPixKey } from '@/shared/lib/masks';
 import { registerAffiliate } from '../register-affiliate.action';
 
@@ -58,7 +60,9 @@ export function RegistrationForm() {
     getValues,
     watch,
     formState: { errors },
-  } = useForm<CreateAffiliateRequest>({
+    // Três parâmetros porque o formulário guarda um tipo e envia outro: o
+    // `handleSubmit` entrega o que o schema já normalizou.
+  } = useForm<CreateAffiliateFormValues, unknown, CreateAffiliateRequest>({
     resolver: zodResolver(createAffiliateSchema),
     mode: 'onBlur',
     // Corrigiu, o erro some enquanto digita — em vez de esperar o próximo blur
@@ -68,8 +72,11 @@ export function RegistrationForm() {
       fullName: '',
       email: '',
       cpf: '',
+      rg: '',
       pixKeyType: PixKeyTypeEnum.EMAIL,
       pixKey: '',
+      socialNetwork: '',
+      socialHandle: '',
     },
   });
 
@@ -92,12 +99,12 @@ export function RegistrationForm() {
       }
 
       // O primeiro campo recusado recebe o foco: a correção começa onde o erro
-      // está, sem a pessoa procurar qual dos cinco campos a API reprovou.
+      // está, sem a pessoa procurar qual dos campos a API reprovou.
       const entries = Object.entries(result.fieldErrors);
 
       entries.forEach(([field, message], index) => {
         setError(
-          field as keyof CreateAffiliateRequest,
+          field as keyof CreateAffiliateFormValues,
           { type: 'server', message },
           { shouldFocus: index === 0 },
         );
@@ -122,19 +129,19 @@ export function RegistrationForm() {
         </div>
       )}
 
-      <Field id="fullName" label="Nome completo" error={errors.fullName?.message}>
+      <Field id="fullName" label="Nome completo" required error={errors.fullName?.message}>
         <Input
           {...register('fullName')}
-          {...fieldAria('fullName', { error: errors.fullName?.message })}
+          {...fieldAria('fullName', { error: errors.fullName?.message, required: true })}
           autoComplete="name"
           placeholder="Como está no seu documento"
         />
       </Field>
 
-      <Field id="email" label="E-mail" error={errors.email?.message}>
+      <Field id="email" label="E-mail" required error={errors.email?.message}>
         <Input
           {...register('email')}
-          {...fieldAria('email', { error: errors.email?.message })}
+          {...fieldAria('email', { error: errors.email?.message, required: true })}
           type="email"
           inputMode="email"
           autoComplete="email"
@@ -142,23 +149,37 @@ export function RegistrationForm() {
         />
       </Field>
 
-      <Field id="cpf" label="CPF" error={errors.cpf?.message}>
-        <Input
-          {...cpfField}
-          {...fieldAria('cpf', { error: errors.cpf?.message })}
-          inputMode="numeric"
-          autoComplete="off"
-          placeholder="000.000.000-00"
-          onChange={(event) => {
-            event.target.value = formatCpf(event.target.value);
-            return cpfField.onChange(event);
-          }}
-        />
-      </Field>
+      {/* Os dois documentos dividem a linha onde há largura: são curtos, e
+          juntos encurtam um formulário que já é longo. */}
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field id="cpf" label="CPF" required error={errors.cpf?.message}>
+          <Input
+            {...cpfField}
+            {...fieldAria('cpf', { error: errors.cpf?.message, required: true })}
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="000.000.000-00"
+            onChange={(event) => {
+              event.target.value = formatCpf(event.target.value);
+              return cpfField.onChange(event);
+            }}
+          />
+        </Field>
+
+        {/* O RG não tem formato nacional: sem máscara, para não recusar na
+            digitação o documento que o estado emitiu de outro jeito. */}
+        <Field id="rg" label="RG" required error={errors.rg?.message}>
+          <Input
+            {...register('rg')}
+            {...fieldAria('rg', { error: errors.rg?.message, required: true })}
+            autoComplete="off"
+            placeholder="00.000.000-0"
+          />
+        </Field>
+      </div>
 
       <div className="grid gap-5 sm:grid-cols-[minmax(0,10rem)_1fr]">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="pixKeyType">Tipo de chave PIX</Label>
+        <Field id="pixKeyType" label="Tipo de chave PIX" required>
           <Controller
             control={control}
             name="pixKeyType"
@@ -174,7 +195,10 @@ export function RegistrationForm() {
                   });
                 }}
               >
-                <SelectTrigger id="pixKeyType" aria-label="Tipo de chave PIX">
+                <SelectTrigger
+                  {...fieldAria('pixKeyType', { required: true })}
+                  aria-label="Tipo de chave PIX"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -187,11 +211,12 @@ export function RegistrationForm() {
               </Select>
             )}
           />
-        </div>
+        </Field>
 
         <Field
           id="pixKey"
           label="Chave PIX"
+          required
           error={errors.pixKey?.message}
           hint="A chave precisa estar no seu nome."
         >
@@ -200,6 +225,7 @@ export function RegistrationForm() {
             {...fieldAria('pixKey', {
               error: errors.pixKey?.message,
               hint: 'A chave precisa estar no seu nome.',
+              required: true,
             })}
             autoComplete="off"
             placeholder={PIX_KEY_PLACEHOLDERS[pixKeyType]}
@@ -208,6 +234,62 @@ export function RegistrationForm() {
               return pixKeyField.onChange(event);
             }}
           />
+        </Field>
+      </div>
+
+      {/* Opcional, e por isso sem asterisco — mas indivisível: o schema recusa
+          um sem o outro, e o erro aparece no campo que ficou faltando. */}
+      <div className="grid gap-5 sm:grid-cols-[minmax(0,10rem)_1fr]">
+        <Field id="socialNetwork" label="Rede social" error={errors.socialNetwork?.message}>
+          <Controller
+            control={control}
+            name="socialNetwork"
+            render={({ field }) => (
+              <Select value={field.value || undefined} onValueChange={field.onChange}>
+                <SelectTrigger
+                  {...fieldAria('socialNetwork', { error: errors.socialNetwork?.message })}
+                  aria-label="Rede social"
+                >
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.values(SocialNetworkEnum).map((network) => (
+                    <SelectItem key={network} value={network}>
+                      {socialNetworkName(network)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </Field>
+
+        <Field
+          id="socialHandle"
+          label="@ na rede"
+          error={errors.socialHandle?.message}
+          hint="Onde você divulga o cupom. Opcional."
+        >
+          {/* O arroba é moldura do campo, não conteúdo: quem preenche digita só
+              o perfil. Colado mesmo assim, o schema tira o arroba repetido. */}
+          <div className="relative">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-ink-500"
+            >
+              @
+            </span>
+            <Input
+              {...register('socialHandle')}
+              {...fieldAria('socialHandle', {
+                error: errors.socialHandle?.message,
+                hint: 'Onde você divulga o cupom. Opcional.',
+              })}
+              autoComplete="off"
+              placeholder="seuperfil"
+              className="pl-7"
+            />
+          </div>
         </Field>
       </div>
 

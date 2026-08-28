@@ -5,6 +5,7 @@ import {
   AffiliateStatusEnum,
   type AffiliateWalletResponse,
   PixKeyTypeEnum,
+  SocialNetworkEnum,
   StatementEntryKindEnum,
 } from '@porto/contracts';
 
@@ -126,6 +127,21 @@ function createdAtFor(index: number): string {
   return `2026-08-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:24:00.000Z`;
 }
 
+const SOCIAL_NETWORKS = Object.values(SocialNetworkEnum);
+
+/** Um em cada três cadastros não informou rede — o par é opcional de verdade. */
+function socialProfileFor(
+  index: number,
+  email: string,
+): Pick<AffiliateDetail, 'socialNetwork' | 'socialHandle'> {
+  if (index % 3 === 2) return { socialNetwork: null, socialHandle: null };
+
+  return {
+    socialNetwork: SOCIAL_NETWORKS[index % SOCIAL_NETWORKS.length],
+    socialHandle: email.split('@')[0],
+  };
+}
+
 export type MockAffiliate = AffiliateDetail;
 
 function build(index: number): MockAffiliate {
@@ -141,6 +157,8 @@ function build(index: number): MockAffiliate {
     email,
     maskedCpf: maskCpf(cpf),
     cpf,
+    rg: `${cpf.slice(0, 8)}X`,
+    ...socialProfileFor(index, email),
     status,
     createdAt,
     pixKeyType: PIX_TYPES[index % PIX_TYPES.length],
@@ -159,6 +177,11 @@ export const mockAffiliates: MockAffiliate[] = SEED.map((_, index) => build(inde
   pessoa: o índice 2 é o primeiro cadastro aprovado da lista.
 */
 const account = mockAffiliates[2];
+
+/** Mascara o RG como a API mascara: só os quatro últimos caracteres sobrevivem. */
+function maskRg(rg: string): string {
+  return `${'*'.repeat(rg.length - 4)}${rg.slice(-4)}`;
+}
 
 /** Mascara a chave do jeito que a API mascara: o suficiente para reconhecer. */
 function maskPixKey(type: PixKeyTypeEnum, key: string): string {
@@ -179,6 +202,9 @@ export const mockAffiliateAccount: AffiliateMeResponse = {
   name: account.name,
   email: account.email,
   maskedCpf: account.maskedCpf,
+  maskedRg: maskRg(account.rg),
+  socialNetwork: account.socialNetwork,
+  socialHandle: account.socialHandle,
   pixKeyType: account.pixKeyType,
   maskedPixKey: maskPixKey(account.pixKeyType, account.pixKey),
   status: account.status,

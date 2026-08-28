@@ -18,6 +18,7 @@ import {
 import {
   CpfAlreadyRegisteredError,
   EmailAlreadyRegisteredError,
+  RgAlreadyRegisteredError,
 } from '@Domain/affiliates/affiliates.errors';
 import { sanitizeCpf } from '@Domain/affiliates/cpf.util';
 import { AffiliateTypeormEntity } from '@Infra/database/typeorm/entities/affiliate.typeorm-entity';
@@ -62,6 +63,7 @@ function translateUniqueViolation(error: unknown): unknown {
   if (constraint.code !== UNIQUE_VIOLATION) return error;
   if (constraint.constraint === 'users_email_key') return new EmailAlreadyRegisteredError();
   if (constraint.constraint === 'affiliates_cpf_key') return new CpfAlreadyRegisteredError();
+  if (constraint.constraint === 'affiliates_rg_key') return new RgAlreadyRegisteredError();
   return error;
 }
 
@@ -75,6 +77,10 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
 
   findByCpf(cpf: string): Promise<AffiliateEntity | null> {
     return this.repository.findOne({ where: { cpf } });
+  }
+
+  findByRg(rg: string): Promise<AffiliateEntity | null> {
+    return this.repository.findOne({ where: { rg } });
   }
 
   findByPublicId(publicId: string): Promise<AffiliateDetail | null> {
@@ -164,8 +170,11 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
           manager.create(AffiliateTypeormEntity, {
             userId: user.id,
             cpf: input.cpf,
+            rg: input.rg,
             pixKeyType: input.pixKeyType,
             pixKey: input.pixKey,
+            socialNetwork: input.socialNetwork,
+            socialHandle: input.socialHandle,
             status: AffiliateStatusEnum.PENDING_APPROVAL,
           }),
         );

@@ -17,6 +17,7 @@ describe('Affiliate registration (e2e)', () => {
     fullName: 'Marina Ferraz',
     email: 'marina@email.com',
     cpf: '529.982.247-25',
+    rg: '12.345.678-X',
     pixKeyType: 'EMAIL',
     pixKey: 'marina@email.com',
   };
@@ -166,6 +167,101 @@ describe('Affiliate registration (e2e)', () => {
           to: 'marina@email.com',
         }),
       );
+    });
+
+    it('stores the rg without punctuation', async () => {
+      await request(app.getHttpServer()).post('/v1/affiliates').send(validBody).expect(201);
+
+      const [{ rg }] = await dataSource.query('SELECT rg FROM affiliates');
+
+      expect(rg).toBe('12345678X');
+    });
+
+    it('registers the social profile the person informed', async () => {
+      await request(app.getHttpServer())
+        .post('/v1/affiliates')
+        .send({ ...validBody, socialNetwork: 'INSTAGRAM', socialHandle: '@marina.ferraz' })
+        .expect(201);
+
+      const [row] = await dataSource.query('SELECT social_network, social_handle FROM affiliates');
+
+      expect(row).toEqual({ social_network: 'INSTAGRAM', social_handle: 'marina.ferraz' });
+    });
+
+    it('registers an affiliate that informed no social profile', async () => {
+      await request(app.getHttpServer()).post('/v1/affiliates').send(validBody).expect(201);
+
+      const [row] = await dataSource.query('SELECT social_network, social_handle FROM affiliates');
+
+      expect(row).toEqual({ social_network: null, social_handle: null });
+    });
+
+    it('rejects a registration without the rg', async () => {
+      const { rg: _rg, ...bodyWithoutRg } = validBody;
+
+      const response = await request(app.getHttpServer())
+        .post('/v1/affiliates')
+        .send(bodyWithoutRg)
+        .expect(400);
+
+      expect(response.body.message).toEqual(['Informe um RG válido.']);
+    });
+
+    it('rejects an rg shorter than five characters', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/v1/affiliates')
+        .send({ ...validBody, rg: '1234' })
+        .expect(400);
+
+      expect(response.body.message).toEqual(['Informe um RG válido.']);
+    });
+
+    it('rejects a duplicated rg', async () => {
+      await request(app.getHttpServer()).post('/v1/affiliates').send(validBody).expect(201);
+
+      const response = await request(app.getHttpServer())
+        .post('/v1/affiliates')
+        .send({
+          ...validBody,
+          email: 'outra@email.com',
+          cpf: '111.444.777-35',
+          rg: '12345678x',
+        })
+        .expect(409);
+
+      expect(response.body.code).toBe(RegistrationErrorCodeEnum.RG_ALREADY_REGISTERED);
+    });
+
+    it('rejects a social network without the handle', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/v1/affiliates')
+        .send({ ...validBody, socialNetwork: 'INSTAGRAM' })
+        .expect(400);
+
+      expect(response.body.message).toEqual(['Informe o @ da rede escolhida.']);
+    });
+
+    it('rejects a handle without the social network', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/v1/affiliates')
+        .send({ ...validBody, socialHandle: '@marinaferraz' })
+        .expect(400);
+
+      expect(response.body.message).toEqual(['Escolha a rede social do @ informado.']);
+    });
+
+    it('rejects an unknown social network', async () => {
+      await request(app.getHttpServer())
+        .post('/v1/affiliates')
+        .send({ ...validBody, socialNetwork: 'ORKUT', socialHandle: 'marinaferraz' })
+        .expect(400);
+    });
+
+    it('rejects a handle with a space', async () => {
+      await request(app.getHttpServer())
+        .post('/v1/affiliates')
+        .send({ ...validBody, socialNetwork: 'TIKTOK', socialHandle: 'marina ferraz' })
+        .expect(400);
     });
   });
 });

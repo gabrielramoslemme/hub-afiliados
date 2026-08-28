@@ -23,8 +23,11 @@ describe('Affiliate account (e2e)', () => {
     fullName: 'Marina Ferraz',
     email: 'marina.ferraz@email.com',
     cpf: '529.982.247-25',
+    rg: '12.345.678-X',
     pixKeyType: 'EMAIL',
     pixKey: 'marina.ferraz@email.com',
+    socialNetwork: 'INSTAGRAM',
+    socialHandle: '@marina.ferraz',
   };
 
   const PASSWORD = 'SenhaNova!2026';
@@ -238,7 +241,7 @@ describe('Affiliate account (e2e)', () => {
       return response.body.accessToken;
     }
 
-    it('answers the account with cpf and pix key masked', async () => {
+    it('answers the account with cpf, rg and pix key masked', async () => {
       const token = await signedInToken();
 
       const response = await request(app.getHttpServer())
@@ -249,11 +252,15 @@ describe('Affiliate account (e2e)', () => {
       expect(response.body).toMatchObject({
         name: 'Marina Ferraz',
         maskedCpf: '***.***.247-25',
+        maskedRg: '*****678X',
+        socialNetwork: 'INSTAGRAM',
+        socialHandle: 'marina.ferraz',
         maskedPixKey: 'ma***********@email.com',
         status: AffiliateStatusEnum.APPROVED,
         coupon: null,
       });
       expect(JSON.stringify(response.body)).not.toContain('52998224725');
+      expect(JSON.stringify(response.body)).not.toContain('12345678X');
     });
 
     it('refuses a request without a token', async () => {

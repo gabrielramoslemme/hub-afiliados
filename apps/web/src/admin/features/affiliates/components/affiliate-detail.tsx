@@ -3,7 +3,12 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { AffiliateStatusEnum, PixKeyTypeEnum } from '@porto/contracts';
 import { QUEUE_PATH } from '@/admin/shared/routes';
-import { formatCpfDisplay, formatDateTime, formatPixKeyDisplay } from '@/shared/lib/format';
+import {
+  formatCpfDisplay,
+  formatDateTime,
+  formatPixKeyDisplay,
+  formatSocialProfile,
+} from '@/shared/lib/format';
 import { fetchAffiliate, fetchAffiliateHistory } from '../data';
 import { AffiliateStatusBadge, statusLabel } from './affiliate-status';
 import { DecisionActions } from './decision-actions';
@@ -30,6 +35,7 @@ export async function AffiliateDetailScreen({ publicId }: { publicId: string }) 
   ]);
 
   const pending = affiliate.status === AffiliateStatusEnum.PENDING_APPROVAL;
+  const social = formatSocialProfile(affiliate.socialNetwork, affiliate.socialHandle);
 
   return (
     <div className="flex flex-col gap-8">
@@ -69,6 +75,11 @@ export async function AffiliateDetailScreen({ publicId }: { publicId: string }) 
             <DataRow label="CPF">
               <span data-tabular>{formatCpfDisplay(affiliate.cpf)}</span>
             </DataRow>
+            {/* Detalhe é também onde a análise precisa do RG completo. */}
+            <DataRow label="RG">
+              <span data-tabular>{affiliate.rg}</span>
+            </DataRow>
+            {social && <DataRow label="Rede social">{social}</DataRow>}
             <DataRow label="Tipo de chave PIX">{PIX_KEY_LABELS[affiliate.pixKeyType]}</DataRow>
             <DataRow label="Chave PIX">
               <span data-tabular>

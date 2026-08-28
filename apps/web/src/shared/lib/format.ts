@@ -1,5 +1,23 @@
-import type { PixKeyTypeEnum } from '@porto/contracts';
+import type { PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
 import { formatCpf, formatPixKey } from './masks';
+
+/** Cada marca escreve o próprio nome de um jeito, e o valor gravado é caixa alta. */
+const SOCIAL_NETWORK_NAMES: Record<SocialNetworkEnum, string> = {
+  INSTAGRAM: 'Instagram',
+  TIKTOK: 'TikTok',
+  YOUTUBE: 'YouTube',
+  FACEBOOK: 'Facebook',
+  X: 'X',
+  KWAI: 'Kwai',
+};
+
+/**
+ * O nome da rede em um lugar só: o `select` do cadastro, o detalhe do painel e
+ * o perfil do afiliado leem daqui. Duas listas divergiriam na primeira rede nova.
+ */
+export function socialNetworkName(network: SocialNetworkEnum): string {
+  return SOCIAL_NETWORK_NAMES[network];
+}
 
 /**
  * Fuso fixo em São Paulo, e não o do navegador: o servidor renderiza a mesma
@@ -64,4 +82,17 @@ export function formatCpfDisplay(cpf: string): string {
 
 export function formatPixKeyDisplay(type: PixKeyTypeEnum, key: string): string {
   return formatPixKey(type, key);
+}
+
+/**
+ * Rede e `@` só dizem alguma coisa juntos, então quem tem metade do par não tem
+ * nada a mostrar — e a tela some com a linha em vez de imprimir um vazio.
+ */
+export function formatSocialProfile(
+  network: SocialNetworkEnum | null,
+  handle: string | null,
+): string | null {
+  if (!network || !handle) return null;
+
+  return `@${handle.replace(/^@+/, '')} no ${socialNetworkName(network)}`;
 }

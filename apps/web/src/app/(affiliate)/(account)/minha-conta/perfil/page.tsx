@@ -5,7 +5,7 @@ import { fetchAccount } from '@/affiliate/features/area/data';
 import { site } from '@/affiliate/shared/content';
 import { Badge } from '@/shared/components/ui/badge';
 import { statusLabel, statusTone } from '@/shared/lib/affiliate-status';
-import { formatDate } from '@/shared/lib/format';
+import { formatDate, formatSocialProfile } from '@/shared/lib/format';
 
 export const metadata: Metadata = { title: 'Seu perfil' };
 
@@ -13,14 +13,18 @@ export default async function ProfilePage() {
   const account = await fetchAccount();
 
   /*
-    CPF e chave PIX chegam mascarados da API e ficam mascarados na tela: esta
+    CPF, RG e chave PIX chegam mascarados da API e ficam mascarados na tela: esta
     página abre em cima de um balcão, dentro de um ônibus, com alguém ao lado.
-    Quem precisa conferir o dado inteiro tem o próprio documento.
+    Quem precisa conferir o dado inteiro tem o próprio documento. O `@`, não: ele
+    é público por natureza, e mascará-lo esconderia o que a pessoa divulga.
   */
+  const social = formatSocialProfile(account.socialNetwork, account.socialHandle);
   const rows = [
     { label: 'Nome', value: account.name },
     { label: 'E-mail', value: account.email },
     { label: 'CPF', value: account.maskedCpf },
+    { label: 'RG', value: account.maskedRg },
+    ...(social ? [{ label: 'Rede social', value: social }] : []),
     { label: 'Chave PIX', value: account.maskedPixKey },
     { label: 'No programa desde', value: formatDate(account.createdAt) },
   ];
@@ -56,7 +60,7 @@ export default async function ProfilePage() {
 
         <p className="mt-6 flex items-start gap-2.5 text-[0.8125rem] leading-relaxed text-ink-500">
           <Lock className="mt-0.5 size-3.5 shrink-0 text-ink-400" aria-hidden />
-          CPF e chave PIX aparecem mascarados aqui de propósito. Para corrigir qualquer dado,
+          CPF, RG e chave PIX aparecem mascarados aqui de propósito. Para corrigir qualquer dado,
           escreva para{' '}
           <a
             href={`mailto:${site.contactEmail}`}

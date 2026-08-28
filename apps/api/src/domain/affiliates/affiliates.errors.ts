@@ -10,6 +10,15 @@ export class InvalidCpfError extends DomainError {
   }
 }
 
+export class InvalidRgError extends DomainError {
+  readonly kind = DomainErrorKindEnum.INVALID_INPUT;
+  readonly code = RegistrationErrorCodeEnum.INVALID_RG;
+
+  constructor() {
+    super('Informe um RG válido.');
+  }
+}
+
 export class InvalidPixKeyError extends DomainError {
   readonly kind = DomainErrorKindEnum.INVALID_INPUT;
   readonly code = RegistrationErrorCodeEnum.PIX_KEY_INVALID;
@@ -60,5 +69,14 @@ export class CpfAlreadyRegisteredError extends DomainError {
 
   constructor() {
     super('Este CPF já está cadastrado.');
+  }
+}
+
+export class RgAlreadyRegisteredError extends DomainError {
+  readonly kind = DomainErrorKindEnum.CONFLICT;
+  readonly code = RegistrationErrorCodeEnum.RG_ALREADY_REGISTERED;
+
+  constructor() {
+    super('Este RG já está cadastrado.');
   }
 }
