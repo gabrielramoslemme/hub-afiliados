@@ -102,9 +102,10 @@ describe('AffiliateRepository (integration)', () => {
     });
     await affiliates.changeStatus({
       affiliateId,
-      toStatus: AffiliateStatusEnum.SUSPENDED,
+      toStatus: AffiliateStatusEnum.REJECTED,
       reason: 'Denúncia de uso indevido do cupom',
       actorUserId: analystId,
+      changes: { rejectionReason: 'Denúncia de uso indevido do cupom' },
     });
 
     const entries = await history.listByAffiliateId(affiliateId);
@@ -112,7 +113,7 @@ describe('AffiliateRepository (integration)', () => {
     expect(entries).toHaveLength(2);
     expect(entries[0]).toMatchObject({
       fromStatus: AffiliateStatusEnum.APPROVED,
-      toStatus: AffiliateStatusEnum.SUSPENDED,
+      toStatus: AffiliateStatusEnum.REJECTED,
       reason: 'Denúncia de uso indevido do cupom',
     });
     expect(entries[1]).toMatchObject({

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { SessionUser } from '@/admin/features/auth/session';
-import { QUEUE_PATH } from '@/admin/shared/routes';
+import { DASHBOARD_PATH } from '@/admin/shared/routes';
 import { PortoLogo } from '@/shared/components/porto-logo';
 import { roleLabel } from '../role-label';
 import { UserMenu } from './user-menu';
@@ -14,7 +14,7 @@ export function AdminTopbar({ user }: { user: SessionUser }) {
   return (
     <header className="sticky top-0 z-30 border-b border-ink-200 bg-white/85 backdrop-blur lg:hidden">
       <div className="flex h-16 items-center justify-between gap-4 px-6">
-        <Link href={QUEUE_PATH} aria-label="Painel do Hub de Afiliados">
+        <Link href={DASHBOARD_PATH} aria-label="Painel do Hub de Afiliados">
           <PortoLogo />
         </Link>
 

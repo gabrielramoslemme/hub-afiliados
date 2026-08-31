@@ -10,7 +10,7 @@ O primeiro nível de `src/` é o **dono**, não o domínio. Três fatias, e o Bi
 |---|---|
 | `src/affiliate/features/<nome>/` | `landing`, `registration`, `auth`, `area` — as telas do afiliado |
 | `src/affiliate/shared/` | o que a fatia inteira divide: `content.ts` (toda a copy), `routes.ts`, `components/` |
-| `src/admin/features/<nome>/` | `auth`, `affiliates`, `shell` — as telas da Porto |
+| `src/admin/features/<nome>/` | `auth`, `affiliates`, `dashboard`, `shell` — as telas da Porto |
 | `src/admin/shared/routes.ts` | as rotas do painel |
 | `src/shared/` | transversal de verdade: `components/ui/` (shadcn), `components/porto-logo`, `hooks/`, `lib/`, `http/` |
 | `src/app/` | só casca de rota, espelhando as fatias em `(affiliate)/` e `(admin)/` |
@@ -22,6 +22,8 @@ Dentro de uma feature: `components/`, `index.ts` e, quando há leitura de servid
 **A rota é casca:** `page.tsx` importa e monta a tela, nada mais. Isso mantém a rota do Next trocável sem reescrever a tela — e é o que permite `/cadastro` e a seção da landing servirem o mesmo componente.
 
 **O route group não aparece na URL.** `(affiliate)/(public)`, `(affiliate)/(account)` e `(admin)` existem para separar layout e bundle: a landing page não carrega uma linha de código do painel.
+
+**`/admin` é o dashboard, e é a home do painel:** `safeAdminTarget` e o `middleware` mandam para lá depois do login, e a fila virou destino escolhido. O item do dashboard casa a rota por igualdade e não por `startsWith` — sendo a raiz de `/admin`, ele ficaria aceso em toda tela do painel.
 
 ### Fronteira entre as fatias
 
@@ -92,6 +94,10 @@ Oito regras que mantêm a página com cara de projetada:
 
 Sobre fundo escuro o `Button` tem duas variantes próprias, `inverse` e `inverse-outline`: `primary` é azul e some sobre a faixa da marca. Elas existem para que ninguém resolva isso com um `bg-white` solto no JSX.
 
+### Gráfico
+
+`recharts` por baixo do `chart.tsx` do shadcn, em `src/shared/components/ui/` — a única biblioteca de desenho do app, e ela entra só na rota que a usa. **Cor de série sai de `--color-chart-1..4`**, nunca de literal no `ChartConfig`: o `ChartContainer` publica cada uma como `var(--color-<série>)`, e é isso que o traço lê. O gráfico é ilha `'use client'` porque o recharts mede o container para desenhar; a tela em volta continua Server Component.
+
 ### Movimento
 
 **A rolagem move a página, não o JavaScript.** A entrada das seções usa as timelines nativas do CSS: `.reveal` numa seção, `.reveal-stagger` num container cujos filhos entram escalonados. Onde o navegador não suporta `animation-timeline: view()`, o bloco `@supports` inteiro é ignorado e o conteúdo aparece normalmente — **nunca** deixe um `opacity-0` no JSX esperando um observer, que é como toda biblioteca de scroll-reveal esconde conteúdo quando o JS falha. A barra de progresso do header segue o mesmo desenho, com `scroll()`.
@@ -131,6 +137,8 @@ O que sobrou por nascer é `GET /v1/affiliate/me/wallet` — saldo e extrato dep
 Saldo e total pago são **somados a partir do extrato**, com teste que trava a invariante em `mock-api.spec.ts`.
 
 A resposta volta pelo mesmo `request()`, então cabeçalho montado, 204 sem corpo e tradução do corpo de erro em `ApiError` continuam exercitados. Quando as rotas nascerem, tire a flag e nenhuma tela muda.
+
+**O dashboard não passa por aqui.** Os números da tela inicial do painel são constantes em `admin/features/dashboard/mock-data.ts`: faturamento, comissão e venda dependem de tabelas que a Onda 1 não tem, então não há rota para dublar. `mock-data.spec.ts` trava as somas que a tela mostra lado a lado — segmento que fecha o total, fatia que fecha 100%, comissão que sai da mesma taxa. Quando as leituras nascerem, o arquivo vira `data.ts` e a montagem não muda.
 
 ### Atenção: por que não é MSW
 

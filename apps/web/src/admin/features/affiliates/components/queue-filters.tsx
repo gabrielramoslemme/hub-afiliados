@@ -10,7 +10,6 @@ const TABS: Array<{ label: string; status: AffiliateStatusEnum | null }> = [
   { label: 'Em análise', status: AffiliateStatusEnum.PENDING_APPROVAL },
   { label: 'Aprovados', status: AffiliateStatusEnum.APPROVED },
   { label: 'Reprovados', status: AffiliateStatusEnum.REJECTED },
-  { label: 'Suspensos', status: AffiliateStatusEnum.SUSPENDED },
   { label: 'Todos', status: null },
 ];
 
@@ -26,7 +25,7 @@ interface QueueFiltersProps {
  * mesmo se o bundle não carregar.
  *
  * As abas ficam no lugar do dropdown "Filtros" do desenho de referência: para
- * cinco situações, a aba é um clique e o dropdown são três, e o recorte atual
+ * quatro recortes, a aba é um clique e o dropdown são três, e o recorte atual
  * fica legível sem abrir nada.
  */
 export function QueueFilters({ params, total }: QueueFiltersProps) {

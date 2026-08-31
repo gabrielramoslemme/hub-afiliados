@@ -30,7 +30,7 @@ export interface AffiliateLoginOutput {
 }
 
 /**
- * Só cadastro aprovado entra. As três recusas por situação vêm **depois** da
+ * Só cadastro aprovado entra. As duas recusas por situação vêm **depois** da
  * senha conferir: antes disso, a resposta contaria a quem tentou que aquele
  * e-mail existe e em que pé está.
  */
@@ -40,9 +40,6 @@ const BLOCKED: Record<string, () => never> = {
   },
   [AffiliateStatusEnum.REJECTED]: () => {
     throw new RegistrationRejectedError();
-  },
-  [AffiliateStatusEnum.SUSPENDED]: () => {
-    throw new AccountInactiveError();
   },
 };
 

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { LOGIN_PATH, QUEUE_PATH, REDIRECT_PARAM } from '@/admin/shared/routes';
+import { DASHBOARD_PATH, LOGIN_PATH, REDIRECT_PARAM } from '@/admin/shared/routes';
 import { AFFILIATE_AREA_PATH, AFFILIATE_LOGIN_PATH } from '@/affiliate/shared/routes';
 import { AFFILIATE_SESSION_COOKIE, SESSION_COOKIE } from '@/shared/lib/session-cookie';
 
@@ -48,7 +48,7 @@ export function middleware(request: NextRequest): NextResponse {
   const isLogin = pathname === LOGIN_PATH;
 
   if (!hasSession && !isLogin) return redirectTo(request, LOGIN_PATH, true);
-  if (hasSession && isLogin) return redirectTo(request, QUEUE_PATH);
+  if (hasSession && isLogin) return redirectTo(request, DASHBOARD_PATH);
 
   return allow();
 }

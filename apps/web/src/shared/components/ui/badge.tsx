@@ -15,7 +15,6 @@ const badgeVariants = cva(
         pending: 'bg-[var(--status-pending-surface)] text-[var(--status-pending)]',
         approved: 'bg-[var(--status-approved-surface)] text-[var(--status-approved)]',
         rejected: 'bg-[var(--status-rejected-surface)] text-[var(--status-rejected)]',
-        suspended: 'bg-[var(--status-suspended-surface)] text-[var(--status-suspended)]',
       },
     },
     defaultVariants: { tone: 'neutral' },
