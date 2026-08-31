@@ -158,8 +158,8 @@
   --status-approved-surface: #dcfce7;
   --status-rejected: #b91c1c;
   --status-rejected-surface: #fee2e2;
-  --status-suspended: #475569;
-  --status-suspended-surface: var(--color-ink-100);
+  /* Base inativa do painel: conta de usuário desativada, não situação de cadastro. */
+  --status-inactive: #475569;
 }
 
 @theme inline {

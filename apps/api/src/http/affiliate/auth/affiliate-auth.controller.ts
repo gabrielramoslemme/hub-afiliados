@@ -27,7 +27,7 @@ export class AffiliateAuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: AffiliateLoginResponseDto })
   @ApiUnauthorizedResponse({ description: 'Credencial inválida ou senha ainda não definida' })
-  @ApiForbiddenResponse({ description: 'Cadastro em análise, reprovado ou suspenso' })
+  @ApiForbiddenResponse({ description: 'Cadastro em análise ou reprovado' })
   login(@Body() body: AffiliateLoginRequestDto): Promise<AffiliateLoginResponseDto> {
     return this.affiliateLoginUseCase.execute(body);
   }

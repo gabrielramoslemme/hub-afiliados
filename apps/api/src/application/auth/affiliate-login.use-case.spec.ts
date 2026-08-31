@@ -78,8 +78,9 @@ describe('AffiliateLoginUseCase', () => {
     await expect(useCase.execute(credentials)).rejects.toThrow(RegistrationRejectedError);
   });
 
-  it('holds back a suspended registration', async () => {
-    userRepository.findByEmail.mockResolvedValue(signedUp(AffiliateStatusEnum.SUSPENDED));
+  it('holds back an account that was deactivated', async () => {
+    const account = signedUp(AffiliateStatusEnum.APPROVED);
+    userRepository.findByEmail.mockResolvedValue({ ...account, isActive: false });
 
     await expect(useCase.execute(credentials)).rejects.toThrow(AccountInactiveError);
   });

@@ -32,7 +32,7 @@ const SEED = [
   ['Juliana Sarmento', 'juliana.sarmento@email.com', '98765432100', AffiliateStatusEnum.REJECTED],
   ['Wesley Andrade', 'wesley.andrade@email.com', '45678912377', AffiliateStatusEnum.APPROVED],
   ['Tatiane Lopes', 'tatiane.lopes@email.com', '32165498701', AffiliateStatusEnum.PENDING_APPROVAL],
-  ['Ibrahim Nasser', 'ibrahim.nasser@email.com', '65498732103', AffiliateStatusEnum.SUSPENDED],
+  ['Ibrahim Nasser', 'ibrahim.nasser@email.com', '65498732103', AffiliateStatusEnum.APPROVED],
   [
     'Denise Vasconcelos',
     'denise.vasconcelos@email.com',
@@ -61,12 +61,7 @@ const SEED = [
     '96385274104',
     AffiliateStatusEnum.PENDING_APPROVAL,
   ],
-  [
-    'Rosângela Tavares',
-    'rosangela.tavares@email.com',
-    '25836914706',
-    AffiliateStatusEnum.SUSPENDED,
-  ],
+  ['Rosângela Tavares', 'rosangela.tavares@email.com', '25836914706', AffiliateStatusEnum.REJECTED],
   [
     'Bruno Sacramento',
     'bruno.sacramento@email.com',

@@ -1,6 +1,6 @@
 import { AffiliateStatusEnum } from '@porto/contracts';
 
-export type StatusTone = 'pending' | 'approved' | 'rejected' | 'suspended';
+export type StatusTone = 'pending' | 'approved' | 'rejected';
 
 /**
  * O rótulo em pt-BR e o tom moram juntos porque são a mesma decisão, e moram em
@@ -12,7 +12,6 @@ const STATUS: Record<AffiliateStatusEnum, { label: string; tone: StatusTone }> =
   [AffiliateStatusEnum.PENDING_APPROVAL]: { label: 'Em análise', tone: 'pending' },
   [AffiliateStatusEnum.APPROVED]: { label: 'Aprovado', tone: 'approved' },
   [AffiliateStatusEnum.REJECTED]: { label: 'Reprovado', tone: 'rejected' },
-  [AffiliateStatusEnum.SUSPENDED]: { label: 'Suspenso', tone: 'suspended' },
 };
 
 export function statusLabel(status: AffiliateStatusEnum): string {
