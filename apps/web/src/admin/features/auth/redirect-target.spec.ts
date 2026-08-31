@@ -18,31 +18,31 @@ describe('safeAdminTarget', () => {
     );
   });
 
-  it('falls back to the queue when there is no destination', () => {
-    expect(safeAdminTarget(null)).toBe('/admin/afiliados');
+  it('falls back to the dashboard when there is no destination', () => {
+    expect(safeAdminTarget(null)).toBe('/admin');
   });
 
   it('refuses an absolute url to another origin', () => {
-    expect(safeAdminTarget('https://exemplo-malicioso.test/colher-senha')).toBe('/admin/afiliados');
+    expect(safeAdminTarget('https://exemplo-malicioso.test/colher-senha')).toBe('/admin');
   });
 
   it('refuses a protocol relative url', () => {
-    expect(safeAdminTarget('//exemplo-malicioso.test')).toBe('/admin/afiliados');
+    expect(safeAdminTarget('//exemplo-malicioso.test')).toBe('/admin');
   });
 
   it('refuses a backslash that some browsers normalise into a slash', () => {
-    expect(safeAdminTarget('/\\exemplo-malicioso.test')).toBe('/admin/afiliados');
+    expect(safeAdminTarget('/\\exemplo-malicioso.test')).toBe('/admin');
   });
 
   it('refuses a path outside the panel', () => {
-    expect(safeAdminTarget('/cadastro')).toBe('/admin/afiliados');
+    expect(safeAdminTarget('/cadastro')).toBe('/admin');
   });
 
   it('refuses a path that only looks like the panel', () => {
-    expect(safeAdminTarget('/administrador/tudo')).toBe('/admin/afiliados');
+    expect(safeAdminTarget('/administrador/tudo')).toBe('/admin');
   });
 
   it('does not send the person back to the login page', () => {
-    expect(safeAdminTarget('/admin/login')).toBe('/admin/afiliados');
+    expect(safeAdminTarget('/admin/login')).toBe('/admin');
   });
 });

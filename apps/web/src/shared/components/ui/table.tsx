@@ -50,3 +50,17 @@ export function TableHead({ className, ...props }: ComponentProps<'th'>) {
 export function TableCell({ className, ...props }: ComponentProps<'td'>) {
   return <td className={cn('px-4 py-3.5 align-middle text-ink-700', className)} {...props} />;
 }
+
+/**
+ * O rodapé da tabela, para o total que fecha as linhas listadas acima. Fundo
+ * próprio e fio no topo: soma que parece mais uma linha é soma que ninguém lê
+ * como soma.
+ */
+export function TableFooter({ className, ...props }: ComponentProps<'tfoot'>) {
+  return (
+    <tfoot
+      className={cn('border-t border-ink-200 bg-ink-50/60 font-semibold text-ink-900', className)}
+      {...props}
+    />
+  );
+}

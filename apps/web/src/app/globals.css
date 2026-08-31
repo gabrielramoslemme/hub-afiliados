@@ -33,6 +33,18 @@
   --color-ink-700: #2a3547;
   --color-ink-900: #0b1220;
 
+  /*
+    Série de gráfico. Vira token pelo mesmo motivo do gradiente: cor de série é
+    decisão de marca, e o `ChartConfig` de cada gráfico só aponta para cá. As
+    duas primeiras repetem o par que a tela já usa em métrica e em status —
+    azul é o que a Porto fatura, verde é o que o afiliado recebe —, e as duas
+    últimas completam a escala da rosca, onde distinguir fatia é a informação.
+  */
+  --color-chart-1: var(--color-blue-600);
+  --color-chart-2: var(--status-approved);
+  --color-chart-3: #eab308;
+  --color-chart-4: var(--color-ink-400);
+
   --font-sans: var(--font-open-sans), ui-sans-serif, system-ui, sans-serif;
 
   /*

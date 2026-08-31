@@ -1,11 +1,11 @@
 'use client';
 
-import { Megaphone, Users, Wallet } from 'lucide-react';
+import { BarChart3, Megaphone, Users, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ComponentType } from 'react';
 import type { SessionUser } from '@/admin/features/auth/session';
-import { QUEUE_PATH } from '@/admin/shared/routes';
+import { DASHBOARD_PATH, QUEUE_PATH } from '@/admin/shared/routes';
 import { PortoLogo } from '@/shared/components/porto-logo';
 import { cn } from '@/shared/lib/cn';
 import { roleLabel } from '../role-label';
@@ -15,6 +15,8 @@ interface NavItem {
   label: string;
   icon: ComponentType<{ className?: string }>;
   href?: string;
+  /** O dashboard é a raiz do painel: sem isto ele fica aceso em toda tela. */
+  exact?: boolean;
 }
 
 /**
@@ -23,6 +25,7 @@ interface NavItem {
  * tela é ganhar `href` — não há outro estado a inventar.
  */
 const NAV: NavItem[] = [
+  { label: 'Dashboard', icon: BarChart3, href: DASHBOARD_PATH, exact: true },
   { label: 'Afiliados', icon: Users, href: QUEUE_PATH },
   { label: 'Pagamentos', icon: Wallet },
   { label: 'Campanhas', icon: Megaphone },
@@ -34,8 +37,8 @@ const NAV: NavItem[] = [
  * navegação fica de pé o dia inteiro na frente da analista, e separar navegação
  * de conteúdo por valor de superfície é o que impede a tela virar uma chapa só.
  *
- * Some abaixo de `lg`: a única seção que existe hoje é a fila, e o logotipo do
- * topo já leva até ela.
+ * Some abaixo de `lg`: o logotipo do topo leva ao dashboard, que é a home do
+ * painel e de onde se chega às demais seções.
  */
 export function AdminSidebar({ user }: { user: SessionUser }) {
   const pathname = usePathname();
@@ -43,17 +46,17 @@ export function AdminSidebar({ user }: { user: SessionUser }) {
   return (
     <aside className="surface-brand sticky top-0 hidden h-svh w-60 shrink-0 flex-col lg:flex">
       <div className="flex h-16 shrink-0 items-center px-6">
-        <Link href={QUEUE_PATH} aria-label="Painel do Hub de Afiliados">
+        <Link href={DASHBOARD_PATH} aria-label="Painel do Hub de Afiliados">
           <PortoLogo tone="dark" />
         </Link>
       </div>
 
       <nav aria-label="Seções do painel" className="px-3 py-4">
         <ul className="flex flex-col gap-1">
-          {NAV.map(({ label, icon: Icon, href }) => {
+          {NAV.map(({ label, icon: Icon, href, exact }) => {
             // O detalhe de um cadastro mora sob a fila: `startsWith` mantém a
             // seção acesa enquanto a analista navega dentro dela.
-            const active = Boolean(href && pathname.startsWith(href));
+            const active = Boolean(href && (exact ? pathname === href : pathname.startsWith(href)));
 
             if (!href) {
               return (
