@@ -120,8 +120,12 @@ Parameters:
 
   GitHubRepo:
     Type: String
-    Default: mesainc/porto-hub-afiliados
-    Description: Restringe o `sub` da role OIDC. Formato owner/repo.
+    Default: mesainc/affiliate-hub-web
+    Description: >
+      Restringe o `sub` da role OIDC. Formato owner/repo, e e o slug do
+      repositorio no GitHub - nao o nome do produto. Errar aqui nao quebra a
+      criacao da stack: quebra o deploy, com o assume-role recusado sem dizer
+      por que.
     AllowedPattern: '^[^/\s]+/[^/\s]+$'
 
   DeployBranch:
