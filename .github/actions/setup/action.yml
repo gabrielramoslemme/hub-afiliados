@@ -1,0 +1,29 @@
+name: Setup
+description: Node da versao do .nvmrc, dependencias instaladas e cache do turbo restaurado.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version-file: .nvmrc
+        cache: npm
+
+    # O turbo hasheia as entradas de cada task. Com o cache restaurado entre
+    # execucoes, pacote que nao mudou nao roda de novo — e isso substitui o
+    # filtro de "affected" escrito a mao, sem o risco de pular o que deveria
+    # rodar: quem decide e o hash das entradas, nao um range de git.
+    - uses: actions/cache@v4
+      with:
+        path: .turbo
+        # `github.job` no meio da chave: sem ele, dois jobs paralelos gravam a
+        # mesma entrada no fim e um deles falha com "cache already exists".
+        key: turbo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+        restore-keys: |
+          turbo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('package-lock.json') }}-
+          turbo-${{ runner.os }}-${{ github.job }}-
+
+    # `npm ci` roda o `prepare` da raiz, que builda o @porto/contracts — os
+    # outros jobs dependem dele compilado.
+    - shell: bash
+      run: npm ci

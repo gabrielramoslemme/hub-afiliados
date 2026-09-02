@@ -1,0 +1,116 @@
+name: CD
+
+# Uma implementacao de deploy so, chamada de dois jeitos:
+#   - pela CI, com `uses:`, depois de todos os jobs de verificacao passarem;
+#   - a mao, para voltar uma release — e ai o `imageTag` e a tag anterior.
+# O bolao mantem dois arquivos quase iguais para dev e prod; aqui a diferenca
+# entre uma chamada e outra e um parametro, nao um arquivo para divergir.
+on:
+  workflow_call:
+    inputs:
+      imageTag:
+        required: true
+        type: string
+      stackName:
+        required: false
+        type: string
+        default: porto-hub-dev
+      environment:
+        required: false
+        type: string
+        default: development
+  workflow_dispatch:
+    inputs:
+      imageTag:
+        description: 'Tag das imagens no ECR (SHA do commit). Uma tag anterior volta a release.'
+        required: true
+        type: string
+      stackName:
+        description: 'Nome da stack do CloudFormation.'
+        required: false
+        type: string
+        default: porto-hub-dev
+      environment:
+        description: 'Environment do GitHub — precisa casar com o parametro GitHubEnvironment da stack.'
+        required: false
+        type: string
+        default: development
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Da historico de deploy na aba Deployments e um lugar para pendurar
+    # revisor obrigatorio no dia em que existir um ambiente que precise disso.
+    # ATENCAO: com `environment`, o `sub` do token OIDC vira
+    # `repo:OWNER/REPO:environment:<nome>` — a trust policy da role na stack
+    # aceita esse valor e o de `ref:refs/heads/<DeployBranch>`, os dois. O nome
+    # aqui tem que ser o mesmo do parametro GitHubEnvironment da stack.
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Ler os outputs da stack
+        id: stack
+        run: |
+          set -euo pipefail
+          outputs="$(aws cloudformation describe-stacks --stack-name "${{ inputs.stackName }}" \
+            --query 'Stacks[0].Outputs' --output json)"
+          for key in DeployBucketName DeployDocumentName InstanceId; do
+            value="$(echo "$outputs" | jq -r --arg k "$key" '.[] | select(.OutputKey==$k) | .OutputValue')"
+            echo "$key=$value" >> "$GITHUB_OUTPUT"
+          done
+
+      # O compose e o script vao do repositorio para o bucket a cada deploy — e
+      # o que garante que a maquina rode a versao versionada aqui.
+      - name: Publicar compose e script de release
+        env:
+          BUCKET: ${{ steps.stack.outputs.DeployBucketName }}
+        run: |
+          set -euo pipefail
+          aws s3 cp infra/compose/docker-compose.prod.yml "s3://$BUCKET/docker-compose.prod.yml"
+          aws s3 cp infra/scripts/install-release.sh "s3://$BUCKET/install-release.sh"
+
+      - name: Instalar a release na instancia
+        env:
+          DOCUMENT: ${{ steps.stack.outputs.DeployDocumentName }}
+          INSTANCE: ${{ steps.stack.outputs.InstanceId }}
+          IMAGE_TAG: ${{ inputs.imageTag }}
+        run: |
+          set -euo pipefail
+          command_id="$(aws ssm send-command \
+            --document-name "$DOCUMENT" \
+            --instance-ids "$INSTANCE" \
+            --parameters "imageTag=$IMAGE_TAG" \
+            --query 'Command.CommandId' --output text)"
+          echo "SSM command: $command_id"
+
+          # `wait` sai com erro quando o comando falha, mas sem dizer por que —
+          # o `|| true` deixa o log de verdade ser impresso antes do exit.
+          aws ssm wait command-executed --command-id "$command_id" --instance-id "$INSTANCE" || true
+
+          status="$(aws ssm get-command-invocation --command-id "$command_id" \
+            --instance-id "$INSTANCE" --query 'Status' --output text)"
+          aws ssm get-command-invocation --command-id "$command_id" \
+            --instance-id "$INSTANCE" --query 'StandardOutputContent' --output text
+          aws ssm get-command-invocation --command-id "$command_id" \
+            --instance-id "$INSTANCE" --query 'StandardErrorContent' --output text >&2
+
+          [ "$status" = "Success" ] || { echo "Deploy falhou: $status" >&2; exit 1; }

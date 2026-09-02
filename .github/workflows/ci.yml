@@ -1,13 +1,48 @@
 name: CI
 
+# `development` e o ambiente de desenvolvimento, `main` e producao. As duas
+# rodam a verificacao inteira; so a `development` termina em deploy, porque a
+# stack de producao ainda nao existe.
 on:
   push:
-    branches: [main]
+    branches: [development, main]
   pull_request:
 
+# Em PR, commit novo cancela a verificacao do anterior. Em push nao: a execucao
+# pode terminar em deploy, e cancelar no meio deixa a instancia num estado que
+# ninguem pediu.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  STACK_NAME: porto-hub-dev
+
 jobs:
+  # Os quatro primeiros jobs rodam em paralelo: o tempo de parede passa a ser o
+  # do mais lento, e nao a soma. O deploy espera todos.
   verify:
+    name: Lint, tipos e testes
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      - run: npm run lint
+      # `build` depende de `type-check` no turbo.json, entao este passo cobre os
+      # dois — rodar `type-check` a parte seria pagar o mesmo grafo duas vezes.
+      - run: npx turbo run build
+      - run: npx turbo run test
+
+  e2e:
+    name: E2E e contrato OpenAPI
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16-alpine
@@ -27,31 +62,160 @@ jobs:
       JWT_EXPIRES_IN_SECONDS: 28800
       APP_BASE_URL: http://localhost:3000
       PANEL_BASE_URL: http://localhost:3005
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:3000/v1
 
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
+      - uses: ./.github/actions/setup
 
-      - run: npm ci
-      - run: npm run lint
-      - run: npx turbo run type-check
+      # Roda as migrations de verdade contra um Postgres de verdade: e o unico
+      # lugar onde um `up()` quebrado aparece antes de rodar na instancia.
       - run: npm run typeorm:run --workspace apps/api
-      - run: npx turbo run test
       - run: npm run test:e2e --workspace apps/api
-      - run: npx turbo run build
 
       - name: Gerar contrato OpenAPI
         run: npm run openapi:generate --workspace apps/api
         env:
           OPENAPI_VERSION: ${{ github.sha }}
 
-      - name: Publicar contrato OpenAPI
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: openapi-${{ github.sha }}
           path: apps/api/openapi.json
           retention-days: 90
+
+  infra-lint:
+    name: Infra
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Os workflows referenciam a action composta por caminho e usam contextos
+      # que so falham em runtime. O actionlint pega isso aqui.
+      - name: Validar os workflows
+        uses: raven-actions/actionlint@v2
+
+      - name: Validar o template do CloudFormation
+        run: |
+          pip install --quiet cfn-lint
+          cfn-lint infra/cloudformation/*.yaml
+
+      - name: Conferir a sintaxe dos scripts
+        run: bash -n infra/scripts/*.sh
+
+      - name: Validar o compose
+        run: |
+          # Os `env_file` sao caminhos absolutos da instancia; sem eles o
+          # `config` falha antes de olhar o YAML.
+          sudo mkdir -p /opt/porto-hub
+          sudo touch /opt/porto-hub/api.env /opt/porto-hub/web.env
+          docker compose -f infra/compose/docker-compose.prod.yml config --quiet
+
+  # Um build so para as duas coisas que se faziam separado antes: validar o
+  # Dockerfile no PR e publicar a imagem na `main`. Em PR e `push: false` —
+  # mesmo build, sem credencial nenhuma e sem sujar o ECR.
+  images:
+    name: Imagens
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development' }}
+    outputs:
+      api-repo: ${{ steps.stack.outputs.ApiRepositoryUri }}
+      web-repo: ${{ steps.stack.outputs.WebRepositoryUri }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Credenciais da AWS
+        if: env.PUBLISH == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Ler os outputs da stack
+        id: stack
+        if: env.PUBLISH == 'true'
+        run: |
+          set -euo pipefail
+          outputs="$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
+            --query 'Stacks[0].Outputs' --output json)"
+          for key in ApiRepositoryUri WebRepositoryUri; do
+            value="$(echo "$outputs" | jq -r --arg k "$key" '.[] | select(.OutputKey==$k) | .OutputValue')"
+            echo "$key=$value" >> "$GITHUB_OUTPUT"
+          done
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        if: env.PUBLISH == 'true'
+
+      # `linux/amd64` explicito para casar com a AMI x86_64 da stack. O `bcrypt`
+      # e modulo nativo: imagem de arquitetura errada sobe e so quebra no
+      # primeiro login, em runtime.
+      #
+      # O cache de camadas fica no cache do proprio Actions, com escopo por
+      # imagem. E o que faz o segundo push do dia reaproveitar o `npm ci` em vez
+      # de baixar o mundo de novo.
+      - name: API
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          platforms: linux/amd64
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: ${{ env.PUBLISH == 'true' && format('{0}:{1},{0}:latest', steps.stack.outputs.ApiRepositoryUri, github.sha) || 'porto-hub/api:ci' }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          platforms: linux/amd64
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: ${{ env.PUBLISH == 'true' && format('{0}:{1},{0}:latest', steps.stack.outputs.WebRepositoryUri, github.sha) || 'porto-hub/web:ci' }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  # `needs` no lugar do `workflow_run` que existia antes: a garantia de nao
+  # rodar migration a partir de commit reprovado deixa de depender de um `if`
+  # que alguem pode esquecer de escrever, e passa a ser estrutural.
+  deploy-dev:
+    name: Deploy dev
+    needs: [verify, e2e, infra-lint, images]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/development'
+    uses: ./.github/workflows/cd.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      imageTag: ${{ github.sha }}
+      stackName: porto-hub-dev
+      environment: development
+    secrets: inherit
+
+  # Producao ainda nao tem stack. Quando tiver, o job e este, e nada mais muda:
+  # o `cd.yml` ja recebe `stackName` e `environment` por parametro.
+  #
+  #   deploy-prod:
+  #     name: Deploy prod
+  #     needs: [verify, e2e, infra-lint, images]
+  #     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #     uses: ./.github/workflows/cd.yml
+  #     permissions:
+  #       contents: read
+  #       id-token: write
+  #     with:
+  #       imageTag: ${{ github.sha }}
+  #       stackName: porto-hub-prod
+  #       environment: production
+  #     secrets: inherit
+  #
+  # Falta antes: a stack de producao (o template de hoje tem DeletionPolicy
+  # Delete no RDS, 1 dia de backup e sem Multi-AZ - escolhas de ambiente
+  # descartavel), o `images` publicando no ECR de producao quando a branch e
+  # `main`, e o secret AWS_DEPLOY_ROLE_ARN no escopo do ambiente `production`.
