@@ -1,0 +1,902 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  porto-hub-afiliados - ambiente de DESENVOLVIMENTO. Instancia unica com Docker
+  Compose (Caddy + web + API), RDS Postgres em subnets privadas, imagens no ECR
+  e deploy por documento SSM. Sem ALB, NAT Gateway, ASG, Multi-AZ nem
+  CloudFront: as escolhas e os custos estao em infra/cloudformation/README.md.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    AllowedPattern: '^[a-z0-9-]{2,12}$'
+    Description: Prefixo de nome e tag de todo recurso da stack.
+
+  DomainName:
+    Type: String
+    Description: >
+      Host unico do ambiente, ex. dev.hubafiliados.com.br. Serve a landing page,
+      a area do afiliado e o painel - sao um app Next so. Obrigatorio: sem TLS o
+      cookie de sessao nao e gravado pelo navegador e o login falha em silencio.
+    AllowedPattern: '^(?!-)[a-zA-Z0-9-]{1,63}(\.[a-zA-Z0-9-]{1,63})+$'
+
+  HostedZoneName:
+    Type: String
+    Default: ''
+    Description: >
+      Hosted zone do Route 53 JA EXISTENTE e NESTA MESMA conta, com o ponto
+      final (ex. hubafiliados.com.br.). Preenchida, a stack cria o registro A
+      para o Elastic IP. Vazia, o registro e criado a mao - o RecordSet nao
+      atravessa conta e a stack falharia com "No hosted zones named ... found".
+
+  AcmeEmail:
+    Type: String
+    Description: >
+      E-mail da conta do Let's Encrypt, usado pelo Caddy. Recebe o aviso de
+      certificado prestes a expirar quando a renovacao automatica falha.
+    AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+
+  InstanceType:
+    Type: String
+    Default: t3.small
+    Description: >
+      x86_64 por padrao, casado com a AMI abaixo e com o build linux/amd64 do
+      job `images` no ci.yml. t3.micro (1 GB) cabe - a instancia nao builda nada, so roda
+      Caddy e dois processos Node - e economiza ~US$ 9/mes, ao custo de o swap
+      trabalhar durante a migration do deploy. Para Graviton (t4g.small,
+      ~US$ 4/mes a menos), troque TRES coisas juntas: este default, o
+      LatestAmiId para o caminho arm64, e a plataforma no job `images` do
+      ci.yml.
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+
+  DBEngineVersion:
+    Type: String
+    Default: '16'
+    Description: >
+      Versao maior basta - o RDS resolve para a menor mais recente. Fixe a menor
+      (ex. 16.10) quando quiser reprodutibilidade exata entre recriacoes.
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+    Description: >
+      Resolvida por SSM, nunca um ami-xxxx escrito a mao (que e regional e
+      envelhece). Graviton usa o caminho terminado em -arm64.
+
+      Consequencia que nao e obvia: este tipo de parametro e reresolvido a CADA
+      operacao de stack, e a AWS publica AL2023 nova mais ou menos todo mes.
+      Update de stack depois de uma publicacao troca o ImageId, e ImageId novo
+      exige replacement - instancia nova, volume raiz novo. E por isso que os
+      certificados do Caddy sao copiados para o bucket de deploy a cada release
+      e restaurados no boot: sem isso, um update qualquer queimaria uma emissao
+      do Let's Encrypt, que limita a 5 certificados duplicados por semana.
+
+  AcmeIngressCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
+    Description: >
+      CIDR que alcanca a 80. Fica aberto: e por ela que o Let's Encrypt faz o
+      desafio HTTP-01, e fechar aqui desliga o TLS automatico junto. Nada da
+      aplicacao passa por essa porta - ela so redireciona para HTTPS e responde
+      o desafio.
+
+  AppIngressCidr:
+    Type: String
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
+    Description: >
+      CIDR que alcanca a 443 - a aplicacao inteira, painel incluso. Separado da
+      80 de proposito: da para restringir este a faixa do escritorio ou da VPN
+      sem quebrar a renovacao do certificado. SEM DEFAULT de proposito: este
+      ambiente tem CPF e chave PIX no banco e um operador semeado a cada deploy,
+      e quem sobe a stack tem que dizer em voz alta quem alcanca isso. 0.0.0.0/0
+      e resposta valida - so nao pode ser a resposta que ninguem deu.
+
+  MailProvider:
+    Type: String
+    Default: resend
+    AllowedValues: [resend, logger]
+    Description: >
+      `logger` so registra o e-mail no log em vez de enviar - util enquanto o
+      dominio nao esta verificado no Resend. Com ele, o link de definir senha
+      sai no CloudWatch, nao na caixa de entrada.
+
+  MailFromEmail:
+    Type: String
+    Default: nao-responda@afiliados.porto.example
+    Description: Remetente. Com MailProvider=resend, o dominio precisa estar verificado la.
+
+  ApiMocking:
+    Type: String
+    Default: enabled
+    AllowedValues: [enabled, disabled]
+    Description: >
+      `enabled` dubla em memoria apenas /affiliate/me/wallet, que ainda nao
+      existe na API; todo o resto vai para a API de verdade. Passe a `disabled`
+      quando a rota da carteira nascer, ou a tela de saldo quebra.
+
+  GitHubRepo:
+    Type: String
+    Default: mesainc/porto-hub-afiliados
+    Description: Restringe o `sub` da role OIDC. Formato owner/repo.
+    AllowedPattern: '^[^/\s]+/[^/\s]+$'
+
+  DeployBranch:
+    Type: String
+    Default: development
+    AllowedPattern: '^[A-Za-z0-9._/-]{1,255}$'
+    Description: >
+      Unica branch que pode assumir a role de deploy desta stack. O modelo do
+      repositorio e `development` para desenvolvimento e `main` para producao;
+      o mesmo template serve as duas, em stacks separadas e com este parametro
+      diferente. Deixar `main` aqui numa stack de dev daria a producao a chave
+      do ambiente errado.
+
+  GitHubEnvironment:
+    Type: String
+    Default: development
+    AllowedPattern: '^[A-Za-z0-9._-]{1,255}$'
+    Description: >
+      Environment do GitHub que o job de deploy declara. Com `environment:` no
+      job, o GitHub troca o `sub` do token por
+      `repo:OWNER/REPO:environment:NOME` e a referencia da branch some da claim
+      - por isso o nome precisa entrar aqui, e por isso a regra de protecao do
+      ambiente no GitHub e que limita quais branches o alcancam.
+
+  CreateGitHubOidcProvider:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: >
+      O provider OIDC do GitHub e um recurso de CONTA, nao de stack. Se a conta
+      ja tiver um, deixe 'false' - criar o segundo faz a stack falhar com
+      EntityAlreadyExists e o rollback leva tudo junto.
+
+Conditions:
+  CreateDnsRecord: !Not [!Equals [!Ref HostedZoneName, '']]
+  CreateOidcProvider: !Equals [!Ref CreateGitHubOidcProvider, 'true']
+
+Resources:
+  # =========================================================== Rede
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-vpc'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-igw'
+
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  # A instancia fica aqui, com Elastic IP. E o que apaga o NAT Gateway
+  # (~US$ 33/mes): ela alcanca ECR, SSM, Secrets Manager e Resend pelo proprio
+  # internet gateway. A exposicao e controlada pelo security group, que abre 80
+  # e 443 e mais nada - nao ha porta 22 nem key pair.
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-public-a'
+
+  # Duas subnets privadas porque o DBSubnetGroup exige duas AZs, mesmo com a
+  # instancia single-AZ. Sem route table propria: o RDS nao precisa de saida
+  # para a internet, e por isso nao ha NAT nenhum para pagar.
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-private-a'
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.12.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-private-b'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-public-rt'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  # =========================================================== Security groups
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: porto-hub app - somente 80 e 443 publicos
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref AcmeIngressCidr
+          # Sem apostrofo: a EC2 recusa a regra inteira com InvalidRequest se a
+          # descricao sair de [a-zA-Z0-9 _-:/()#,@[]+=&;{}!$*].
+          Description: HTTP - redirect para HTTPS e desafio ACME HTTP-01
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref AppIngressCidr
+          Description: HTTPS
+      # Saida sem restricao, e de propriedade deliberada: a instancia precisa
+      # alcancar ECR, SSM, Secrets Manager, Resend, Let's Encrypt e o resolvedor
+      # da VPC. Fechar isso em regra de porta e um exercicio que quebra de
+      # formas silenciosas (NTP link-local, DNS, endpoint regional novo) e nao
+      # muda o risco real, que e alguem com shell na maquina - e esse e barrado
+      # por IAM, no ssm:StartSession, nao aqui.
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-app-sg'
+
+  # 3000 e 3005 nao aparecem aqui de proposito: a API e publicada apenas em
+  # loopback e a web so existe na rede interna do compose. Quem fala com as duas
+  # e o Caddy, dentro da maquina.
+  DbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: porto-hub RDS - 5432 apenas a partir da instancia
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+          Description: Postgres a partir da instancia da aplicacao
+      # O RDS so responde, nunca inicia conexao. Declarar a saida substitui o
+      # "permite tudo" que a EC2 adiciona sozinha quando o campo fica de fora; o
+      # destino e o loopback justamente por nao existir destino legitimo.
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 127.0.0.1/32
+          Description: Sem saida - o banco nunca inicia conexao
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-db-sg'
+
+  # =========================================================== Segredos
+  # Nenhum valor sensivel no template, na CLI ou nos eventos da stack: o RDS
+  # consome a senha por {{resolve:secretsmanager:}}.
+  #
+  # Nenhum dos tres tem `Name` fixo, e isso e deliberado. O DeleteSecret do
+  # CloudFormation agenda a exclusao com janela de recuperacao, nao apaga na
+  # hora: com nome fixo, recriar a stack falharia por 30 dias com "already
+  # scheduled for deletion" - justamente o contrario do que um ambiente de
+  # desenvolvimento precisa. Quem precisa do ARN le dos outputs.
+  DbSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Credenciais do RDS Postgres do Hub de Afiliados
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"porto"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        # Sem pontuacao para nao quebrar a connection string montada no deploy.
+        ExcludePunctuation: true
+
+  # O JWT_SECRET nasce gerado com 48 caracteres - satisfaz o min(32) do Joi sem
+  # passar por mao humana. A chave do Resend nasce REPLACE_ME e e injetada
+  # depois do create pelo comando do output SetResendKeyCommand.
+  #
+  # Nao mexa no GenerateSecretString depois do primeiro create: qualquer
+  # alteracao nele regenera o segredo inteiro e leva junto a chave do Resend
+  # injetada a mao. O sintoma - e-mail parando de sair depois de um update de
+  # stack sem relacao nenhuma - nao aponta para ca sozinho.
+  AppSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Segredos de aplicacao do Hub de Afiliados
+      GenerateSecretString:
+        SecretStringTemplate: '{"resend_api_key":"REPLACE_ME"}'
+        GenerateStringKey: jwt_secret
+        PasswordLength: 48
+        ExcludePunctuation: true
+
+  # Secret proprio - e nao um campo do anterior - porque GenerateSecretString
+  # gera UMA chave por segredo. Vale os US$ 0,40/mes: a alternativa era a senha
+  # publicada no README (MudarAgora!2026) valendo num painel exposto a internet.
+  SeedSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      # "Hub de Afiliados" nos tres: e por essa descricao que o comando de
+      # limpeza do README acha os segredos, agora que nao ha mais nome fixo.
+      Description: Senha inicial dos operadores do painel do Hub de Afiliados, trocada no primeiro login
+      GenerateSecretString:
+        SecretStringTemplate: '{"note":"senha inicial; should_change_password fica true"}'
+        GenerateStringKey: admin_password
+        PasswordLength: 24
+        ExcludePunctuation: true
+
+  # =========================================================== Banco
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets privadas do Hub de Afiliados
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-db-subnets'
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    # Ambiente de desenvolvimento: o banco e recriavel pelo seed e a stack
+    # precisa poder ser deletada inteira sem briga.
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DBInstanceIdentifier: !Sub 'porto-hub-${EnvironmentName}-db'
+      Engine: postgres
+      EngineVersion: !Ref DBEngineVersion
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: '20'
+      StorageType: gp3
+      # Ligado tambem em dev: a tabela guarda CPF e chave PIX de afiliado.
+      StorageEncrypted: true
+      DBName: hub_afiliados
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DbSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbSecret}:SecretString:password}}'
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      # Mesma AZ da instancia. Sem isto o single-AZ cai onde o RDS quiser, e
+      # metade das vezes e a outra AZ: todo o trafego do banco vira cross-AZ,
+      # cobrado nos dois sentidos e com mais latencia, sem nada em troca.
+      AvailabilityZone: !Select [0, !GetAZs '']
+      VPCSecurityGroups:
+        - !Ref DbSecurityGroup
+      # A referencia do bolao abre o banco de dev para 0.0.0.0/0. Aqui nao:
+      # o acesso de fora e por port-forward do SSM, comando no output.
+      PubliclyAccessible: false
+      MultiAZ: false
+      BackupRetentionPeriod: 1
+      DeletionProtection: false
+      AutoMinorVersionUpgrade: true
+      CopyTagsToSnapshot: true
+      # Janelas em UTC, escolhidas para cair de madrugada no horario de Brasilia
+      # (UTC-3). Sem elas a AWS sorteia um horario que pode ser o meio da tarde
+      # de quem esta usando o ambiente - e `AutoMinorVersionUpgrade` reinicia o
+      # banco dentro da janela de manutencao.
+      PreferredBackupWindow: '06:00-06:30'
+      PreferredMaintenanceWindow: 'Sun:07:00-Sun:07:30'
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-db'
+
+  # =========================================================== Registro e deploy
+  ApiRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub 'porto-hub-${EnvironmentName}/api'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EmptyOnDelete: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {"rules":[{"rulePriority":1,"description":"Guarda as 10 ultimas",
+          "selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},
+          "action":{"type":"expire"}}]}
+
+  WebRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub 'porto-hub-${EnvironmentName}/web'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EmptyOnDelete: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {"rules":[{"rulePriority":1,"description":"Guarda as 10 ultimas",
+          "selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},
+          "action":{"type":"expire"}}]}
+
+  # O compose e o install-release.sh viajam por aqui, e nao embutidos no
+  # template: assim existe UMA copia de cada, versionada no repositorio e
+  # lintada pela CI. A referencia do bolao duplicou o script dentro do YAML e as
+  # duas copias divergiram.
+  DeployBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub 'porto-hub-${EnvironmentName}-deploy-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-deploy'
+
+  # O bucket carrega o compose, o script de release e o backup dos certificados
+  # do Caddy. Nada disso tem motivo para trafegar em claro.
+  DeployBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DeployBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt DeployBucket.Arn
+              - !Sub '${DeployBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/porto-hub/${EnvironmentName}'
+      RetentionInDays: 14
+
+  # Toda a configuracao da maquina vive aqui, e nao no UserData. UserData e
+  # imutavel na pratica: mudar um valor nele ou substitui a instancia - levando
+  # o volume com os certificados do Caddy, e com ele a cota semanal do Let's
+  # Encrypt - ou nao roda de novo, porque o cloud-init e `once`, e a mudanca
+  # passa despercebida. No Parameter Store, trocar MailProvider ou absorver um
+  # endpoint novo do RDS e um update de stack seguido do proximo deploy.
+  #
+  # Nada de secreto entra aqui: sao ARNs de segredo, nunca o conteudo deles.
+  ConfigParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/porto-hub/${EnvironmentName}/config'
+      Type: String
+      Description: Configuracao nao-secreta lida pelo install-release.sh a cada deploy
+      Value: !Sub |
+        AWS_REGION=${AWS::Region}
+        ECR_REGISTRY=${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com
+        API_IMAGE=${ApiRepository.RepositoryUri}
+        WEB_IMAGE=${WebRepository.RepositoryUri}
+        LOG_GROUP=${LogGroup}
+        DEPLOY_BUCKET=${DeployBucket}
+        DB_HOST=${Database.Endpoint.Address}
+        DB_NAME=hub_afiliados
+        DB_SECRET_ARN=${DbSecret}
+        APP_SECRET_ARN=${AppSecret}
+        SEED_SECRET_ARN=${SeedSecret}
+        DOMAIN_NAME=${DomainName}
+        ACME_EMAIL=${AcmeEmail}
+        MAIL_PROVIDER=${MailProvider}
+        MAIL_FROM_EMAIL=${MailFromEmail}
+        API_MOCKING=${ApiMocking}
+
+  # =========================================================== IAM
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        # Da o Session Manager: shell na maquina e port-forward para o RDS
+        # privado sem abrir a 22 e sem chave privada para vazar.
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: porto-hub-instance
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DbSecret
+                  - !Ref AppSecret
+                  - !Ref SeedSecret
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchCheckLayerAvailability
+                Resource:
+                  - !GetAtt ApiRepository.Arn
+                  - !GetAtt WebRepository.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  # O backup dos certificados do Caddy sobe por aqui a cada
+                  # release. E o que faz a instancia ser descartavel de verdade.
+                  - s3:PutObject
+                Resource: !Sub '${DeployBucket.Arn}/*'
+              # Sem isto o sinal do CreationPolicy e recusado e a stack espera
+              # os 15 minutos inteiros antes de fazer rollback por timeout - uma
+              # falha que nao diz o que aconteceu.
+              - Effect: Allow
+                Action: cloudformation:SignalResource
+                Resource: !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*'
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ConfigParameter}'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                # ARN montado a mao: `LogGroup.Arn` ja termina em `:*`, e
+                # concatenar outro produz `:*:*`, que nao casa com a forma
+                # `log-group:NOME:*` que o DescribeLogStreams autoriza.
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroup}:*'
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref InstanceRole]
+
+  # Sem ThumbprintList: o IAM valida o endpoint do GitHub contra a propria
+  # biblioteca de CAs raiz e ignora o thumbprint desde 2023. Fixar um aqui so
+  # criaria mais um valor para envelhecer.
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateOidcProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+
+  # Sem chave de AWS no GitHub: o workflow troca o token do proprio Actions por
+  # credencial temporaria, e so a partir da `main` deste repositorio.
+  GitHubOidcRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'porto-hub-${EnvironmentName}-github-deploy'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              # `!Ref` no provider - e nao o ARN montado como string - quando a
+              # stack e quem o cria: assim o CloudFormation enxerga a
+              # dependencia e nunca tenta criar a role antes dele. Com string, a
+              # ordem fica ao acaso e o IAM recusa com "Invalid principal in
+              # policy" de forma intermitente. Quando o provider ja existe na
+              # conta nao ha o que ordenar, e o ARN construido resolve.
+              Federated: !If
+                - CreateOidcProvider
+                - !Ref GitHubOidcProvider
+                - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                # Dois `sub`, e nao um, porque o GitHub monta a claim de dois
+                # jeitos: job comum vira `ref:refs/heads/<branch>`; job com
+                # `environment:` declarado vira `environment:<nome>` e perde a
+                # referencia da branch. O primeiro e o job que publica as
+                # imagens, o segundo e o deploy. Lista em StringEquals e OU.
+                #
+                # A branch some do segundo valor, entao quem garante que so a
+                # DeployBranch chega la e a regra de protecao do ambiente no
+                # GitHub - configure-a com "Selected branches" apontando para
+                # ela, ou qualquer branch podera pedir o deploy.
+                token.actions.githubusercontent.com:sub:
+                  - !Sub 'repo:${GitHubRepo}:ref:refs/heads/${DeployBranch}'
+                  - !Sub 'repo:${GitHubRepo}:environment:${GitHubEnvironment}'
+      Policies:
+        - PolicyName: porto-hub-deploy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:CompleteLayerUpload
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                Resource:
+                  - !GetAtt ApiRepository.Arn
+                  - !GetAtt WebRepository.Arn
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub '${DeployBucket.Arn}/*'
+              - Effect: Allow
+                Action: ssm:SendCommand
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:document/${DeployDocument}'
+                  - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/${Instance}'
+              - Effect: Allow
+                Action:
+                  - ssm:GetCommandInvocation
+                  - ssm:ListCommandInvocations
+                Resource: '*'
+              - Effect: Allow
+                Action: cloudformation:DescribeStacks
+                Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*'
+
+  # =========================================================== Deploy por SSM
+  DeployDocument:
+    Type: AWS::SSM::Document
+    Properties:
+      Name: !Sub 'porto-hub-${EnvironmentName}-deploy'
+      DocumentType: Command
+      # O padrao e `Replace`: editar o Content apagaria e recriaria o documento
+      # de mesmo nome, com uma janela em que o deploy nao acha nada.
+      UpdateMethod: NewVersion
+      TargetType: /AWS::EC2::Instance
+      Content:
+        schemaVersion: '2.2'
+        description: Baixa a release do bucket de deploy e instala na instancia.
+        parameters:
+          imageTag:
+            type: String
+            description: Tag das imagens no ECR, normalmente o SHA do commit.
+            # O valor e interpolado num shell. O padrao e o que impede que uma
+            # tag como `x; rm -rf /` vire comando.
+            allowedPattern: '^[A-Za-z0-9._-]{1,128}$'
+        mainSteps:
+          - action: aws:runShellScript
+            name: installRelease
+            inputs:
+              runCommand:
+                - 'set -euo pipefail'
+                - !Sub 'aws s3 cp s3://${DeployBucket}/docker-compose.prod.yml /opt/porto-hub/docker-compose.prod.yml'
+                - !Sub 'aws s3 cp s3://${DeployBucket}/install-release.sh /opt/porto-hub/install-release.sh'
+                - 'chmod +x /opt/porto-hub/install-release.sh'
+                - '/opt/porto-hub/install-release.sh "{{ imageTag }}"'
+
+  # =========================================================== Instancia
+  ElasticIp:
+    Type: AWS::EC2::EIP
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-eip'
+
+  ElasticIpAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt ElasticIp.AllocationId
+      InstanceId: !Ref Instance
+
+  # TTL curto porque em dev o IP pode mudar junto com a stack. DependsOn para o
+  # nome nao propagar antes de haver alguem no IP - o Caddy queimaria tentativas
+  # de ACME contra o vazio, e o Let's Encrypt limita a 5 por semana por host.
+  DnsRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateDnsRecord
+    DependsOn: ElasticIpAssociation
+    Properties:
+      HostedZoneName: !Ref HostedZoneName
+      Name: !Ref DomainName
+      Type: A
+      TTL: '60'
+      ResourceRecords: [!Ref ElasticIp]
+
+  Instance:
+    Type: AWS::EC2::Instance
+    DependsOn: VpcGatewayAttachment
+    # Sem isto o CREATE_COMPLETE chega assim que a instancia fica `running`, e
+    # um UserData que falhou vira falso positivo silencioso - o erro so
+    # apareceria no primeiro deploy, com "docker: command not found".
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+        Count: 1
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref PublicSubnetA
+      SecurityGroupIds: [!Ref AppSecurityGroup]
+      IamInstanceProfile: !Ref InstanceProfile
+      # Sem key pair de proposito: o acesso e por SSM Session Manager.
+      MetadataOptions:
+        HttpTokens: required
+        # 1 faz o IMDS recusar pacote vindo da bridge do Docker, que e um hop a
+        # mais: nenhum container assume a role da instancia. Quem le o Secrets
+        # Manager e o ECR passa a ser o host, no deploy - e a aplicacao nao faz
+        # chamada nenhuma a AWS em runtime, entao nao perde nada.
+        HttpPutResponseHopLimit: 1
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-app'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euo pipefail
+
+          # O sinal vai pela CLI da AWS, que ja vem na AMI, e nao pelo
+          # cfn-signal, que exigiria um `dnf install aws-cfn-bootstrap` antes.
+          # A diferenca importa: com o cfn-bootstrap, uma falha nesse primeiro
+          # install nao teria como avisar ninguem, e a stack esperaria os 15
+          # minutos do CreationPolicy por um sinal que nunca viria. Assim a
+          # armadilha esta armada desde a primeira linha.
+          IMDS_TOKEN="$(curl -sS -X PUT http://169.254.169.254/latest/api/token \
+            -H 'X-aws-ec2-metadata-token-ttl-seconds: 300')"
+          INSTANCE_ID="$(curl -sS -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" \
+            http://169.254.169.254/latest/meta-data/instance-id)"
+
+          signal() {
+            aws cloudformation signal-resource \
+              --stack-name ${AWS::StackName} --logical-resource-id Instance \
+              --unique-id "$INSTANCE_ID" --status "$1" --region ${AWS::Region}
+          }
+          trap 'signal FAILURE' ERR
+
+          # Swap antes de tudo. Sao 2 GB de RAM segurando dockerd, Caddy e dois
+          # processos Node, mais um terceiro durante a migration do deploy.
+          # swappiness 10 mantem o swap como seguro contra OOM, nao como memoria
+          # de trabalho - swap em EBS e lento e queima IOPS.
+          if [ ! -f /swapfile ]; then
+            fallocate -l 2G /swapfile
+            chmod 600 /swapfile
+            mkswap /swapfile
+            swapon /swapfile
+            echo '/swapfile swap swap defaults 0 0' >> /etc/fstab
+          fi
+          sysctl -w vm.swappiness=10
+          echo 'vm.swappiness=10' > /etc/sysctl.d/99-swap.conf
+
+          # Sem `dnf update -y`: a AMI vem resolvida pelo SSM e ja atualizada, e
+          # atualizar tudo no boot faz duas instancias da mesma stack nascerem
+          # diferentes - fora o kernel novo pedindo reboot no meio do create.
+          dnf install -y docker python3
+          systemctl enable --now docker
+
+          # O plugin do compose nao vem nos repositorios do AL2023. Versao
+          # fixada: `latest` transformaria um reboot em upgrade silencioso.
+          COMPOSE_VERSION=v2.32.4
+          mkdir -p /usr/local/lib/docker/cli-plugins
+          curl -fsSL -o /usr/local/lib/docker/cli-plugins/docker-compose \
+            "https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-linux-$(uname -m)"
+          chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+          docker compose version
+
+          mkdir -p /opt/porto-hub
+
+          # As duas unicas coisas que o UserData sabe: em que regiao esta e onde
+          # achar o resto. Tudo o mais vem do Parameter Store a cada deploy -
+          # nada que possa mudar durante a vida da instancia entra aqui, porque
+          # o cloud-init nao roda de novo para corrigir.
+          cat > /opt/porto-hub/bootstrap.env <<'BOOTSTRAP'
+          AWS_REGION=${AWS::Region}
+          CONFIG_PARAM=${ConfigParameter}
+          BOOTSTRAP
+
+          signal SUCCESS
+
+Outputs:
+  WebUrl:
+    Description: URL publica do ambiente - landing, area do afiliado e painel
+    Value: !Sub 'https://${DomainName}'
+
+  PanelUrl:
+    Description: Login do painel de analise
+    Value: !Sub 'https://${DomainName}/admin/login'
+
+  ElasticIpAddress:
+    Description: Alvo do registro A, quando o DNS nao esta nesta conta
+    Value: !Ref ElasticIp
+
+  InstanceId:
+    Value: !Ref Instance
+
+  RdsEndpoint:
+    Value: !GetAtt Database.Endpoint.Address
+
+  ApiRepositoryUri:
+    Value: !GetAtt ApiRepository.RepositoryUri
+
+  WebRepositoryUri:
+    Value: !GetAtt WebRepository.RepositoryUri
+
+  DeployBucketName:
+    Value: !Ref DeployBucket
+
+  DeployDocumentName:
+    Value: !Ref DeployDocument
+
+  GitHubOidcRoleArn:
+    Description: Vai no secret AWS_DEPLOY_ROLE_ARN, usado pelo ci.yml e pelo cd.yml
+    Value: !GetAtt GitHubOidcRole.Arn
+
+  SsmSessionCommand:
+    Description: Shell na maquina, sem SSH e sem porta 22
+    Value: !Sub 'aws ssm start-session --target ${Instance} --region ${AWS::Region}'
+
+  SwaggerTunnelCommand:
+    Description: >
+      Swagger em http://localhost:3000/v1/docs. A API nao e publicada na
+      internet - so o servidor do Next fala com ela - entao este e o caminho.
+    Value: !Sub 'aws ssm start-session --target ${Instance} --region ${AWS::Region} --document-name AWS-StartPortForwardingSession --parameters ''{"portNumber":["3000"],"localPortNumber":["3000"]}'''
+
+  RdsTunnelCommand:
+    Description: psql em localhost:5433 contra o RDS privado
+    Value: !Sub
+      - 'aws ssm start-session --target ${Instance} --region ${AWS::Region} --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters ''{"host":["${DbHost}"],"portNumber":["5432"],"localPortNumber":["5433"]}'''
+      - DbHost: !GetAtt Database.Endpoint.Address
+
+  ConfigParameterName:
+    Description: Parametro com a configuracao nao-secreta lida a cada deploy
+    Value: !Ref ConfigParameter
+
+  ReadDbPasswordCommand:
+    Description: Senha do master do RDS, para o psql pelo tunel
+    Value: !Sub 'aws secretsmanager get-secret-value --secret-id ${DbSecret} --region ${AWS::Region} --query SecretString --output text'
+
+  ReadSeedPasswordCommand:
+    Description: Senha inicial dos operadores do painel (trocada no primeiro login)
+    Value: !Sub 'aws secretsmanager get-secret-value --secret-id ${SeedSecret} --region ${AWS::Region} --query SecretString --output text'
+
+  # O valor vem de ARQUIVO, nunca de argv: segredo em argv fica visivel em `ps`
+  # e no historico do shell - exatamente o que tira-lo do template evitou.
+  SetResendKeyCommand:
+    Description: Injeta o RESEND_API_KEY lendo de ./resend_key.txt, preservando os demais campos
+    Value: !Sub 'aws secretsmanager get-secret-value --secret-id ${AppSecret} --region ${AWS::Region} --query SecretString --output text | python3 -c ''import json,sys;s=json.load(sys.stdin);s["resend_api_key"]=open("resend_key.txt").read().strip();sys.stdout.write(json.dumps(s))'' > secret.json && aws secretsmanager put-secret-value --secret-id ${AppSecret} --region ${AWS::Region} --secret-string file://secret.json && rm -f secret.json resend_key.txt'

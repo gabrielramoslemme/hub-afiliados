@@ -168,6 +168,18 @@ jest.mock('@/shared/http/api-client', () => ({ publicApiFetch: jest.fn() }));
 
 `next.config.mjs` lista `['@porto/contracts']`. Pacote novo do monorepo consumido aqui precisa ser acrescentado, senão o Next tenta carregar o build como dependência externa e falha em runtime.
 
+## Atenção: a imagem de produção depende de `output: 'standalone'`
+
+`next.config.mjs` declara `output: 'standalone'` e `outputFileTracingRoot`
+apontando para a raiz do monorepo. Sem o primeiro, a imagem carregaria o
+`node_modules` inteiro; sem o segundo, o rastreamento não enxerga
+`@porto/contracts`, que é symlink de workspace, e o container sobe quebrado.
+
+`standalone` é servidor Node completo — compatível com o `middleware.ts` de
+`/admin`, ao contrário de `output: 'export'`. O `Dockerfile` copia
+`.next/standalone`, e à mão `.next/static` e `public`, que ficam de fora do
+rastreamento.
+
 ## Comandos
 
 ```bash

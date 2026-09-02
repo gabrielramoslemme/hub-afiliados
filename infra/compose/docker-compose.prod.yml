@@ -1,0 +1,75 @@
+# Ambiente provisionado do Hub de Afiliados. Sobe pelo `install-release.sh`, que
+# escreve os arquivos de env antes. As variáveis não-secretas vêm do
+# `/opt/porto-hub/.env`, lido pelo compose por convenção.
+name: porto-hub
+
+services:
+  # Termina o TLS e é o único serviço exposto à internet. Fica na `egress` para
+  # alcançar o Let's Encrypt, e na `internal` para chegar na web.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - /opt/porto-hub/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Perder este volume é perder os certificados e recomeçar do zero contra
+      # o rate limit do Let's Encrypt (5 emissões por semana para o mesmo host).
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [egress, internal]
+    mem_limit: 128m
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: ${LOG_GROUP}
+        awslogs-stream: caddy
+
+  # Só na rede `internal`, e é isso que fecha a fronteira: sem rota para o RDS,
+  # para a internet e para o IMDS. Ela não precisa de nenhum dos três — quem
+  # fala com o banco e com o Resend é a API.
+  web:
+    image: ${WEB_IMAGE}:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file: [/opt/porto-hub/web.env]
+    networks: [internal]
+    mem_limit: 512m
+    depends_on:
+      api:
+        condition: service_healthy
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: ${LOG_GROUP}
+        awslogs-stream: web
+
+  api:
+    image: ${API_IMAGE}:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file: [/opt/porto-hub/api.env]
+    # Publicada em loopback e só: é por aqui que o port-forward do SSM alcança
+    # o Swagger, sem a porta existir na internet.
+    ports:
+      - '127.0.0.1:3000:3000'
+    networks: [internal, egress]
+    mem_limit: 640m
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: ${LOG_GROUP}
+        awslogs-stream: api
+
+networks:
+  # `internal: true` remove a rota default da rede. É fronteira do Docker, não
+  # regra de iptables no host: não há o que dessincronizar depois.
+  internal:
+    internal: true
+  egress: {}
+
+volumes:
+  caddy-data: {}
+  caddy-config: {}

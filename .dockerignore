@@ -1,0 +1,19 @@
+# Nada de artefato local dentro de camada de imagem: o build de dentro do
+# container tem que ser o mesmo em qualquer máquina.
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+.git
+.github
+
+# `.env*` fora, sempre. Segredo local em camada de imagem é segredo publicado
+# no registry — e camada apagada continua no histórico.
+**/.env
+**/.env.*
+
+**/*.md
+**/*.png
+apps/api/openapi.json
+infra

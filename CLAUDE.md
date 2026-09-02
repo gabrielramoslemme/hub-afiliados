@@ -14,8 +14,9 @@ O canal do afiliado é **web responsivo**, no mesmo Next que serve o backoffice 
 | [`apps/web`](apps/web/CLAUDE.md) | Next 15 + React 19 + shadcn sobre Radix. Landing page, cadastro, área do afiliado e painel. | tela, formulário, Server Action, componente |
 | [`packages/contracts`](packages/contracts/CLAUDE.md) | `@porto/contracts` — enums, tipos e schemas zod compartilhados. | enum, DTO ou schema que a API e a web dividem |
 | `packages/tsconfig` | `base.json`, `nest.json`, `next.json`. | — |
+| [`infra`](infra/cloudformation/README.md) | CloudFormation do ambiente de desenvolvimento, compose de produção e script de release. | stack, deploy, Dockerfile, variável do ambiente provisionado |
 
-Setup local, portas e seed no [`README.md`](README.md); e-mails em [`apps/api/docs/EMAILS.md`](apps/api/docs/EMAILS.md).
+Setup local, portas e seed no [`README.md`](README.md); e-mails em [`apps/api/docs/EMAILS.md`](apps/api/docs/EMAILS.md); a stack de dev em [`infra/cloudformation/README.md`](infra/cloudformation/README.md).
 
 ## Comandos
 
