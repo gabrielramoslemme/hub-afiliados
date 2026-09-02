@@ -11,6 +11,7 @@ export const LOGIN_PATH = '/admin/login';
  */
 export const DASHBOARD_PATH = '/admin';
 export const QUEUE_PATH = '/admin/afiliados';
+export const CAMPAIGNS_PATH = '/admin/campanhas';
 
 /**
  * Para onde a leitura manda quem a API recusou. Não é o login direto: o cookie

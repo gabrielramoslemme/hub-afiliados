@@ -10,7 +10,7 @@ O primeiro nível de `src/` é o **dono**, não o domínio. Três fatias, e o Bi
 |---|---|
 | `src/affiliate/features/<nome>/` | `landing`, `registration`, `auth`, `area` — as telas do afiliado |
 | `src/affiliate/shared/` | o que a fatia inteira divide: `content.ts` (toda a copy), `routes.ts`, `components/` |
-| `src/admin/features/<nome>/` | `auth`, `affiliates`, `dashboard`, `shell` — as telas da Porto |
+| `src/admin/features/<nome>/` | `auth`, `affiliates`, `campaigns`, `dashboard`, `shell` — as telas da Porto |
 | `src/admin/shared/routes.ts` | as rotas do painel |
 | `src/shared/` | transversal de verdade: `components/ui/` (shadcn), `components/porto-logo`, `hooks/`, `lib/`, `http/` |
 | `src/app/` | só casca de rota, espelhando as fatias em `(affiliate)/` e `(admin)/` |
@@ -139,6 +139,8 @@ Saldo e total pago são **somados a partir do extrato**, com teste que trava a i
 A resposta volta pelo mesmo `request()`, então cabeçalho montado, 204 sem corpo e tradução do corpo de erro em `ApiError` continuam exercitados. Quando as rotas nascerem, tire a flag e nenhuma tela muda.
 
 **O dashboard não passa por aqui.** Os números da tela inicial do painel são constantes em `admin/features/dashboard/mock-data.ts`: faturamento, comissão e venda dependem de tabelas que a Onda 1 não tem, então não há rota para dublar. `mock-data.spec.ts` trava as somas que a tela mostra lado a lado — segmento que fecha o total, fatia que fecha 100%, comissão que sai da mesma taxa. Quando as leituras nascerem, o arquivo vira `data.ts` e a montagem não muda.
+
+**Campanhas segue o mesmo desenho.** `admin/features/campaigns/mock-data.ts` guarda os registros e `list-campaigns.ts` corta em memória o que a API vai cortar com `WHERE`, `ORDER BY` e `LIMIT` — devolvendo o mesmo `{ data, total }` de `PaginatedResult`, que é o que mantém a tela intacta na troca. Criar, editar e encerrar campanha aparecem desabilitados com "em breve": a Onda 1 não tem rota de escrita, e oferecer o clique seria oferecer um caminho que não chega.
 
 ### Atenção: por que não é MSW
 

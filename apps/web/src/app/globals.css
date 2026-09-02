@@ -303,6 +303,15 @@
   }
 
   /*
+    A superfície clara do destaque: o cartão que carrega a campanha no ar precisa
+    se separar da pilha de blocos brancos do painel sem virar uma segunda faixa
+    escura — a regra é uma por documento, e ela é o topo.
+  */
+  .surface-card {
+    background-image: var(--gradient-card);
+  }
+
+  /*
     Malha de luz do hero. Dois focos de luz suaves em vez do blob flutuante da
     referência: o blob chama atenção para si, a malha só tira o gradiente da
     chapa lisa. Fica atrás do conteúdo e nunca captura ponteiro.
