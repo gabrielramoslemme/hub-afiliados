@@ -176,7 +176,7 @@ Token trocado de posição no `provideUseCase` **era** a quarta, e a pior: dois 
 | Factory e mock de teste | `src/testing/` |
 | Teste unitário | ao lado do arquivo, `.spec.ts` |
 | Teste de integração | `test/<assunto>.e2e-spec.ts` |
-| Seed | `seeds/seed.ts` |
+| Seed | `src/infra/database/typeorm/seeds/` — `seed-operators.ts` (a lógica) e `run-seed.ts` (a entrada) |
 
 ## Nome da dependência injetada
 
@@ -225,7 +225,7 @@ Contrato no domínio, implementação em infra. **Use case nunca recebe `Reposit
 ## Entidades
 
 - Arquivo `<nome>.typeorm-entity.ts`, classe `<Nome>TypeormEntity`, declarando `implements <TipoDoDominio>` — é o compilador cobrando que a tabela atenda o contrato.
-- **Os dois DataSources encontram as entidades por esse sufixo** (`typeorm.module.ts` e `ormconfig.ts`). Renomear arquivo sem trocar os dois globs derruba a aplicação na subida.
+- **Os dois DataSources encontram as entidades por esse sufixo** (`typeorm.module.ts` e `data-source.ts`). Renomear arquivo sem trocar os dois globs derruba a aplicação na subida.
 - Tabela e coluna em `snake_case` via `name:`; propriedade em `camelCase`.
 - `id` serial PK interno **mais** `public_id` uuid `@Generated('uuid')` único — só o `public_id` sai da API.
 - Timestamps `timestamptz` via `@CreateDateColumn` / `@UpdateDateColumn`. Soft delete (`@DeleteDateColumn`) só onde o modelo pede (`users`).
@@ -242,7 +242,11 @@ Contrato no domínio, implementação em infra. **Use case nunca recebe `Reposit
 - **O que a migration cria, a entidade declara também:** índice (`@Index`, com `where` quando parcial), `CHECK` (`@Check`) e nome de FK (`@JoinColumn({ foreignKeyConstraintName })`). Não é enfeite — é o que mantém o detector de drift utilizável.
 - `typeorm:generate` não escreve a migration final aqui (batiza constraint com hash e não expressa `DESC` em índice): serve como **detector de drift** entre entidade e schema, e o esperado é `No changes`. **Nesse caso ele sai com código ≠ 0** — é sucesso, não falha; não encadeie com `&&`.
 
-**Atenção: `ormconfig.ts` e o `DatabaseModule` são dois DataSources.** O `ormconfig.ts` é o do CLI (lê `.env` por `dotenv`, aponta para os `.ts`); o `DatabaseModule` é o da aplicação (lê o `EnvironmentVariableService`, aponta para `__dirname`). Mexeu em um, confira o outro — o sintoma de divergência é migration que roda no CLI e some em runtime.
+**Atenção: o DataSource do CLI mora em `src/`, e `ormconfig.ts` é só a casca.** O de verdade é `src/infra/database/typeorm/data-source.ts`, que resolve entidades e migrations por `__dirname` — assim o mesmo arquivo serve ao `ts-node` sobre `src/` em desenvolvimento e ao `node` sobre `dist/` na imagem de produção. O `ormconfig.ts` continua sendo o `-d` do CLI local porque precisa carregar o `.env` por `dotenv` antes.
+
+**Ele exporta a instância uma vez só, como `default`.** O `migration:run -d <arquivo>` recusa o módulo que exporte duas — e a mesma instância exportada como nomeada *e* como default já conta como duas, com a mensagem `Given data source file must contain only one export of DataSource instance`. Há teste para isso em `data-source.spec.ts`.
+
+O `DatabaseModule` continua sendo um DataSource à parte, o da aplicação, que lê o `EnvironmentVariableService`. Os globs dos dois são iguais de propósito; divergir volta a produzir migration que roda no CLI e some em runtime.
 
 ## Configuração
 
@@ -253,7 +257,7 @@ Variável nova entra em **quatro** lugares, sempre os quatro:
 3. `.env.example` — com comentário quando o valor não for óbvio.
 4. `.github/workflows/ci.yml`, bloco `env:` — quando for obrigatória.
 
-**Nunca leia `process.env` fora do `EnvironmentVariableService`** — exceto em `ormconfig.ts`, `seeds/` e `scripts/`, que rodam fora do container de DI do Nest.
+**Nunca leia `process.env` fora do `EnvironmentVariableService`** — exceto em `ormconfig.ts`, `scripts/`, `src/infra/database/typeorm/data-source.ts` e `src/infra/database/typeorm/seeds/`, que rodam fora do container de DI do Nest. Os dois últimos estão em `src/` justamente por precisarem existir compilados na imagem de produção; continuam sendo código de CLI, não de aplicação.
 
 ## Erros
 
@@ -334,6 +338,14 @@ npm run typeorm:revert --workspace apps/api                  # reverte a última
 npm run typeorm:generate --workspace apps/api --name=Drift   # detector de drift, espera "No changes"
 npm run seed --workspace apps/api                            # operadores
 npm run openapi:generate --workspace apps/api                # gera apps/api/openapi.json
+```
+
+Os dois `:prod` rodam contra `dist/`, sem `ts-node`, e existem para a imagem de
+produção — é o `install-release.sh` que os chama, nessa ordem, a cada deploy:
+
+```bash
+npm run typeorm:run:prod --workspace apps/api                # migrations em dist/
+npm run seed:prod --workspace apps/api                       # operadores em dist/
 ```
 
 Swagger em `http://localhost:3000/v1/docs`.

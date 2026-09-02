@@ -5,7 +5,6 @@
     "node_modules",
     "test",
     "dist",
-    "seeds",
     "scripts",
     "src/testing",
     "**/*.spec.ts",

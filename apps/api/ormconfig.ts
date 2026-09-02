@@ -1,9 +1,6 @@
 import 'dotenv/config';
-import { DataSource } from 'typeorm';
 
-export default new DataSource({
-  type: 'postgres',
-  url: process.env.DATABASE_URL,
-  entities: ['src/infra/database/typeorm/entities/*.typeorm-entity.ts'],
-  migrations: ['src/infra/database/typeorm/migrations/*.ts'],
-});
+// O DataSource de verdade mora em `src/`, para existir também na imagem de
+// produção. Este arquivo continua sendo o `-d` do CLI em desenvolvimento, onde
+// o `.env` precisa ser lido antes.
+export { default } from './src/infra/database/typeorm/data-source';

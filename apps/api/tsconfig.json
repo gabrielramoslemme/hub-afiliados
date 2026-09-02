@@ -12,7 +12,7 @@
       "@Testing/*": ["src/testing/*"]
     }
   },
-  "include": ["src/**/*", "test/**/*", "scripts/**/*", "seeds/**/*", "ormconfig.ts"],
+  "include": ["src/**/*", "test/**/*", "scripts/**/*", "ormconfig.ts"],
   "ts-node": {
     "require": ["tsconfig-paths/register"]
   }

@@ -12,9 +12,12 @@
     "typeorm:create": "typeorm-ts-node-commonjs migration:create src/infra/database/typeorm/migrations/$npm_config_name",
     "typeorm:generate": "typeorm-ts-node-commonjs -d ormconfig.ts migration:generate src/infra/database/typeorm/migrations/$npm_config_name",
     "typeorm:run": "typeorm-ts-node-commonjs migration:run -d ormconfig.ts",
+    "typeorm:run:prod": "typeorm migration:run -d dist/infra/database/typeorm/data-source.js",
     "typeorm:revert": "typeorm-ts-node-commonjs migration:revert -d ormconfig.ts",
+    "typeorm:revert:prod": "typeorm migration:revert -d dist/infra/database/typeorm/data-source.js",
     "openapi:generate": "ts-node -r tsconfig-paths/register scripts/generate-openapi.ts",
-    "seed": "ts-node -r tsconfig-paths/register seeds/seed.ts"
+    "seed": "ts-node -r tsconfig-paths/register -r dotenv/config src/infra/database/typeorm/seeds/run-seed.ts",
+    "seed:prod": "node dist/infra/database/typeorm/seeds/run-seed.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
