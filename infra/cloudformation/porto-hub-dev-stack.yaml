@@ -891,6 +891,12 @@ Outputs:
     Description: Parametro com a configuracao nao-secreta lida a cada deploy
     Value: !Ref ConfigParameter
 
+  # O nome do segredo e gerado pelo CloudFormation, entao nao ha string fixa que
+  # um script possa adivinhar: quem precisa da senha resolve o ARN por aqui.
+  DbSecretArn:
+    Description: Segredo com usuario e senha do master do RDS
+    Value: !Ref DbSecret
+
   ReadDbPasswordCommand:
     Description: Senha do master do RDS, para o psql pelo tunel
     Value: !Sub 'aws secretsmanager get-secret-value --secret-id ${DbSecret} --region ${AWS::Region} --query SecretString --output text'

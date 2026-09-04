@@ -161,14 +161,22 @@ se o banco for substituído, o parâmetro acompanha.
 
 ## Operação
 
-Todos os comandos saem prontos nos outputs da stack.
+Todos os comandos saem prontos nos outputs da stack. Os dois do dia a dia têm
+atalho na raiz do repositório — `db:tunnel` e `db:password` resolvem sozinhos o
+id da instância, o endpoint do RDS e o ARN do segredo.
+
+O túnel exige o `session-manager-plugin` (`brew install --cask session-manager-plugin`),
+que não vem junto com o AWS CLI. Com ele instalado, qualquer cliente — psql,
+TablePlus, DBeaver, DataGrip — conecta em `localhost:5433` como se o banco fosse
+local. O RDS continua sem rota para a internet: o controle de acesso é a
+permissão `ssm:StartSession`, revogável por pessoa e auditável no CloudTrail.
 
 | O quê | Como |
 |---|---|
 | Shell na máquina | `aws ssm start-session --target <id>` |
 | Swagger | túnel do output `SwaggerTunnelCommand`, depois `http://localhost:3000/v1/docs` |
-| psql no RDS | túnel do output `RdsTunnelCommand`, depois `psql -h localhost -p 5433 -U porto hub_afiliados` |
-| Senha do RDS | output `ReadDbPasswordCommand` |
+| psql no RDS | `npm run db:tunnel` na raiz, depois `psql -h localhost -p 5433 -U porto hub_afiliados` |
+| Senha do RDS | `npm run db:password` na raiz |
 | Senha inicial do painel | output `ReadSeedPasswordCommand` |
 | Logs | CloudWatch, grupo `/porto-hub/dev`, streams `api`, `web` e `caddy` |
 | Rollback | *Actions → CD → Run workflow*, com o `imageTag` anterior (o ECR guarda as 10 últimas) |
