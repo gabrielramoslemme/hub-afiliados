@@ -180,6 +180,21 @@ apontando para a raiz do monorepo. Sem o primeiro, a imagem carregaria o
 `.next/standalone`, e à mão `.next/static` e `public`, que ficam de fora do
 rastreamento.
 
+## Atenção: Server Action atrás de proxy precisa de `allowedOrigins`
+
+O ambiente provisionado tem CloudFront (e a Imperva da Porto na frente dele). O
+Next compara o header `Origin` com `X-Forwarded-Host` e **aborta a ação** quando
+divergem — `Invalid Server Actions request`, HTTP 500. Como são sete actions e
+elas são todo o caminho de escrita — cadastro, os dois logins, definir senha,
+aprovar/reprovar e os dois logouts —, errar isso derruba a aplicação inteira com
+a tela carregando normalmente.
+
+`next.config.mjs` resolve com `experimental.serverActions.allowedOrigins`,
+alimentado por `PUBLIC_DOMAIN_NAME`, que o `install-release.sh` grava no
+`web.env`. É lido em **runtime**, não embutido na imagem: trocar o domínio é
+reiniciar o container, não rebuildar. Mas **trocar o domínio sem trocar a
+variável quebra tudo que é POST**.
+
 ## Comandos
 
 ```bash
