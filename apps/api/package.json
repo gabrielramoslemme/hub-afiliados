@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "nest build",
+    "build": "nest build && npm run verify:dist",
+    "verify:dist": "! grep -rlE \"require\\\\(['\\\"]@(Domain|Infra|Application|Http|Testing)/\" dist",
     "dev": "nest start --watch",
     "start": "node dist/main",
     "type-check": "tsc --noEmit",
