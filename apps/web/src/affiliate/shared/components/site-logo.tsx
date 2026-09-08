@@ -30,7 +30,7 @@ export function SiteLogo({ tone }: { tone?: 'light' | 'dark' }) {
   return (
     <Link
       href={destinationFor(usePathname())}
-      aria-label="Hub de Afiliados da Porto Serviços"
+      aria-label="Influenciadores da Porto Serviço"
       className="rounded-sm transition-opacity hover:opacity-80"
     >
       <PortoLogo tone={tone} />
