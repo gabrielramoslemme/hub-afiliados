@@ -60,6 +60,9 @@ export class AffiliateTypeormEntity implements AffiliateEntity {
   @Column({ type: 'varchar', length: 20, default: AffiliateStatusEnum.PENDING_APPROVAL })
   status: AffiliateStatusEnum;
 
+  @Column({ name: 'terms_accepted_at', type: 'timestamptz' })
+  termsAcceptedAt: Date;
+
   @Column({ name: 'approved_at', type: 'timestamptz', nullable: true })
   approvedAt: Date | null;
 

@@ -20,6 +20,7 @@ describe('Affiliate registration (e2e)', () => {
     rg: '12.345.678-X',
     pixKeyType: 'EMAIL',
     pixKey: 'marina@email.com',
+    termsAccepted: true,
   };
 
   beforeAll(async () => {
@@ -262,6 +263,31 @@ describe('Affiliate registration (e2e)', () => {
         .post('/v1/affiliates')
         .send({ ...validBody, socialNetwork: 'TIKTOK', socialHandle: 'marina ferraz' })
         .expect(400);
+    });
+
+    it('rejects a registration that did not accept the terms', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/v1/affiliates')
+        .send({ ...validBody, termsAccepted: false })
+        .expect(400);
+
+      expect(response.body.message).toEqual(['É preciso aceitar o Regulamento do programa.']);
+    });
+
+    it('rejects a registration sent without the acceptance field', async () => {
+      const { termsAccepted: _termsAccepted, ...bodyWithoutTerms } = validBody;
+
+      await request(app.getHttpServer()).post('/v1/affiliates').send(bodyWithoutTerms).expect(400);
+    });
+
+    it('records when the terms were accepted', async () => {
+      await request(app.getHttpServer()).post('/v1/affiliates').send(validBody).expect(201);
+
+      const [{ terms_accepted_at: termsAcceptedAt }] = await dataSource.query(
+        'SELECT terms_accepted_at FROM affiliates',
+      );
+
+      expect(termsAcceptedAt).toBeInstanceOf(Date);
     });
   });
 });

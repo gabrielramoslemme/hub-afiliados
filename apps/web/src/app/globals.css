@@ -358,6 +358,19 @@
   .draw-check {
     stroke-dasharray: var(--draw-length, 32);
   }
+
+  /*
+    Lista em que os checks se riscam **juntos**. Preso ao `view()` de cada
+    ícone, o traço mede a posição de cada um: numa lista os itens estão a
+    dezenas de pixels de distância, então o de baixo fica sempre atrás — e o
+    último parava a meio traço, com cara de ícone diferente dos outros, que foi
+    o que a Porto viu na validação. O nome de timeline no container faz os
+    quatro lerem o mesmo progresso: entram como uma lista, não como quatro
+    peças independentes.
+  */
+  .draw-check-group {
+    view-timeline-name: --draw-check-group;
+  }
 }
 
 /*
@@ -423,6 +436,12 @@
     .draw-check {
       animation: draw linear both;
       animation-timeline: view();
+      animation-range: entry 12% cover 30%;
+    }
+
+    /* O progresso é o do container, e não o de cada ícone da lista. */
+    .draw-check-group .draw-check {
+      animation-timeline: --draw-check-group;
       animation-range: entry 12% cover 30%;
     }
   }

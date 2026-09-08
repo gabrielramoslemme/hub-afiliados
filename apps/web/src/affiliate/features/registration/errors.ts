@@ -19,6 +19,7 @@ const FIELD_BY_CODE: Record<RegistrationErrorCodeEnum, RegistrationField> = {
   [RegistrationErrorCodeEnum.EMAIL_ALREADY_REGISTERED]: 'email',
   [RegistrationErrorCodeEnum.PIX_KEY_INVALID]: 'pixKey',
   [RegistrationErrorCodeEnum.PIX_KEY_MISMATCH]: 'pixKey',
+  [RegistrationErrorCodeEnum.TERMS_NOT_ACCEPTED]: 'termsAccepted',
 };
 
 /** `null` significa erro de formulário, não de campo: o alerta vai para o topo. */

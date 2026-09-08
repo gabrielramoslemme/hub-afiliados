@@ -175,6 +175,7 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
             pixKey: input.pixKey,
             socialNetwork: input.socialNetwork,
             socialHandle: input.socialHandle,
+            termsAcceptedAt: input.termsAcceptedAt,
             status: AffiliateStatusEnum.PENDING_APPROVAL,
           }),
         );

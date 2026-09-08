@@ -145,7 +145,7 @@ export function MailLayout({ preview, heading, children }: MailLayoutProps) {
           </Section>
           <Hr style={rule} />
           <Text style={footer}>
-            Mensagem automática do Hub de Afiliados da Porto Serviços. Não responda a este e-mail.
+            Mensagem automática do Hub de Afiliados da Porto Serviço. Não responda a este e-mail.
           </Text>
         </Container>
       </Body>

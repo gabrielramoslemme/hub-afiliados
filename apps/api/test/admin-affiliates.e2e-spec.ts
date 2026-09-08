@@ -53,6 +53,7 @@ describe('Admin affiliates (e2e)', () => {
       pixKey: 'marina.ferraz@email.com',
       socialNetwork: SocialNetworkEnum.INSTAGRAM,
       socialHandle: 'marina.ferraz',
+      termsAcceptedAt: new Date('2026-08-17T12:00:00Z'),
     });
     const cleide = await affiliates.createWithUser({
       fullName: 'Cleide Nakamura',
@@ -63,6 +64,7 @@ describe('Admin affiliates (e2e)', () => {
       pixKey: '39053344705',
       socialNetwork: null,
       socialHandle: null,
+      termsAcceptedAt: new Date('2026-08-17T12:00:00Z'),
     });
     await affiliates.changeStatus({
       affiliateId: cleide.id,

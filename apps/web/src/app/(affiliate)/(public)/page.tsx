@@ -1,4 +1,5 @@
 import {
+  AboutSection,
   AudienceSection,
   BenefitsSection,
   FaqSection,
@@ -19,6 +20,7 @@ export default function LandingPage() {
   return (
     <>
       <HeroSection />
+      <AboutSection />
       <AudienceSection />
       <StepsSection />
       <BenefitsSection />

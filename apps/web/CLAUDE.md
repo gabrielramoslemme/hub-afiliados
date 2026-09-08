@@ -94,6 +94,12 @@ Oito regras que mantêm a página com cara de projetada:
 
 Sobre fundo escuro o `Button` tem duas variantes próprias, `inverse` e `inverse-outline`: `primary` é azul e some sobre a faixa da marca. Elas existem para que ninguém resolva isso com um `bg-white` solto no JSX.
 
+### Atenção: a trava da marca não usa o `<text>` do kit
+
+O kit oficial mora em `public/brand/`: a trava em horizontal e vertical, cada uma nas três versões de cor (`primary` colorida, `positive` escura, `negative` branca). Nesses seis arquivos o descritor "Influenciadores" é `<text>` composto em **Porto Roobert**, fonte que o projeto não serve — e SVG dentro de `<img>` não enxerga a fonte da página. Servir um deles direto na tela imprime o descritor na serifada padrão do navegador, com os avanços errados.
+
+Por isso `PortoLogo` monta a trava em duas partes: os dois `porto-servico-wordmark-*.svg`, que são só traçado recortado do arquivo oficial, mais o descritor como texto do documento em Open Sans. **Ao trocar o logotipo, refaça os dois `wordmark` a partir do kit** — não aponte o componente para a trava inteira. As versões `positive` e `negative` do kit ainda trazem um retângulo de fundo chapado, que também precisa sair.
+
 ### Gráfico
 
 `recharts` por baixo do `chart.tsx` do shadcn, em `src/shared/components/ui/` — a única biblioteca de desenho do app, e ela entra só na rota que a usa. **Cor de série sai de `--color-chart-1..4`**, nunca de literal no `ChartConfig`: o `ChartContainer` publica cada uma como `var(--color-<série>)`, e é isso que o traço lê. O gráfico é ilha `'use client'` porque o recharts mede o container para desenhar; a tela em volta continua Server Component.
@@ -114,7 +120,7 @@ Componente do Radix precisa de **entrada e saída**: `data-[state=open]:animate-
 
 Animação nova é token `--animate-*` no `@theme` com os keyframes no fim do `globals.css`. Nada de `animation:` solto em componente.
 
-Toda a copy da landing está em `src/affiliate/shared/content.ts`, num arquivo só. Os números que dependem da Porto vivem em `pendingFromPorto`, hoje `null`: a copy funciona sem eles e passa a exibir quando forem preenchidos. **Não escreva número de comissão, desconto ou prazo direto no JSX.**
+Toda a copy da landing está em `src/affiliate/shared/content.ts`, num arquivo só. Os números que dependem da Porto vivem em `pendingFromPorto` — só o `reviewWindow` está fechado, o resto ainda é `null`: a copy funciona sem eles e passa a exibir quando forem preenchidos. **Não escreva número de comissão, desconto ou prazo direto no JSX.**
 
 O extrato do hero é a exceção declarada: `showcase` guarda valores de exemplo e a peça imprime `showcase.disclaimer` colado no saldo, não em nota de rodapé. As linhas somam exatamente `totalCents` — extrato ilustrativo que não fecha a conta ensina a não conferir o extrato de verdade. Quando `pendingFromPorto` for preenchido, este bloco sai.
 

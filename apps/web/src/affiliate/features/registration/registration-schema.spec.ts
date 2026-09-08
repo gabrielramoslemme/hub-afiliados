@@ -14,6 +14,7 @@ const validInput = {
   pixKey: 'marina@email.com',
   socialNetwork: '' as SocialNetworkEnum | '',
   socialHandle: '',
+  termsAccepted: true,
 };
 
 function parse(overrides: Partial<typeof validInput> = {}) {
@@ -29,6 +30,12 @@ function firstErrorOn(result: ReturnType<typeof parse>, path: string): string | 
 describe('createAffiliateSchema', () => {
   it('accepts a complete registration', () => {
     expect(parse().success).toBe(true);
+  });
+
+  it('rejects a registration that did not accept the terms', () => {
+    expect(firstErrorOn(parse({ termsAccepted: false }), 'termsAccepted')).toBe(
+      'É preciso aceitar o Regulamento do programa.',
+    );
   });
 
   it('trims the full name', () => {

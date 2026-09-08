@@ -28,6 +28,7 @@ describe('Affiliate account (e2e)', () => {
     pixKey: 'marina.ferraz@email.com',
     socialNetwork: 'INSTAGRAM',
     socialHandle: '@marina.ferraz',
+    termsAccepted: true,
   };
 
   const PASSWORD = 'SenhaNova!2026';

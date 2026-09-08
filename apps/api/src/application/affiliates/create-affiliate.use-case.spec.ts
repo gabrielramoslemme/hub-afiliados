@@ -12,10 +12,12 @@ import {
   InvalidRgError,
   PixKeyMismatchError,
   RgAlreadyRegisteredError,
+  TermsNotAcceptedError,
 } from '@Domain/affiliates/affiliates.errors';
 import { buildAffiliate } from '@Testing/factories/affiliate.factory';
 import { affiliateRepositoryMock } from '@Testing/mocks/repositories/affiliate.repository.mock';
 import { userRepositoryMock } from '@Testing/mocks/repositories/user.repository.mock';
+import { clockMock } from '@Testing/mocks/services/clock.mock';
 import { mailerMock } from '@Testing/mocks/services/mailer.mock';
 import { CreateAffiliateInput, CreateAffiliateUseCase } from './create-affiliate.use-case';
 
@@ -29,17 +31,21 @@ describe('CreateAffiliateUseCase', () => {
     pixKey: 'marina@email.com',
     socialNetwork: null,
     socialHandle: null,
+    termsAccepted: true,
   };
+
+  const acceptedAt = new Date('2026-09-04T12:00:00.000Z');
 
   function buildUseCase() {
     const userRepository = userRepositoryMock();
     const affiliateRepository = affiliateRepositoryMock();
     const mailer = mailerMock();
+    const clock = clockMock(acceptedAt);
     affiliateRepository.createWithUser.mockResolvedValue(
       buildAffiliate({ publicId: 'affiliate-public-id' }),
     );
-    const useCase = new CreateAffiliateUseCase(userRepository, affiliateRepository, mailer);
-    return { useCase, userRepository, affiliateRepository, mailer };
+    const useCase = new CreateAffiliateUseCase(userRepository, affiliateRepository, mailer, clock);
+    return { useCase, userRepository, affiliateRepository, mailer, clock };
   }
 
   it('creates the affiliate pending approval', async () => {
@@ -228,5 +234,32 @@ describe('CreateAffiliateUseCase', () => {
 
     await expect(useCase.execute(input)).rejects.toThrow(RgAlreadyRegisteredError);
     expect(mailer.send).not.toHaveBeenCalled();
+  });
+
+  it('rejects a registration sent without accepting the terms', async () => {
+    const { useCase } = buildUseCase();
+
+    await expect(useCase.execute({ ...input, termsAccepted: false })).rejects.toThrow(
+      TermsNotAcceptedError,
+    );
+  });
+
+  it('does not create the affiliate when the terms were not accepted', async () => {
+    const { useCase, affiliateRepository } = buildUseCase();
+
+    await expect(useCase.execute({ ...input, termsAccepted: false })).rejects.toThrow(
+      TermsNotAcceptedError,
+    );
+    expect(affiliateRepository.createWithUser).not.toHaveBeenCalled();
+  });
+
+  it('records when the terms were accepted', async () => {
+    const { useCase, affiliateRepository } = buildUseCase();
+
+    await useCase.execute(input);
+
+    expect(affiliateRepository.createWithUser).toHaveBeenCalledWith(
+      expect.objectContaining({ termsAcceptedAt: acceptedAt }),
+    );
   });
 });

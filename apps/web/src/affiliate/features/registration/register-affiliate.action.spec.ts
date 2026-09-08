@@ -19,6 +19,7 @@ const validInput = {
   rg: '12.345.678-X',
   pixKeyType: PixKeyTypeEnum.EMAIL,
   pixKey: 'marina@email.com',
+  termsAccepted: true,
 };
 
 function sentBody(): Record<string, unknown> {
