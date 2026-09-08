@@ -34,11 +34,12 @@ class FakeIntersectionObserver {
   }
 }
 
-/** Os quatro alvos que `useActiveSection` observa, fora da própria SiteHeader. */
+/** Os alvos que `useActiveSection` observa, fora da própria SiteHeader. */
 function renderWithSections() {
   return render(
     <>
       <SiteHeader />
+      <div id="quem-somos" />
       <div id="como-funciona" />
       <div id="beneficios" />
       <div id="requisitos" />
@@ -66,6 +67,28 @@ describe('SiteHeader active section', () => {
     renderWithSections();
 
     expect(activeLabel()).toBeNull();
+  });
+
+  /*
+    A Porto pediu a área de "Quem somos" no cabeçalho na validação de
+    04/09/2026. O item é o primeiro do menu e acompanha a seção como os outros
+    quatro — ele só existe enquanto `about` tiver texto.
+  */
+  it('offers the quem somos entry the header has to carry', () => {
+    renderWithSections();
+
+    expect(screen.getAllByRole('link', { name: 'Quem somos' })[0]).toHaveAttribute(
+      'href',
+      '#quem-somos',
+    );
+  });
+
+  it('highlights quem somos when it reaches the band', () => {
+    renderWithSections();
+
+    act(() => FakeIntersectionObserver.last?.fire({ 'quem-somos': true }));
+
+    expect(activeLabel()).toBe('Quem somos');
   });
 
   it('highlights the section that enters the band', () => {

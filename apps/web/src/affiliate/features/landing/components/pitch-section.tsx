@@ -22,7 +22,7 @@ export function PitchSection() {
         */}
         <div className="reveal-pop rounded-panel border border-ink-200 bg-white p-7 shadow-card">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-eyebrow uppercase text-ink-400">Checkout da Porto</p>
+            <p className="text-eyebrow uppercase text-ink-400">{pitch.checkoutLabel}</p>
             <span className="inline-flex items-center gap-1.5 rounded-pill bg-[var(--status-approved-surface)] px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-wider text-[var(--status-approved)]">
               <span
                 className="size-1.5 animate-pulse rounded-pill bg-[var(--status-approved)]"

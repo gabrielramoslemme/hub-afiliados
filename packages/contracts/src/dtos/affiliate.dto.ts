@@ -157,6 +157,14 @@ export const createAffiliateSchema = z
       })
       .default(''),
     socialHandle: z.string().transform(normalizeSocialHandle).default(''),
+    /*
+      Aceite do Regulamento. `boolean` e não `literal(true)`: a caixa nasce
+      desmarcada, e um tipo de entrada que só admite `true` não descreveria o
+      estado em que o formulário abre.
+    */
+    termsAccepted: z
+      .boolean()
+      .refine((value) => value, 'É preciso aceitar o Regulamento do programa.'),
   })
   .superRefine((input, ctx) => {
     const reject = (field: 'pixKey' | 'socialNetwork' | 'socialHandle', message: string) =>

@@ -1,6 +1,6 @@
 import { Check, Lock } from 'lucide-react';
 import { Container, SectionHeading } from '@/affiliate/shared/components/section';
-import { registration, steps } from '@/affiliate/shared/content';
+import { registration } from '@/affiliate/shared/content';
 import { RegistrationForm } from './registration-form';
 
 export function RegistrationSection({ autoFocus = false }: { autoFocus?: boolean } = {}) {
@@ -27,13 +27,18 @@ export function RegistrationSection({ autoFocus = false }: { autoFocus?: boolean
             ))}
           </ul>
 
+          {/*
+            A jornada inteira, e não os três primeiros passos de "Como funciona":
+            ao lado do formulário o que importa é o que acontece depois de
+            enviar, e é aí que aprovação e liberação do cupom são duas etapas.
+          */}
           <ol className="mt-10 flex flex-col gap-5 border-t border-blue-200 pt-8">
-            {steps.items.slice(0, 3).map((step, index) => (
-              <li key={step.title} className="flex items-baseline gap-4">
+            {registration.journey.map((step, index) => (
+              <li key={step} className="flex items-baseline gap-4">
                 <span className="text-sm font-semibold text-blue-400" data-tabular aria-hidden>
                   {String(index + 1).padStart(2, '0')}
                 </span>
-                <span className="text-[0.9375rem] text-ink-700">{step.title}</span>
+                <span className="text-[0.9375rem] text-ink-700">{step}</span>
               </li>
             ))}
           </ol>

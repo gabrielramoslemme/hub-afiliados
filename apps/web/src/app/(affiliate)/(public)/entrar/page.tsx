@@ -7,7 +7,7 @@ import { site } from '@/affiliate/shared/content';
 export const metadata: Metadata = {
   title: 'Entrar na sua área',
   description:
-    'Acesse a área do afiliado do Hub de Afiliados da Porto Serviços para ver o seu cupom e o extrato das suas indicações.',
+    'Acesse a área do afiliado do programa Influenciadores da Porto Serviço para ver o seu cupom e o extrato das suas indicações.',
   robots: { index: false, follow: false },
 };
 

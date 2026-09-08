@@ -37,6 +37,15 @@ export class PixKeyMismatchError extends DomainError {
   }
 }
 
+export class TermsNotAcceptedError extends DomainError {
+  readonly kind = DomainErrorKindEnum.INVALID_INPUT;
+  readonly code = RegistrationErrorCodeEnum.TERMS_NOT_ACCEPTED;
+
+  constructor() {
+    super('É preciso aceitar o Regulamento do programa.');
+  }
+}
+
 export class EmailAlreadyRegisteredError extends DomainError {
   readonly kind = DomainErrorKindEnum.CONFLICT;
   readonly code = RegistrationErrorCodeEnum.EMAIL_ALREADY_REGISTERED;

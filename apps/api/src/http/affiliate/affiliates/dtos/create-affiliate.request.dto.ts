@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
+  Equals,
+  IsBoolean,
   IsEmail,
   IsEnum,
   IsNotEmpty,
@@ -84,4 +86,14 @@ export class CreateAffiliateRequestDto implements CreateAffiliateInput {
   @IsNotEmpty({ message: 'Informe o @ da rede escolhida.' })
   @Transform(({ value }: { value: string }) => value?.trim())
   socialHandle?: string | null;
+
+  /*
+    O aceite é campo do cadastro, não pressuposto do envio: sem ele marcado a
+    requisição é recusada aqui, antes do use case. `Equals(true)` e não
+    `IsBoolean` sozinho — `false` é um booleano válido e um cadastro inválido.
+  */
+  @ApiProperty({ example: true, description: 'Aceite do Regulamento do programa.' })
+  @IsBoolean({ message: 'É preciso aceitar o Regulamento do programa.' })
+  @Equals(true, { message: 'É preciso aceitar o Regulamento do programa.' })
+  termsAccepted: boolean;
 }

@@ -84,6 +84,7 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
       pixKey: '',
       socialNetwork: '',
       socialHandle: '',
+      termsAccepted: false,
     },
   });
 
@@ -313,6 +314,45 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
         </Field>
       </div>
 
+      {/*
+        O aceite é campo do formulário, e não um aviso embaixo do botão: a Porto
+        pediu na validação de 04/09/2026 que a concordância com o Regulamento
+        fosse um gesto explícito. A caixa é `input` nativo — o Radix não
+        acrescentaria nada aqui, e um controle nativo já chega no teclado, no
+        leitor de tela e no autofill.
+      */}
+      <div className="mt-2 flex flex-col gap-1.5">
+        <div className="flex items-start gap-3">
+          <input
+            {...register('termsAccepted')}
+            {...fieldAria('termsAccepted', {
+              error: errors.termsAccepted?.message,
+              required: true,
+            })}
+            type="checkbox"
+            className="mt-0.5 size-4 shrink-0 accent-blue-600"
+          />
+          {/*
+            Sem link para o Regulamento aqui: a página `/regulamento` ainda não
+            existe, e um 404 ao lado de uma caixa obrigatória é pior do que não
+            oferecer o caminho. O rodapé já aponta para lá — quando a página
+            nascer, o link entra neste rótulo.
+          */}
+          <label htmlFor="termsAccepted" className="text-[0.8125rem] leading-relaxed text-ink-700">
+            {registration.consent}
+          </label>
+        </div>
+
+        {errors.termsAccepted?.message && (
+          <p
+            id="termsAccepted-error"
+            className="text-[0.8125rem] font-medium leading-snug text-destructive"
+          >
+            {errors.termsAccepted.message}
+          </p>
+        )}
+      </div>
+
       <Button type="submit" size="lg" disabled={pending} className="group mt-2 w-full">
         {pending ? (
           <>
@@ -329,8 +369,6 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
           </>
         )}
       </Button>
-
-      <p className="text-[0.8125rem] leading-relaxed text-ink-500">{registration.consent}</p>
     </form>
   );
 }
