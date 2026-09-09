@@ -135,13 +135,20 @@ ENV
 # O Caddy não termina mais TLS: quem faz isso é o CloudFront, com o certificado
 # da Porto. Aqui ele só escuta HTTP na 80 — a única porta que o security group
 # abre, e só para as faixas do CloudFront — e roteia pelo `Host` encaminhado.
+#
+# `DOMAIN_NAME` nunca chega vazio: sem domínio próprio a stack o resolve para o
+# nome da distribuição do CloudFront. `API_DOMAIN_NAME`, sim — e aí o bloco da
+# API não é escrito, porque um host só não dá para separar web de API por nome.
+# Não se perde nada: o único consumidor externo seria o serviço de cupom da
+# Porto batendo em /v1/webhooks, que ainda não existe na API.
 write_caddyfile() {
   ( umask 022
     cat > "${APP_DIR}/Caddyfile" <<CADDY
 {
-	# Sem isto o Caddy tentaria emitir certificado para os nomes abaixo. Eles
-	# apontam para a Imperva, não para esta máquina, e cada tentativa queimaria
-	# cota do Let's Encrypt sem nunca validar.
+	# Sem isto o Caddy tentaria emitir certificado para os nomes abaixo. Com
+	# domínio próprio eles apontam para a Imperva, não para esta máquina, e cada
+	# tentativa queimaria cota do Let's Encrypt sem nunca validar. Sem domínio
+	# próprio o nome é do CloudFront, e o desafio jamais chegaria aqui.
 	auto_https off
 }
 
@@ -149,10 +156,14 @@ http://${DOMAIN_NAME} {
 	encode zstd gzip
 	reverse_proxy web:3005
 }
+CADDY
 
-# A API existe para chamada servidor-a-servidor. São os dois únicos caminhos
-# publicados; os canais /v1/admin e /v1/affiliate ficam de fora, alcançáveis
-# apenas pelo container da web, pela rede interna do compose.
+    # A API existe para chamada servidor-a-servidor. São os dois únicos caminhos
+    # publicados; os canais /v1/admin e /v1/affiliate ficam de fora, alcançáveis
+    # apenas pelo container da web, pela rede interna do compose.
+    if [ -n "${API_DOMAIN_NAME}" ]; then
+      cat >> "${APP_DIR}/Caddyfile" <<CADDY
+
 http://${API_DOMAIN_NAME} {
 	encode zstd gzip
 
@@ -166,6 +177,7 @@ http://${API_DOMAIN_NAME} {
 	}
 }
 CADDY
+    fi
   )
 }
 
@@ -227,7 +239,10 @@ curl -fsS --max-time 5 http://127.0.0.1:3000/v1/health > /dev/null || rollback
 # o TLS, que termina no CloudFront e não aqui.
 curl -fsS --max-time 5 -H "Host: ${DOMAIN_NAME}" http://127.0.0.1/ -o /dev/null \
   || rollback
-curl -fsS --max-time 5 -H "Host: ${API_DOMAIN_NAME}" \
-  http://127.0.0.1/v1/health -o /dev/null || rollback
+
+if [ -n "${API_DOMAIN_NAME}" ]; then
+  curl -fsS --max-time 5 -H "Host: ${API_DOMAIN_NAME}" \
+    http://127.0.0.1/v1/health -o /dev/null || rollback
+fi
 
 echo "Release ${IMAGE_TAG_NEW} no ar."

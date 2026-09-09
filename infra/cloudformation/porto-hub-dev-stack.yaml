@@ -13,34 +13,62 @@ Parameters:
     AllowedPattern: '^[a-z0-9-]{2,12}$'
     Description: Prefixo de nome e tag de todo recurso da stack.
 
+  # Os tres parametros abaixo nascem VAZIOS de proposito, e e isso que permite
+  # o ambiente subir antes de a Porto emitir o certificado. Sao tres modos:
+  #
+  #   vazio / vazio / vazio  -> serve em https://<id>.cloudfront.net, com o
+  #                             certificado padrao da AWS. Valida o ambiente
+  #                             inteiro; o host da API nao existe.
+  #   dev. / vazio / cert    -> ambiente de verdade. A API continua alcancavel
+  #                             so pelo servidor do Next e pelo tunel do SSM.
+  #   dev. / api-dev. / cert -> quando /v1/webhooks existir e a Porto for
+  #                             chamar de fora.
+  #
+  # Passar do primeiro modo para os outros e um update de stack seguido de um
+  # deploy: Aliases e ViewerCertificate mudam a distribuicao no lugar, sem
+  # substituir nada, e o Caddyfile pega os nomes no deploy seguinte.
   DomainName:
     Type: String
+    Default: ''
     Description: >
       Host da aplicacao web, ex. dev.hubafiliados.com.br. Serve a landing page,
       a area do afiliado e o painel - sao um app Next so. Vira Alias do
-      CloudFront, e o certificado de CertificateArn precisa cobri-lo.
+      CloudFront, e ai CertificateArn passa a ser obrigatorio e precisa cobri-lo.
       A zona vive no DNS on premise da Porto: a stack nao cria registro nenhum.
-    AllowedPattern: '^(?!-)[a-zA-Z0-9-]{1,63}(\.[a-zA-Z0-9-]{1,63})+$'
+      VAZIO: o ambiente serve no dominio do proprio CloudFront. HTTPS existe de
+      um jeito ou de outro - sem ele o cookie de sessao nao e gravado pelo
+      navegador e o login falha em silencio.
+    AllowedPattern: '^$|^(?!-)[a-zA-Z0-9-]{1,63}(\.[a-zA-Z0-9-]{1,63})+$'
 
   ApiDomainName:
     Type: String
+    Default: ''
     Description: >
       Host da API, ex. api-dev.hubafiliados.com.br. Existe para chamada
       SERVIDOR-A-SERVIDOR - o servico de cupom da Porto batendo em
       /v1/webhooks. O navegador continua sem falar com a API: quem chama e o
       servidor do Next, pela rede interna do compose. Por isso o Caddy so
       publica /v1/webhooks e /v1/health neste host, e devolve 404 no resto.
-    AllowedPattern: '^(?!-)[a-zA-Z0-9-]{1,63}(\.[a-zA-Z0-9-]{1,63})+$'
+      VAZIO enquanto /v1/webhooks nao existir - hoje o modulo e uma casca sem
+      controller, entao este host serviria apenas o health check. Sem ele o
+      Caddy nao escreve o bloco, e nada se perde. Preencher exige DomainName
+      preenchido: alias de API sem a web nao e configuracao, e engano.
+    AllowedPattern: '^$|^(?!-)[a-zA-Z0-9-]{1,63}(\.[a-zA-Z0-9-]{1,63})+$'
 
   CertificateArn:
     Type: String
+    Default: ''
     Description: >
       Certificado no ACM, obrigatoriamente em us-east-1 - CloudFront so aceita
-      dessa regiao. E o certificado emitido pela seguranca da informacao da
-      Porto, importado no ACM; tem que cobrir DomainName e ApiDomainName (um
-      curinga resolve os dois). Importado nao renova sozinho: quando a Porto
+      dessa regiao, e na MESMA conta desta stack. E o certificado emitido pela
+      seguranca da informacao da Porto, importado no ACM; tem que cobrir os
+      nomes declarados acima. Peca o curinga desde o comeco: o pedido e o item
+      lento, e um `*.dominio` cobre o host da API no dia em que ele nascer sem
+      abrir um segundo chamado. Importado nao renova sozinho: quando a Porto
       reemitir, e reimportar e atualizar a stack.
-    AllowedPattern: '^arn:aws:acm:us-east-1:\d{12}:certificate/[a-f0-9-]+$'
+      VAZIO so faz sentido com DomainName vazio - a distribuicao usa o
+      certificado padrao da AWS, que serve apenas o dominio cloudfront.net.
+    AllowedPattern: '^$|^arn:aws:acm:us-east-1:\d{12}:certificate/[a-f0-9-]+$'
 
   InstanceType:
     Type: String
@@ -156,8 +184,34 @@ Parameters:
       ja tiver um, deixe 'false' - criar o segundo faz a stack falhar com
       EntityAlreadyExists e o rollback leva tudo junto.
 
+# Os tres parametros de dominio se acoplam, e o tipo deles nao expressa isso.
+# Sem estas regras a combinacao errada falha dois minutos depois, no CloudFront,
+# com mensagem que nao aponta para o parametro. Com elas, falha na hora do
+# create, dizendo qual campo esta faltando.
+Rules:
+  DomainRequiresCertificate:
+    RuleCondition: !Not [!Equals [!Ref DomainName, '']]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref CertificateArn, '']]
+        AssertDescription: >
+          DomainName preenchido exige CertificateArn. Alias no CloudFront nao
+          existe sem um certificado do ACM, em us-east-1, que cubra o nome.
+
+  ApiDomainRequiresDomain:
+    RuleCondition: !Not [!Equals [!Ref ApiDomainName, '']]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref DomainName, '']]
+        AssertDescription: >
+          ApiDomainName exige DomainName. O host da API existe para o webhook
+          servidor-a-servidor; publica-lo sem a aplicacao web nao e uma
+          configuracao deste ambiente.
+
 Conditions:
   CreateOidcProvider: !Equals [!Ref CreateGitHubOidcProvider, 'true']
+  # Duas, e nao uma: o modo mais provavel de rodar e dominio na web e nada na
+  # API - o host da API so existe para o webhook, que ainda nao foi escrito.
+  HasDomain: !Not [!Equals [!Ref DomainName, '']]
+  HasApiDomain: !Not [!Equals [!Ref ApiDomainName, '']]
 
 Resources:
   # =========================================================== Rede
@@ -496,26 +550,40 @@ Resources:
   ConfigParameter:
     Type: AWS::SSM::Parameter
     Properties:
+      # Este nome e repetido literalmente no UserData e na politica da
+      # InstanceRole. E deliberado: `!Ref` nos dois lugares fecharia um ciclo
+      # de dependencia, porque o Value abaixo le a distribuicao. Mudou aqui,
+      # mude nos dois - o `grep` do caminho acha os tres.
       Name: !Sub '/porto-hub/${EnvironmentName}/config'
       Type: String
       Description: Configuracao nao-secreta lida pelo install-release.sh a cada deploy
-      Value: !Sub |
-        AWS_REGION=${AWS::Region}
-        ECR_REGISTRY=${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com
-        API_IMAGE=${ApiRepository.RepositoryUri}
-        WEB_IMAGE=${WebRepository.RepositoryUri}
-        LOG_GROUP=${LogGroup}
-        DEPLOY_BUCKET=${DeployBucket}
-        DB_HOST=${Database.Endpoint.Address}
-        DB_NAME=hub_afiliados
-        DB_SECRET_ARN=${DbSecret}
-        APP_SECRET_ARN=${AppSecret}
-        SEED_SECRET_ARN=${SeedSecret}
-        DOMAIN_NAME=${DomainName}
-        API_DOMAIN_NAME=${ApiDomainName}
-        MAIL_PROVIDER=${MailProvider}
-        MAIL_FROM_EMAIL=${MailFromEmail}
-        API_MOCKING=${ApiMocking}
+      # `DOMAIN_NAME` sem dominio proprio cai para o nome do CloudFront, e nao
+      # para vazio. Ele nao e enfeite: alimenta o roteamento por Host do Caddy,
+      # o APP_BASE_URL dos links de e-mail e o PUBLIC_DOMAIN_NAME que vira
+      # `allowedOrigins` das Server Actions - vazio ali, todo POST volta 500.
+      # Com o fallback aqui, o install-release.sh nao precisa saber de nada.
+      Value: !Sub
+        - |
+          AWS_REGION=${AWS::Region}
+          ECR_REGISTRY=${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com
+          API_IMAGE=${ApiRepository.RepositoryUri}
+          WEB_IMAGE=${WebRepository.RepositoryUri}
+          LOG_GROUP=${LogGroup}
+          DEPLOY_BUCKET=${DeployBucket}
+          DB_HOST=${Database.Endpoint.Address}
+          DB_NAME=hub_afiliados
+          DB_SECRET_ARN=${DbSecret}
+          APP_SECRET_ARN=${AppSecret}
+          SEED_SECRET_ARN=${SeedSecret}
+          DOMAIN_NAME=${EffectiveDomainName}
+          API_DOMAIN_NAME=${ApiDomainName}
+          MAIL_PROVIDER=${MailProvider}
+          MAIL_FROM_EMAIL=${MailFromEmail}
+          API_MOCKING=${ApiMocking}
+        - EffectiveDomainName: !If
+            - HasDomain
+            - !Ref DomainName
+            - !GetAtt Distribution.DomainName
 
   # =========================================================== IAM
   InstanceRole:
@@ -568,7 +636,11 @@ Resources:
                 Resource: !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*'
               - Effect: Allow
                 Action: ssm:GetParameter
-                Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ConfigParameter}'
+                # Nome literal, e nao `!Ref ConfigParameter`: o parametro passou a
+                # ler `Distribution.DomainName`, e a referencia aqui fecharia o
+                # ciclo ConfigParameter -> Distribution -> ElasticIpAssociation
+                # -> Instance -> InstanceProfile -> InstanceRole.
+                Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/porto-hub/${EnvironmentName}/config'
               - Effect: Allow
                 Action:
                   - logs:CreateLogStream
@@ -727,19 +799,37 @@ Resources:
   Distribution:
     Type: AWS::CloudFront::Distribution
     DependsOn: ElasticIpAssociation
+    # W1030 avisa que `CertificateArn` pode nao ser um ARN de certificado -
+    # verdade, ele aceita vazio. Quem garante que nao esta vazio no ramo que o
+    # usa e a regra DomainRequiresCertificate, que o cfn-lint nao le.
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1030
     Properties:
       DistributionConfig:
         Enabled: true
         Comment: !Sub 'porto-hub-${EnvironmentName}'
         # Os dois hosts entram na MESMA distribuicao. O roteamento e do Caddy,
         # que le o Host encaminhado pela politica AllViewer.
-        Aliases:
-          - !Ref DomainName
-          - !Ref ApiDomainName
-        ViewerCertificate:
-          AcmCertificateArn: !Ref CertificateArn
-          SslSupportMethod: sni-only
-          MinimumProtocolVersion: TLSv1.2_2021
+        Aliases: !If
+          - HasDomain
+          - !If
+            - HasApiDomain
+            - [!Ref DomainName, !Ref ApiDomainName]
+            - [!Ref DomainName]
+          - !Ref 'AWS::NoValue'
+        # O objeto inteiro sob o !If, e nao campo a campo: com
+        # CloudFrontDefaultCertificate o CloudFront recusa MinimumProtocolVersion
+        # declarado, e o certificado padrao serve so o dominio cloudfront.net -
+        # e por isso que ele anda junto com a ausencia de alias.
+        ViewerCertificate: !If
+          - HasDomain
+          - AcmCertificateArn: !Ref CertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
         HttpVersion: http2and3
         IPV6Enabled: true
         Origins:
@@ -888,19 +978,27 @@ Resources:
           # o cloud-init nao roda de novo para corrigir.
           cat > /opt/porto-hub/bootstrap.env <<'BOOTSTRAP'
           AWS_REGION=${AWS::Region}
-          CONFIG_PARAM=${ConfigParameter}
+          CONFIG_PARAM=/porto-hub/${EnvironmentName}/config
           BOOTSTRAP
 
           signal SUCCESS
 
 Outputs:
+  # Sem dominio proprio os dois saem no nome do CloudFront - e continuam sendo
+  # a URL de verdade do ambiente, com HTTPS pelo certificado padrao da AWS.
   WebUrl:
     Description: URL publica do ambiente - landing, area do afiliado e painel
-    Value: !Sub 'https://${DomainName}'
+    Value: !If
+      - HasDomain
+      - !Sub 'https://${DomainName}'
+      - !Sub 'https://${Distribution.DomainName}'
 
   PanelUrl:
     Description: Login do painel de analise
-    Value: !Sub 'https://${DomainName}/admin/login'
+    Value: !If
+      - HasDomain
+      - !Sub 'https://${DomainName}/admin/login'
+      - !Sub 'https://${Distribution.DomainName}/admin/login'
 
   # ---------------------------------------------------------------------------
   # ESTE e o valor que sai da nossa mao e entra na da Porto. E o origin que o
@@ -911,7 +1009,11 @@ Outputs:
     Description: Origin para a Imperva, e alvo dos CNAMEs de DomainName e ApiDomainName
     Value: !GetAtt Distribution.DomainName
 
+  # Condicional porque sem ApiDomainName o Caddy nao escreve o bloco, e uma URL
+  # que devolve 404 no output e pior que output nenhum. A API segue alcancavel
+  # pelo servidor do Next e pelo tunel do SwaggerTunnelCommand.
   ApiUrl:
+    Condition: HasApiDomain
     Description: Host da API, so para chamada servidor-a-servidor (/v1/webhooks)
     Value: !Sub 'https://${ApiDomainName}'
 

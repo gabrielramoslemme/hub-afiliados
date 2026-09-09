@@ -96,7 +96,8 @@ o que dessincronizar depois, e o teste é uma linha (abaixo).
 
 ## Subir pela primeira vez
 
-**1. Criar a stack.**
+**1. Criar a stack.** O certificado da Porto **não** é pré-requisito: sem ele o
+ambiente sobe no domínio do próprio CloudFront, com o certificado padrão da AWS.
 
 ```bash
 aws cloudformation deploy \
@@ -104,18 +105,44 @@ aws cloudformation deploy \
   --stack-name porto-hub-dev \
   --region us-east-1 \
   --capabilities CAPABILITY_NAMED_IAM \
-  --disable-rollback \
-  --parameter-overrides \
-      DomainName=dev.hubafiliados.com.br \
-      ApiDomainName=api-dev.hubafiliados.com.br \
-      CertificateArn=arn:aws:acm:us-east-1:123456789012:certificate/xxxx
+  --disable-rollback
 ```
 
-O `CertificateArn` tem que estar em **`us-east-1`** — CloudFront não aceita
-certificado de outra região — e precisa cobrir os dois nomes. É o certificado
-que a segurança da informação da Porto emite, importado no ACM. Um curinga
-`*.<domínio>` resolve os dois de uma vez e poupa um pedido futuro; vale pedir
-assim desde o começo.
+O `WebUrl` do output sai em `https://<id>.cloudfront.net`, e é a URL de verdade
+do ambiente: landing, cadastro, área do afiliado e painel, todos funcionando.
+**Não semeie dado real nessa janela** — a URL não tem Imperva na frente nem
+restrição de origem, e quem souber dela entra.
+
+### Os três modos de domínio
+
+| `DomainName` | `ApiDomainName` | `CertificateArn` | Quando |
+|---|---|---|---|
+| vazio | vazio | vazio | Validar o ambiente antes de a Porto emitir o certificado |
+| `dev.…` | vazio | cobre `dev.` | Ambiente de verdade. **É o modo esperado hoje** |
+| `dev.…` | `api-dev.…` | cobre os dois | Quando `/v1/webhooks` existir na API |
+
+O segundo modo é o esperado porque o host da API só tem uma razão de existir —
+o serviço de cupom da Porto batendo em `/v1/webhooks` — e essa rota **ainda não
+foi escrita**: `apps/api/src/http/webhooks/` tem só o módulo, sem controller.
+Enquanto isso, o host publicaria apenas o health check. Quem fala com a API é o
+servidor do Next, pela rede interna do compose, e não precisa de nome nenhum.
+
+Preencher `DomainName` sem `CertificateArn` — ou `ApiDomainName` sem
+`DomainName` — falha **na hora do create**, com o nome do parâmetro que falta:
+são as duas regras da seção `Rules` do template. Sem elas, a combinação errada
+morreria dois minutos depois num erro do CloudFront que não aponta para cá.
+
+**Passar de um modo para o outro é update de stack + um deploy.** `Aliases` e
+`ViewerCertificate` mudam a distribuição **no lugar**, sem substituir nada
+(~10 min); o `Caddyfile` só pega os nomes novos no deploy seguinte, porque é ele
+que lê o Parameter Store. Mesmo padrão da seção *Mudar configuração*.
+
+O `CertificateArn`, quando entrar, tem que estar em **`us-east-1`** — CloudFront
+não aceita de outra região — e na **mesma conta** desta stack, o que significa
+que a Porto precisa te entregar o PEM e a chave privada para importar no ACM;
+combine o transporte antes de pedir. Um curinga `*.<domínio>` cobre o host da
+API no dia em que ele nascer e poupa um segundo chamado; vale pedir assim desde
+o começo.
 
 `--disable-rollback` **só na primeira criação**. O log do `cloud-init` não vai
 para o CloudWatch, e no rollback a instância é terminada junto — um UserData que
@@ -132,7 +159,8 @@ Se a conta já tiver o provider OIDC do GitHub, acrescente
 `CreateGitHubOidcProvider=false` — o segundo faz a stack falhar com
 `EntityAlreadyExists`, e o rollback derruba tudo.
 
-**2. Entregar o `CloudFrontDomainName` para a Porto.** É esse output, e só ele,
+**2. Entregar o `CloudFrontDomainName` para a Porto.** Só quando for plugar o
+domínio — no primeiro modo não há o que pedir a ninguém. É esse output, e só ele,
 que sai da nossa mão: é o alvo dos dois CNAMEs e o origin da RDM da Imperva. O
 Elastic IP **não** vai para eles — virou detalhe interno, e é isso que o
 CloudFront comprou. **A stack não cria registro de DNS**: a zona fica no
@@ -329,8 +357,26 @@ docker compose exec -T web node -e "fetch('http://<rds-endpoint>:5432').catch(e=
 docker compose exec -T web node -e "fetch('http://api:3000/v1/health').then(r=>console.log(r.status))"
 ```
 
-Ponta a ponta, com o DNS no ar: cadastro em `/cadastro`, aprovação em
-`/admin/afiliados`, e-mail, `/definir-senha`, login em `/entrar`.
+Ponta a ponta: cadastro em `/cadastro`, aprovação em `/admin/afiliados`,
+e-mail, `/definir-senha`, login em `/entrar`. Sem domínio próprio isso roda no
+`WebUrl` do output, direto — não depende de a Porto ter apontado nada.
+
+Já **com** domínio próprio, e antes de os CNAMEs propagarem, o caminho pelo nome
+não existe ainda. Dois testes que funcionam nessa janela:
+
+```bash
+# Ponta a ponta pelo CloudFront, sem DNS. SNI e Host certos, certificado
+# validado de verdade. Testar pelo <id>.cloudfront.net cru NÃO serve: o Host
+# encaminhado seria o dele, e o Caddy não tem bloco para esse nome.
+IP="$(dig +short <id>.cloudfront.net | head -1)"
+curl -sS --resolve "dev.hubafiliados.com.br:443:$IP" \
+  https://dev.hubafiliados.com.br/ -o /dev/null -w '%{http_code}\n'
+```
+
+```bash
+# Ou de dentro da instância, por Session Manager — é o que o deploy já faz:
+curl -sS -H 'Host: dev.hubafiliados.com.br' http://127.0.0.1/ -o /dev/null -w '%{http_code}\n'
+```
 
 ## Custo aproximado (us-east-1, sob demanda)
 
