@@ -15,7 +15,7 @@ Parameters:
   DomainName:
     Type: String
     Description: >
-      Host unico do ambiente, ex. dev.influencersportoservico.com.br. Serve a landing page,
+      Host unico do ambiente, ex. dev.hubafiliados.com.br. Serve a landing page,
       a area do afiliado e o painel - sao um app Next so. Obrigatorio: sem TLS o
       cookie de sessao nao e gravado pelo navegador e o login falha em silencio.
     AllowedPattern: '^(?!-)[a-zA-Z0-9-]{1,63}(\.[a-zA-Z0-9-]{1,63})+$'
