@@ -2,8 +2,9 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   porto-hub-afiliados - ambiente de DESENVOLVIMENTO. Instancia unica com Docker
   Compose (Caddy + web + API), RDS Postgres em subnets privadas, imagens no ECR
-  e deploy por documento SSM. Sem ALB, NAT Gateway, ASG, Multi-AZ nem
-  CloudFront: as escolhas e os custos estao em infra/cloudformation/README.md.
+  e deploy por documento SSM. CloudFront na frente termina o TLS e da um nome
+  estavel para a Imperva apontar. Sem ALB, NAT Gateway, ASG nem Multi-AZ: as
+  escolhas e os custos estao em infra/cloudformation/README.md.
 
 Parameters:
   EnvironmentName:
@@ -15,26 +16,31 @@ Parameters:
   DomainName:
     Type: String
     Description: >
-      Host unico do ambiente, ex. dev.hubafiliados.com.br. Serve a landing page,
-      a area do afiliado e o painel - sao um app Next so. Obrigatorio: sem TLS o
-      cookie de sessao nao e gravado pelo navegador e o login falha em silencio.
+      Host da aplicacao web, ex. dev.hubafiliados.com.br. Serve a landing page,
+      a area do afiliado e o painel - sao um app Next so. Vira Alias do
+      CloudFront, e o certificado de CertificateArn precisa cobri-lo.
+      A zona vive no DNS on premise da Porto: a stack nao cria registro nenhum.
     AllowedPattern: '^(?!-)[a-zA-Z0-9-]{1,63}(\.[a-zA-Z0-9-]{1,63})+$'
 
-  HostedZoneName:
+  ApiDomainName:
     Type: String
-    Default: ''
     Description: >
-      Hosted zone do Route 53 JA EXISTENTE e NESTA MESMA conta, com o ponto
-      final (ex. hubafiliados.com.br.). Preenchida, a stack cria o registro A
-      para o Elastic IP. Vazia, o registro e criado a mao - o RecordSet nao
-      atravessa conta e a stack falharia com "No hosted zones named ... found".
+      Host da API, ex. api-dev.hubafiliados.com.br. Existe para chamada
+      SERVIDOR-A-SERVIDOR - o servico de cupom da Porto batendo em
+      /v1/webhooks. O navegador continua sem falar com a API: quem chama e o
+      servidor do Next, pela rede interna do compose. Por isso o Caddy so
+      publica /v1/webhooks e /v1/health neste host, e devolve 404 no resto.
+    AllowedPattern: '^(?!-)[a-zA-Z0-9-]{1,63}(\.[a-zA-Z0-9-]{1,63})+$'
 
-  AcmeEmail:
+  CertificateArn:
     Type: String
     Description: >
-      E-mail da conta do Let's Encrypt, usado pelo Caddy. Recebe o aviso de
-      certificado prestes a expirar quando a renovacao automatica falha.
-    AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+      Certificado no ACM, obrigatoriamente em us-east-1 - CloudFront so aceita
+      dessa regiao. E o certificado emitido pela seguranca da informacao da
+      Porto, importado no ACM; tem que cobrir DomainName e ApiDomainName (um
+      curinga resolve os dois). Importado nao renova sozinho: quando a Porto
+      reemitir, e reimportar e atualizar a stack.
+    AllowedPattern: '^arn:aws:acm:us-east-1:\d{12}:certificate/[a-f0-9-]+$'
 
   InstanceType:
     Type: String
@@ -69,31 +75,20 @@ Parameters:
       Consequencia que nao e obvia: este tipo de parametro e reresolvido a CADA
       operacao de stack, e a AWS publica AL2023 nova mais ou menos todo mes.
       Update de stack depois de uma publicacao troca o ImageId, e ImageId novo
-      exige replacement - instancia nova, volume raiz novo. E por isso que os
-      certificados do Caddy sao copiados para o bucket de deploy a cada release
-      e restaurados no boot: sem isso, um update qualquer queimaria uma emissao
-      do Let's Encrypt, que limita a 5 certificados duplicados por semana.
+      exige replacement - instancia nova, volume raiz novo. Nada de estado mora
+      na instancia (o banco e o RDS, os segredos sao do Secrets Manager e o TLS
+      e do CloudFront), entao replacement custa um deploy, nao um incidente.
 
-  AcmeIngressCidr:
+  CloudFrontPrefixListId:
     Type: String
-    Default: 0.0.0.0/0
-    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
+    Default: pl-3b927c52
+    AllowedPattern: '^pl-[a-f0-9]+$'
     Description: >
-      CIDR que alcanca a 80. Fica aberto: e por ela que o Let's Encrypt faz o
-      desafio HTTP-01, e fechar aqui desliga o TLS automatico junto. Nada da
-      aplicacao passa por essa porta - ela so redireciona para HTTPS e responde
-      o desafio.
-
-  AppIngressCidr:
-    Type: String
-    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
-    Description: >
-      CIDR que alcanca a 443 - a aplicacao inteira, painel incluso. Separado da
-      80 de proposito: da para restringir este a faixa do escritorio ou da VPN
-      sem quebrar a renovacao do certificado. SEM DEFAULT de proposito: este
-      ambiente tem CPF e chave PIX no banco e um operador semeado a cada deploy,
-      e quem sobe a stack tem que dizer em voz alta quem alcanca isso. 0.0.0.0/0
-      e resposta valida - so nao pode ser a resposta que ninguem deu.
+      Prefix list gerenciada pela AWS com as faixas de saida do CloudFront
+      (com.amazonaws.global.cloudfront.origin-facing). E a unica origem que
+      alcanca a instancia: sem CloudFront na frente, a maquina nao responde a
+      ninguem. O default e o id em us-east-1; conferir com
+      `aws ec2 describe-managed-prefix-lists --filters Name=prefix-list-name,Values=com.amazonaws.global.cloudfront.origin-facing`.
 
   MailProvider:
     Type: String
@@ -162,7 +157,6 @@ Parameters:
       EntityAlreadyExists e o rollback leva tudo junto.
 
 Conditions:
-  CreateDnsRecord: !Not [!Equals [!Ref HostedZoneName, '']]
   CreateOidcProvider: !Equals [!Ref CreateGitHubOidcProvider, 'true']
 
 Resources:
@@ -254,23 +248,22 @@ Resources:
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: porto-hub app - somente 80 e 443 publicos
+      GroupDescription: porto-hub app - somente 80, e so a partir do CloudFront
       VpcId: !Ref Vpc
+      # Uma porta, uma origem. O TLS termina no CloudFront, entao a 443 nao
+      # existe aqui, e nao ha ACME porque nao ha certificado nesta maquina.
+      # Sem CloudFront na frente, a instancia nao responde a ninguem - nem a
+      # quem souber o Elastic IP.
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: !Ref AcmeIngressCidr
+          SourcePrefixListId: !Ref CloudFrontPrefixListId
           # Sem apostrofo: a EC2 recusa a regra inteira com InvalidRequest se a
           # descricao sair de [a-zA-Z0-9 _-:/()#,@[]+=&;{}!$*].
-          Description: HTTP - redirect para HTTPS e desafio ACME HTTP-01
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: !Ref AppIngressCidr
-          Description: HTTPS
+          Description: HTTP a partir do CloudFront - unica entrada da instancia
       # Saida sem restricao, e de propriedade deliberada: a instancia precisa
-      # alcancar ECR, SSM, Secrets Manager, Resend, Let's Encrypt e o resolvedor
+      # alcancar ECR, SSM, Secrets Manager, Resend e o resolvedor
       # da VPC. Fechar isso em regra de porta e um exercicio que quebra de
       # formas silenciosas (NTP link-local, DNS, endpoint regional novo) e nao
       # muda o risco real, que e alguem com shell na maquina - e esse e barrado
@@ -519,7 +512,7 @@ Resources:
         APP_SECRET_ARN=${AppSecret}
         SEED_SECRET_ARN=${SeedSecret}
         DOMAIN_NAME=${DomainName}
-        ACME_EMAIL=${AcmeEmail}
+        API_DOMAIN_NAME=${ApiDomainName}
         MAIL_PROVIDER=${MailProvider}
         MAIL_FROM_EMAIL=${MailFromEmail}
         API_MOCKING=${ApiMocking}
@@ -725,19 +718,77 @@ Resources:
       AllocationId: !GetAtt ElasticIp.AllocationId
       InstanceId: !Ref Instance
 
-  # TTL curto porque em dev o IP pode mudar junto com a stack. DependsOn para o
-  # nome nao propagar antes de haver alguem no IP - o Caddy queimaria tentativas
-  # de ACME contra o vazio, e o Let's Encrypt limita a 5 por semana por host.
-  DnsRecord:
-    Type: AWS::Route53::RecordSet
-    Condition: CreateDnsRecord
+  # =========================================================== CloudFront
+  # Duas razoes, e nenhuma delas e cache:
+  #  1. Termina o TLS com o certificado da Porto, que e importado no ACM.
+  #  2. Da um nome ESTAVEL para a Imperva apontar. Sem ele, o origin registrado
+  #     la seria o Elastic IP, e recriar a stack viraria uma RDM no time deles.
+  # O cache de /_next/static/* e bonus: sao arquivos com hash no nome.
+  Distribution:
+    Type: AWS::CloudFront::Distribution
     DependsOn: ElasticIpAssociation
     Properties:
-      HostedZoneName: !Ref HostedZoneName
-      Name: !Ref DomainName
-      Type: A
-      TTL: '60'
-      ResourceRecords: [!Ref ElasticIp]
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub 'porto-hub-${EnvironmentName}'
+        # Os dois hosts entram na MESMA distribuicao. O roteamento e do Caddy,
+        # que le o Host encaminhado pela politica AllViewer.
+        Aliases:
+          - !Ref DomainName
+          - !Ref ApiDomainName
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        Origins:
+          - Id: instance
+            # CloudFront exige NOME para origin customizado - nao aceita IP. Este
+            # e o DNS publico que a AWS da ao Elastic IP; o formato `compute-1`
+            # e o de us-east-1, que ja e obrigatoria por causa do ACM.
+            DomainName: !Sub
+              - 'ec2-${DashedIp}.compute-1.amazonaws.com'
+              - DashedIp: !Join ['-', !Split ['.', !Ref ElasticIp]]
+            CustomOriginConfig:
+              HTTPPort: 80
+              # A perna CloudFront -> origin vai em claro. E o preco de nao ter
+              # certificado na instancia, e o que a limita e o security group,
+              # que so aceita as faixas do CloudFront. ACEITAVEL EM DEV, NAO EM
+              # PRODUCAO: la, um nome de origin proprio com certificado valido e
+              # `https-only` fecham isso.
+              OriginProtocolPolicy: http-only
+              OriginReadTimeout: 60
+        DefaultCacheBehavior:
+          TargetOriginId: instance
+          # Todos os metodos: as sete Server Actions do Next sao POST, e o
+          # default do CloudFront (so GET e HEAD) as recusaria antes de a
+          # requisicao chegar na aplicacao.
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          CachedMethods: [GET, HEAD]
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          # CachingDisabled: pagina de afiliado servida para outro afiliado seria
+          # incidente, nao bug - ha CPF e chave PIX nessa arvore.
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          # AllViewer encaminha Host, cookies e query string. Os tres importam:
+          # o Host, para o Caddy rotear e para a Server Action nao abortar com
+          # `Invalid Server Actions request`; os cookies, porque a sessao inteira
+          # e cookie httpOnly e o default do CloudFront os removeria.
+          OriginRequestPolicyId: 216adef6-5c7f-47e4-b989-5492eafa07d3
+        CacheBehaviors:
+          - PathPattern: /_next/static/*
+            TargetOriginId: instance
+            AllowedMethods: [GET, HEAD]
+            ViewerProtocolPolicy: redirect-to-https
+            Compress: true
+            # CachingOptimized. Seguro aqui e so aqui: o nome do arquivo carrega
+            # o hash do conteudo, entao build novo gera caminho novo.
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            OriginRequestPolicyId: 216adef6-5c7f-47e4-b989-5492eafa07d3
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-cdn'
 
   Instance:
     Type: AWS::EC2::Instance
@@ -851,8 +902,24 @@ Outputs:
     Description: Login do painel de analise
     Value: !Sub 'https://${DomainName}/admin/login'
 
+  # ---------------------------------------------------------------------------
+  # ESTE e o valor que sai da nossa mao e entra na da Porto. E o origin que o
+  # time da Imperva registra, e para ele que os dois nomes apontam no BIND on
+  # premise. Nao muda quando a instancia e recriada - foi por isso que o
+  # CloudFront entrou.
+  CloudFrontDomainName:
+    Description: Origin para a Imperva, e alvo dos CNAMEs de DomainName e ApiDomainName
+    Value: !GetAtt Distribution.DomainName
+
+  ApiUrl:
+    Description: Host da API, so para chamada servidor-a-servidor (/v1/webhooks)
+    Value: !Sub 'https://${ApiDomainName}'
+
   ElasticIpAddress:
-    Description: Alvo do registro A, quando o DNS nao esta nesta conta
+    Description: >
+      Origin do CloudFront, e detalhe interno: a Porto NAO aponta DNS para ca.
+      A instancia so aceita conexao das faixas do CloudFront, entao este
+      endereco nao responde a mais ninguem.
     Value: !Ref ElasticIp
 
   InstanceId:

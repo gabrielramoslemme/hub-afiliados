@@ -2,35 +2,82 @@
 
 Stack única em `porto-hub-dev-stack.yaml`. Sobe uma EC2 com Docker Compose
 (Caddy + web + API), um RDS Postgres em subnets privadas, dois repositórios no
-ECR e o deploy por documento SSM.
+ECR, uma distribuição CloudFront na frente e o deploy por documento SSM.
 
-## O que existe, e o que não existe
+## O caminho de uma requisição
 
 ```
-Internet ──► EC2 (subnet pública, Elastic IP)     security group: 80 e 443, nada mais
-             │  caddy    :80/:443   TLS pelo Let's Encrypt
-             │    └─ reverse_proxy web:3005
-             │  web      :3005      rede `internal`: sem rota para RDS, internet ou IMDS
-             │  api      :3000      publicada só em 127.0.0.1
-             └──────────────────────► RDS Postgres 16 (subnets privadas, 2 AZs)
+navegador
+   │  https://dev.<domínio>          https://api-dev.<domínio>
+   ▼
+Imperva Cloud WAF          TLS para o navegador, certificado da Porto
+   │                       (obrigatório: "tudo tem que passar por lá")
+   ▼
+CloudFront                 mesmo certificado, importado no ACM us-east-1
+   │                       nome ESTÁVEL — é o origin que a Imperva registra
+   │                       cache só em /_next/static/*, resto passa direto
+   ▼  :80, em claro
+EC2 (subnet pública, Elastic IP)   security group: uma porta, só CloudFront
+   │  caddy   :80    auto_https off — não há certificado nesta máquina
+   │    ├─ Host dev.<domínio>      → web:3005
+   │    └─ Host api-dev.<domínio>  → api:3000, só /v1/webhooks e /v1/health
+   │  web     :3005  rede `internal`: sem rota para RDS, internet ou IMDS
+   │  api     :3000  publicada só em 127.0.0.1
+   └────────────────────► RDS Postgres 16 (subnets privadas, 2 AZs)
 ```
 
-**Não há ALB, NAT Gateway, ASG, Multi-AZ, CloudFront nem alarmes.** Cada um foi
-recusado por um motivo, não por esquecimento:
+**Não há ALB, NAT Gateway, ASG, Multi-AZ nem alarmes.** Cada um foi recusado por
+um motivo, não por esquecimento:
 
 | Ausente | Por quê |
 |---|---|
-| ALB (~US$ 18/mês) | Só o servidor do Next fala com a API — o navegador nunca fala. Com uma aplicação e um host, o ALB não roteava nada que o Caddy não roteie. |
-| NAT Gateway (~US$ 33/mês) | A instância fica em subnet pública com Elastic IP e alcança ECR, SSM, Secrets Manager e Resend pelo internet gateway. O que a protege é o security group, que abre 80 e 443 e mais nada. |
+| ALB (~US$ 18/mês) | O CloudFront já é o ponto de entrada, e o roteamento por host é do Caddy. O ALB não faria nada que já não esteja feito. |
+| NAT Gateway (~US$ 33/mês) | A instância fica em subnet pública com Elastic IP e alcança ECR, SSM, Secrets Manager e Resend pelo internet gateway. O que a protege é o security group. |
 | Multi-AZ, ASG | É ambiente de desenvolvimento. Cair e voltar é aceitável; pagar o dobro por isso não. |
 | Alarmes e SNS | Higiene de produção. Em dev quem percebe que quebrou é quem está usando. O log group fica, com 14 dias de retenção. |
 
-## Por que a API não é publicada
+## Por que CloudFront, já que não é por cache
+
+Duas razões, e a segunda é a que decidiu:
+
+1. **Termina o TLS** com o certificado que a segurança da informação da Porto
+   emite, importado no ACM em `us-east-1`.
+2. **Dá um nome estável para a Imperva apontar.** Sem ele, o *origin* registrado
+   lá seria o Elastic IP — e recriar a stack viraria um pedido de mudança no
+   time do Diego, no tempo deles. Com o CloudFront, o `dxxxx.cloudfront.net`
+   nunca muda, mesmo que a instância seja destruída e refeita.
+
+O que ele **não** faz é servir o app como site estático: o `middleware.ts` de
+`/admin` e as sete Server Actions exigem runtime Node. O origin é a EC2.
+
+## A instância tem uma porta aberta, e só o CloudFront a alcança
+
+O security group aceita **apenas a 80**, e apenas das faixas da prefix list
+gerenciada `com.amazonaws.global.cloudfront.origin-facing`. Não há 443 porque
+não há certificado na máquina, e não há ACME porque não há o que emitir. Quem
+souber o Elastic IP não consegue nada com ele.
+
+> **A perna CloudFront → origin vai em claro.** É o preço de não ter certificado
+> na instância. O que a limita é o security group. **Aceitável em dev, não em
+> produção**: lá, um nome de origin próprio com certificado válido e
+> `OriginProtocolPolicy: https-only` fecham isso. Está marcado no template, no
+> ponto exato.
+
+## A API tem hostname, mas não é o navegador que fala com ela
 
 `CLAUDE.md`, regra inviolável: *"o navegador nunca fala com a API; quem chama é o
-servidor do Next"*. Como o `/v1/webhooks` ainda não tem controller, nada de fora
-precisa alcançá-la — então ela não sai da máquina. O container da web chama
-`http://api:3000/v1` pela rede interna do compose.
+servidor do Next"*. Ela continua valendo — a sessão é cookie `httpOnly` gravado
+pelo servidor do Next, e um token alcançável por JavaScript desmontaria isso.
+
+O que o `ApiDomainName` existe para atender é **chamada servidor-a-servidor**: o
+serviço de cupom da Porto batendo em `/v1/webhooks`. Por isso o Caddy, nesse
+host, publica **só `/v1/webhooks` e `/v1/health`** e devolve 404 no resto. Os
+canais `/v1/admin` e `/v1/affiliate` seguem alcançáveis apenas pelo container da
+web, por `http://api:3000/v1` na rede interna do compose.
+
+É defesa em profundidade, não substituto de guard: os canais continuam
+protegidos por audiência de JWT. Ampliar é uma linha no `Caddyfile`, quando
+houver motivo.
 
 Consequência prática: **Swagger e psql saem por túnel do SSM**, com os comandos
 prontos nos outputs `SwaggerTunnelCommand` e `RdsTunnelCommand`.
@@ -60,10 +107,15 @@ aws cloudformation deploy \
   --disable-rollback \
   --parameter-overrides \
       DomainName=dev.hubafiliados.com.br \
-      HostedZoneName=hubafiliados.com.br. \
-      AcmeEmail=voce@mesa.tech \
-      AppIngressCidr=203.0.113.0/24
+      ApiDomainName=api-dev.hubafiliados.com.br \
+      CertificateArn=arn:aws:acm:us-east-1:123456789012:certificate/xxxx
 ```
+
+O `CertificateArn` tem que estar em **`us-east-1`** — CloudFront não aceita
+certificado de outra região — e precisa cobrir os dois nomes. É o certificado
+que a segurança da informação da Porto emite, importado no ACM. Um curinga
+`*.<domínio>` resolve os dois de uma vez e poupa um pedido futuro; vale pedir
+assim desde o começo.
 
 `--disable-rollback` **só na primeira criação**. O log do `cloud-init` não vai
 para o CloudWatch, e no rollback a instância é terminada junto — um UserData que
@@ -71,22 +123,33 @@ falhou vira um erro sem causa. Com a instância de pé, `aws ssm start-session` 
 `cat /var/log/cloud-init-output.log` dizem o que houve. Depois de a stack subir
 uma vez, tire a flag.
 
-`AppIngressCidr` restringe **só a 443**, que é a aplicação inteira, painel
-incluso. A 80 (`AcmeIngressCidr`) fica aberta porque é por ela que o Let's
-Encrypt faz o desafio HTTP-01 — fechá-la desliga o TLS automático. Deixar as
-duas no padrão põe na internet um ambiente com CPF e chave PIX no banco; é
-escolha, não descuido, e vale fazê-la de propósito.
-
-`HostedZoneName` só quando a zona estiver **nesta mesma conta** — RecordSet não
-atravessa conta, e a stack falharia com `No hosted zones named ... found`. Fora
-disso, deixe vazia e crie o registro A à mão apontando para o output
-`ElasticIpAddress`.
+Não há parâmetro de CIDR de entrada: a instância aceita **só a 80, e só das
+faixas do CloudFront**, pela prefix list gerenciada da AWS. O
+`CloudFrontPrefixListId` tem o id de `us-east-1` como padrão; se um dia a AWS
+mudá-lo, o comando para conferir está na descrição do parâmetro.
 
 Se a conta já tiver o provider OIDC do GitHub, acrescente
 `CreateGitHubOidcProvider=false` — o segundo faz a stack falhar com
 `EntityAlreadyExists`, e o rollback derruba tudo.
 
-**2. Injetar a chave do Resend.** Nasce `REPLACE_ME`.
+**2. Entregar o `CloudFrontDomainName` para a Porto.** É esse output, e só ele,
+que sai da nossa mão: é o alvo dos dois CNAMEs e o origin da RDM da Imperva. O
+Elastic IP **não** vai para eles — virou detalhe interno, e é isso que o
+CloudFront comprou. **A stack não cria registro de DNS**: a zona fica no
+servidor on premise deles, e é gente de lá que aponta o nome. A tabela de *O que
+depende da Porto* diz o que pedir, a quem, e em que ordem.
+
+Confirme que os dois nomes resolvem **pela internet** antes de esperar HTTPS:
+
+```bash
+dig +short dev.hubafiliados.com.br @1.1.1.1      # CNAME -> <id>.cloudfront.net
+dig +short api-dev.hubafiliados.com.br @1.1.1.1  # idem
+```
+
+Com a Imperva na frente o CNAME é dela, e o CloudFront aparece só como origin
+na RDM — nesse caso o que se confirma é que a resposta **não** é o Elastic IP.
+
+**3. Injetar a chave do Resend.** Nasce `REPLACE_ME`.
 
 ```bash
 echo -n 're_sua_chave' > resend_key.txt
@@ -98,7 +161,7 @@ Enquanto o domínio não estiver verificado no Resend, suba com
 `MailProvider=logger`: o link de definir senha sai no CloudWatch em vez da caixa
 de entrada.
 
-**3. Ligar o deploy.** Duas coisas no GitHub, e a segunda não é opcional:
+**4. Ligar o deploy.** Duas coisas no GitHub, e a segunda não é opcional:
 
 - o output `GitHubOidcRoleArn` no secret `AWS_DEPLOY_ROLE_ARN`;
 - o ambiente **`development`** em *Settings → Environments*, com
@@ -110,12 +173,35 @@ o GitHub monta o `sub` do token OIDC como `repo:OWNER/REPO:environment:developme
 só a `development` chega até ele é a regra de proteção do ambiente. Sem ela,
 qualquer branch pode pedir o deploy deste ambiente.
 
-**4. Publicar.** Um push na `development` roda a CI; os jobs de verificação, o
+**5. Publicar.** Um push na `development` roda a CI; os jobs de verificação, o
 de infra e o que publica as imagens rodam em paralelo, e o deploy só existe como
 `needs:` de todos eles.
 
 Antes desse primeiro deploy a instância está de pé mas vazia — não há imagem no
 ECR, e o `https://` ainda não responde. É esperado.
+
+## O que depende da Porto, e em que ordem
+
+Nada disto está na nossa mão, e **os três são caminho crítico**. O certificado,
+nas palavras do Diego, *"não é rápido"* — então começa por ele.
+
+| # | O quê | Com quem | Trava o quê |
+|---|---|---|---|
+| 1 | **Certificado** do domínio, de preferência curinga | Segurança da informação (Lucas Paula / Thiago), por chamado interno | Tudo. *"Sem o certificado não vai ser externalizado."* |
+| 2 | **Entrada TXT** para validar o domínio do certificado | DNS (Diego / Tiago) | O passo 1 |
+| 3 | **CNAME** de `DomainName` e `ApiDomainName` → `CloudFrontDomainName` | DNS (Diego / Tiago) | O acesso |
+| 4 | **RDM do WAF**: registrar as URLs na Imperva, com o CloudFront como origin | Ricardo B (Diego participa) | A publicação |
+
+O divisor de águas é a frase do Tiago: *"o trabalho de administrar o domínio é
+nosso, porém o de prover as informações são de vocês."* **Não temos console de
+DNS.** Toda entrada é um pedido, e cada pedido errado custa um ciclo. Por isso
+pedir o curinga de uma vez, e por isso resolver internamente quantos hostnames
+queremos antes de abrir o primeiro chamado.
+
+O que sai da nossa mão é **um valor só**: o output `CloudFrontDomainName`. É o
+origin que a Imperva registra e o alvo dos dois CNAMEs. O Elastic IP não vai
+para eles — virou detalhe interno, e é justamente isso que o CloudFront comprou:
+recriar a stack não obriga ninguém da Porto a mexer em nada.
 
 ## Branches e ambientes
 
@@ -139,7 +225,7 @@ literal no YAML.
 
 ## Mudar configuração
 
-`DomainName`, `AcmeEmail`, `MailProvider`, `MailFromEmail` e `ApiMocking` são
+`DomainName`, `ApiDomainName`, `MailProvider`, `MailFromEmail` e `ApiMocking` são
 parâmetros da stack, mas **não vivem no UserData** — vivem no parâmetro
 `/porto-hub/dev/config` do Parameter Store, que o `install-release.sh` lê a cada
 deploy. Trocar um valor é:
@@ -154,10 +240,13 @@ O passo 2 é o que aplica: o update de stack reescreve o parâmetro, o deploy
 reescreve os arquivos de env e reinicia os containers.
 
 Foi para isso que a configuração saiu do UserData. Lá, mudar um valor ou
-**substituiria a instância** — levando o volume `caddy-data` e, com ele, a cota
-de 5 emissões por semana do Let's Encrypt — ou não teria efeito nenhum, porque o
-`cloud-init` roda só no primeiro boot. O endpoint do RDS entra na mesma conta:
-se o banco for substituído, o parâmetro acompanha.
+**substituiria a instância**, ou não teria efeito nenhum — o `cloud-init` roda
+só no primeiro boot. O endpoint do RDS entra na mesma conta: se o banco for
+substituído, o parâmetro acompanha.
+
+Trocar `DomainName` ou `ApiDomainName` tem um passo a mais: eles também são
+`Aliases` do CloudFront, então o certificado precisa cobrir o nome novo **antes**
+do update, e a Porto precisa do CNAME correspondente.
 
 ## Operação
 
@@ -252,8 +341,13 @@ Ponta a ponta, com o DNS no ar: cadastro em `/cadastro`, aprovação em
 | IPv4 público | 3,65 |
 | RDS `db.t4g.micro` + 20 GB gp3 | 13,98 |
 | Secrets Manager (3 segredos) | 1,20 |
-| ECR, S3, CloudWatch, Route 53 | ~1,20 |
+| CloudFront (tráfego de dev) | ~0,50 |
+| ECR, S3, CloudWatch | ~0,70 |
 | **Total** | **~US$ 38** |
+
+O CloudFront cobra por requisição e por GB de saída; no volume de um ambiente de
+desenvolvimento fica em trocados, e conta com o nível gratuito da AWS no primeiro
+ano. Não muda a ordem de grandeza.
 
 Duas alavancas, ambas parâmetro do template:
 
@@ -268,10 +362,29 @@ Duas alavancas, ambas parâmetro do template:
   não há compilação nativa no caminho; o custo é o `next build` sob QEMU, a
   menos que a organização tenha runner `ubuntu-24.04-arm`.
 
-## Uma armadilha que custa uma tarde
+## Três armadilhas que custam uma tarde cada
 
+Todas têm o mesmo formato: a tela carrega, nada quebra no log, e o app não
+funciona. É o pior tipo de falha, e as três vêm de ter um proxy na frente.
+
+**1. O cookie `secure` exige HTTPS de ponta a ponta do navegador.**
 `secure: process.env.NODE_ENV === 'production'` nos dois `session.ts`, e
-`next start` força `NODE_ENV=production`. **Em HTTP puro o navegador descarta o
-cookie de sessão** e o login entra em loop, sem erro no log da API nem no do
-Next. Por isso o `DomainName` é obrigatório e o Caddy existe: sem TLS o ambiente
-sobe inteiro e não dá para entrar.
+`next start` força `NODE_ENV=production`. Em HTTP puro o navegador **descarta**
+o `Set-Cookie` e o login entra em loop, sem erro no log da API nem no do Next.
+Aqui está resolvido porque a Imperva e o CloudFront servem HTTPS ao navegador —
+a perna interna em claro não afeta o cookie, que só olha o que o navegador viu.
+
+**2. As Server Actions checam a origem.** O Next compara `Origin` com
+`X-Forwarded-Host` e aborta com `Invalid Server Actions request` e HTTP 500
+quando divergem. São **sete actions**, e são todo o caminho de escrita:
+cadastro, os dois logins, definir senha, aprovar/reprovar e os dois logouts.
+Resolvido pelo `allowedOrigins` no `next.config.mjs`, alimentado pelo
+`PUBLIC_DOMAIN_NAME` que o `install-release.sh` grava no `web.env`. **Trocar o
+domínio sem trocar essa variável quebra tudo que é POST.**
+
+**3. O CloudFront, no padrão, remove cookies e recusa POST.** Cache behavior
+nasce com `AllowedMethods: GET, HEAD` — as sete actions são POST — e sem política
+de origin request ele não encaminha cookies nem o `Host`. Qualquer um dos três
+sozinho derruba a aplicação. Resolvido no template pela política `AllViewer` e
+pelos métodos completos no `DefaultCacheBehavior`; se alguém "otimizar" isso um
+dia, é aqui que vai doer.

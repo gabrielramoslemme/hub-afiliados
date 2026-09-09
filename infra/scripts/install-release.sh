@@ -12,7 +12,6 @@ IMAGE_TAG_NEW="${1:?uso: install-release.sh <image-tag>}"
 APP_DIR=/opt/porto-hub
 COMPOSE_FILE="${APP_DIR}/docker-compose.prod.yml"
 ENV_FILE="${APP_DIR}/.env"
-CADDY_BACKUP_KEY=caddy-data.tgz
 
 # Vira true assim que a migration desta release passa. O rollback precisa saber:
 # voltar a imagem não desfaz schema.
@@ -79,47 +78,6 @@ AVISO
   exit 1
 }
 
-# ------------------------------------------------------------- certificados
-# Instância nova nasce sem os certificados — e a troca de AMI num update de
-# stack cria uma instância nova sem ninguém pedir. Reemitir queima a cota do
-# Let's Encrypt (5 certificados duplicados por semana para o mesmo host), então
-# eles vivem no bucket e não só no volume do compose.
-#
-# O `caddy` do compose já monta `caddy-data` em /data; usar o próprio serviço
-# evita uma segunda imagem e mantém uma fonte de verdade só para o caminho.
-restore_caddy_data() {
-  if compose run --rm --no-deps --entrypoint /bin/sh caddy \
-       -c '[ -n "$(ls -A /data 2>/dev/null)" ]' > /dev/null 2>&1; then
-    return 0
-  fi
-
-  if ! aws s3 cp "s3://${DEPLOY_BUCKET}/${CADDY_BACKUP_KEY}" "/tmp/${CADDY_BACKUP_KEY}" \
-        --region "${AWS_REGION}" > /dev/null 2>&1; then
-    echo "Sem backup de certificados no bucket — o Caddy vai emitir do zero."
-    return 0
-  fi
-
-  compose run --rm --no-deps -v /tmp:/backup --entrypoint /bin/sh caddy \
-    -c "tar xzf /backup/${CADDY_BACKUP_KEY} -C /data"
-  rm -f "/tmp/${CADDY_BACKUP_KEY}"
-  echo "Certificados restaurados do bucket."
-}
-
-# Roda depois da verificação. No primeiro deploy de um host novo o Caddy ainda
-# pode estar emitindo, e o backup sai vazio ou parcial — o do deploy seguinte
-# corrige. Não vale falhar um deploy saudável por causa disso.
-backup_caddy_data() {
-  compose run --rm --no-deps -v /tmp:/backup --entrypoint /bin/sh caddy \
-    -c "tar czf /backup/${CADDY_BACKUP_KEY} -C /data ." \
-    && aws s3 cp "/tmp/${CADDY_BACKUP_KEY}" "s3://${DEPLOY_BUCKET}/${CADDY_BACKUP_KEY}" \
-        --region "${AWS_REGION}" > /dev/null
-  rm -f "/tmp/${CADDY_BACKUP_KEY}"
-}
-
-# ------------------------------------------------------------------ segredos
-# Daqui até o fim da função nada é ecoado: `set +x` é explícito porque o
-# documento SSM pode rodar com rastreamento ligado, e um `echo` de debug aqui
-# publicaria a senha do banco no log do CloudWatch.
 write_secret_files() {
   set +x
 
@@ -167,20 +125,45 @@ PORT=3005
 HOSTNAME=0.0.0.0
 API_BASE_URL=http://api:3000/v1
 API_MOCKING=${API_MOCKING}
+# Alimenta o `allowedOrigins` das Server Actions no next.config.mjs. Atrás do
+# CloudFront, sem ele todo POST volta 500 — e são sete actions.
+PUBLIC_DOMAIN_NAME=${DOMAIN_NAME}
 ENV
   )
 }
 
+# O Caddy não termina mais TLS: quem faz isso é o CloudFront, com o certificado
+# da Porto. Aqui ele só escuta HTTP na 80 — a única porta que o security group
+# abre, e só para as faixas do CloudFront — e roteia pelo `Host` encaminhado.
 write_caddyfile() {
   ( umask 022
     cat > "${APP_DIR}/Caddyfile" <<CADDY
 {
-	email ${ACME_EMAIL}
+	# Sem isto o Caddy tentaria emitir certificado para os nomes abaixo. Eles
+	# apontam para a Imperva, não para esta máquina, e cada tentativa queimaria
+	# cota do Let's Encrypt sem nunca validar.
+	auto_https off
 }
 
-${DOMAIN_NAME} {
+http://${DOMAIN_NAME} {
 	encode zstd gzip
 	reverse_proxy web:3005
+}
+
+# A API existe para chamada servidor-a-servidor. São os dois únicos caminhos
+# publicados; os canais /v1/admin e /v1/affiliate ficam de fora, alcançáveis
+# apenas pelo container da web, pela rede interna do compose.
+http://${API_DOMAIN_NAME} {
+	encode zstd gzip
+
+	@publico path /v1/webhooks /v1/webhooks/* /v1/health
+	handle @publico {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		respond 404
+	}
 }
 CADDY
   )
@@ -212,7 +195,6 @@ docker image prune -af --filter 'until=168h' > /dev/null
 
 compose pull || rollback
 
-restore_caddy_data
 
 # Instância única: não há corrida entre processos aplicando migration. Quando
 # aparecer a segunda, este passo sai daqui e vira job à parte, antes do fan-out.
@@ -236,10 +218,16 @@ for _ in $(seq 1 30); do
 done
 
 curl -fsS --max-time 5 http://127.0.0.1:3000/v1/health > /dev/null || rollback
-# A web só existe na rede interna, então quem a alcança é o Caddy — e é
-# exatamente o caminho que o navegador vai fazer.
-compose exec -T caddy wget -q -O /dev/null http://web:3005/ || rollback
 
-backup_caddy_data || echo "AVISO: não foi possível salvar os certificados no bucket." >&2
+# Pela 80 do host e com o `Host` do CloudFront, porque agora o roteamento é
+# lógica: são dois blocos casados por nome e um `respond 404` de fallback.
+# Bater em `web:3005` direto passaria por cima disso, e um nome errado no
+# Caddyfile — ou o bloco da API respondendo 404 no que deveria servir —
+# subiria dizendo que deu certo. É o caminho do navegador e o da Porto, sem
+# o TLS, que termina no CloudFront e não aqui.
+curl -fsS --max-time 5 -H "Host: ${DOMAIN_NAME}" http://127.0.0.1/ -o /dev/null \
+  || rollback
+curl -fsS --max-time 5 -H "Host: ${API_DOMAIN_NAME}" \
+  http://127.0.0.1/v1/health -o /dev/null || rollback
 
 echo "Release ${IMAGE_TAG_NEW} no ar."

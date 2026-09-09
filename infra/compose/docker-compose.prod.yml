@@ -9,13 +9,12 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    # Só a 80: o TLS termina no CloudFront, com o certificado da Porto, e o
+    # security group não abre a 443 nesta máquina.
     ports:
       - '80:80'
-      - '443:443'
     volumes:
       - /opt/porto-hub/Caddyfile:/etc/caddy/Caddyfile:ro
-      # Perder este volume é perder os certificados e recomeçar do zero contra
-      # o rate limit do Let's Encrypt (5 emissões por semana para o mesmo host).
       - caddy-data:/data
       - caddy-config:/config
     networks: [egress, internal]
