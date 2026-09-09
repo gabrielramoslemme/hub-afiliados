@@ -20,7 +20,9 @@
     "type-check": "turbo run type-check",
     "prepare": "(lefthook install || true) && npm run build --workspace packages/contracts",
     "db:up": "docker compose up -d postgres",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "db:tunnel": "bash infra/scripts/db-tunnel.sh",
+    "db:password": "bash infra/scripts/db-tunnel.sh --password"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.9",

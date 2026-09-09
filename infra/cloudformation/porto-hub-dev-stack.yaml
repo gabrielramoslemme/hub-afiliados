@@ -92,16 +92,18 @@ Parameters:
 
   MailProvider:
     Type: String
-    Default: resend
+    Default: logger
     AllowedValues: [resend, logger]
     Description: >
-      `logger` so registra o e-mail no log em vez de enviar - util enquanto o
-      dominio nao esta verificado no Resend. Com ele, o link de definir senha
-      sai no CloudWatch, nao na caixa de entrada.
+      `logger` so registra o e-mail no log em vez de enviar, e e o default
+      porque a verificacao do dominio no Resend depende de registros SPF e DKIM
+      na zona - que nao esta nesta conta. Com ele, o link de definir senha sai
+      no CloudWatch, nao na caixa de entrada. Passe a `resend` no dia em que o
+      dominio aparecer verificado la, ou o cadastro do afiliado para no meio.
 
   MailFromEmail:
     Type: String
-    Default: nao-responda@afiliados.porto.example
+    Default: nao-responda@influencersportoservico.com.br
     Description: Remetente. Com MailProvider=resend, o dominio precisa estar verificado la.
 
   ApiMocking:
@@ -695,8 +697,8 @@ Resources:
             inputs:
               runCommand:
                 - 'set -euo pipefail'
-                - !Sub 'aws s3 cp s3://${DeployBucket}/docker-compose.prod.yml /opt/porto-hub/docker-compose.prod.yml'
-                - !Sub 'aws s3 cp s3://${DeployBucket}/install-release.sh /opt/porto-hub/install-release.sh'
+                - !Sub 'aws s3 cp --region ${AWS::Region} s3://${DeployBucket}/docker-compose.prod.yml /opt/porto-hub/docker-compose.prod.yml'
+                - !Sub 'aws s3 cp --region ${AWS::Region} s3://${DeployBucket}/install-release.sh /opt/porto-hub/install-release.sh'
                 - 'chmod +x /opt/porto-hub/install-release.sh'
                 - '/opt/porto-hub/install-release.sh "{{ imageTag }}"'
 
@@ -790,7 +792,11 @@ Resources:
 
   Instance:
     Type: AWS::EC2::Instance
-    DependsOn: VpcGatewayAttachment
+    # A associacao entra junto: ate ela existir a subnet cai na route table
+    # principal da VPC, que so tem a rota local. Instancia que boota nessa
+    # janela nao alcanca o dnf, nem o GitHub, nem o proprio signal-resource - e
+    # sem o sinal a stack espera os PT15M inteiros antes de dizer que falhou.
+    DependsOn: [VpcGatewayAttachment, PublicSubnetARouteTableAssociation]
     # Sem isto o CREATE_COMPLETE chega assim que a instancia fica `running`, e
     # um UserData que falhou vira falso positivo silencioso - o erro so
     # apareceria no primeiro deploy, com "docker: command not found".
@@ -957,6 +963,12 @@ Outputs:
   ConfigParameterName:
     Description: Parametro com a configuracao nao-secreta lida a cada deploy
     Value: !Ref ConfigParameter
+
+  # O nome do segredo e gerado pelo CloudFormation, entao nao ha string fixa que
+  # um script possa adivinhar: quem precisa da senha resolve o ARN por aqui.
+  DbSecretArn:
+    Description: Segredo com usuario e senha do master do RDS
+    Value: !Ref DbSecret
 
   ReadDbPasswordCommand:
     Description: Senha do master do RDS, para o psql pelo tunel
