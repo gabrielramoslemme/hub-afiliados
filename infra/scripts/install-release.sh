@@ -239,6 +239,13 @@ curl -fsS --max-time 5 http://127.0.0.1:3000/v1/health > /dev/null || rollback
 # A web só existe na rede interna, então quem a alcança é o Caddy — e é
 # exatamente o caminho que o navegador vai fazer.
 compose exec -T caddy wget -q -O /dev/null http://web:3005/ || rollback
+# Nenhuma verificacao acima toca a 443: com o ACME falhando o deploy diria "no
+# ar" e o site ficaria inacessivel, sem rollback. `--resolve` aponta o host para
+# a 443 local em vez de sair pela internet e voltar pelo Elastic IP - hairpin no
+# proprio IP publico nao e garantido na VPC. O SNI e a validacao da cadeia sao
+# os de verdade, entao isto prova que o certificado existe e e valido.
+curl -fsS --max-time 10 --resolve "${DOMAIN_NAME}:443:127.0.0.1" \
+  "https://${DOMAIN_NAME}/" -o /dev/null || rollback
 
 backup_caddy_data || echo "AVISO: não foi possível salvar os certificados no bucket." >&2
 

@@ -59,11 +59,14 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_NAMED_IAM \
   --disable-rollback \
   --parameter-overrides \
-      DomainName=dev.hubafiliados.com.br \
-      HostedZoneName=hubafiliados.com.br. \
+      DomainName=dev.influencersportoservico.com.br \
       AcmeEmail=voce@mesa.tech \
       AppIngressCidr=203.0.113.0/24
 ```
+
+Sem `HostedZoneName`: a zona `influencersportoservico.com.br` está delegada aos
+nameservers da Porto (`ns1..ns4.portoseguro.com.br`), não a esta conta. O
+registro A é pedido a quem opera a zona — passo 2.
 
 `--disable-rollback` **só na primeira criação**. O log do `cloud-init` não vai
 para o CloudWatch, e no rollback a instância é terminada junto — um UserData que
@@ -86,7 +89,24 @@ Se a conta já tiver o provider OIDC do GitHub, acrescente
 `CreateGitHubOidcProvider=false` — o segundo faz a stack falhar com
 `EntityAlreadyExists`, e o rollback derruba tudo.
 
-**2. Injetar a chave do Resend.** Nasce `REPLACE_ME`.
+**2. Pedir o registro A.** `dev.influencersportoservico.com.br` apontando para
+o output `ElasticIpAddress`. Peça **assim que a stack subir**: o Elastic IP é
+alocado na criação e não muda mais, e a resposta de um time de DNS de terceiro
+costuma levar dias — é o caminho crítico deste ambiente, não um detalhe do fim.
+
+Duas coisas para confirmar no pedido:
+
+- **sem registro CAA** na zona restringindo a autoridade certificadora. Hoje não
+  há nenhum, e é isso que mantém o TLS automático do Caddy funcionando. Um CAA
+  que não liste o Let's Encrypt derruba a emissão, e aí o certificado passa a ser
+  entregue pelo time deles — ver *Certificado gerenciado fora* abaixo;
+- **o A aponta direto para o Elastic IP**, sem CDN ou WAF no meio. Com um
+  intermediário, o desafio HTTP-01 não chega na instância.
+
+Enquanto o nome não resolver, não faça o passo 5: o Caddy não consegue emitir o
+certificado e a verificação do deploy falha de propósito.
+
+**3. Injetar a chave do Resend.** Nasce `REPLACE_ME`.
 
 ```bash
 echo -n 're_sua_chave' > resend_key.txt
@@ -98,7 +118,7 @@ Enquanto o domínio não estiver verificado no Resend, suba com
 `MailProvider=logger`: o link de definir senha sai no CloudWatch em vez da caixa
 de entrada.
 
-**3. Ligar o deploy.** Duas coisas no GitHub, e a segunda não é opcional:
+**4. Ligar o deploy.** Duas coisas no GitHub, e a segunda não é opcional:
 
 - o output `GitHubOidcRoleArn` no secret `AWS_DEPLOY_ROLE_ARN`;
 - o ambiente **`development`** em *Settings → Environments*, com
@@ -110,12 +130,31 @@ o GitHub monta o `sub` do token OIDC como `repo:OWNER/REPO:environment:developme
 só a `development` chega até ele é a regra de proteção do ambiente. Sem ela,
 qualquer branch pode pedir o deploy deste ambiente.
 
-**4. Publicar.** Um push na `development` roda a CI; os jobs de verificação, o
+**5. Publicar.** Um push na `development` roda a CI; os jobs de verificação, o
 de infra e o que publica as imagens rodam em paralelo, e o deploy só existe como
 `needs:` de todos eles.
 
 Antes desse primeiro deploy a instância está de pé mas vazia — não há imagem no
 ECR, e o `https://` ainda não responde. É esperado.
+
+## Certificado gerenciado fora
+
+Se o time que opera a zona optar por emitir o certificado por fora, **o Caddy
+continua**: ele é o único serviço exposto e o reverse proxy para a `web`, que
+vive numa rede sem rota para a internet. O que muda é só a origem do
+certificado, e são dois caminhos:
+
+- **arquivos entregues a nós** — monte o diretório dos certificados no serviço
+  `caddy` e troque o bloco do site no `write_caddyfile` por
+  `tls /certs/fullchain.pem /certs/privkey.pem`. Aí `restore_caddy_data`,
+  `backup_caddy_data`, a chave `caddy-data.tgz` no bucket e o `s3:PutObject` da
+  role da instância saem: existem só para proteger a cota do Let's Encrypt;
+- **TLS terminado num CDN ou WAF deles**, falando HTTP com a origem — `auto_https
+  off` no bloco global do Caddyfile, e `AppIngressCidr` restrito à faixa de
+  saída desse intermediário. A 80 deixa de ser só redirecionamento e passa a
+  servir a aplicação.
+
+Nos dois casos `AcmeIngressCidr` pode fechar e `AcmeEmail` deixa de ter uso.
 
 ## Branches e ambientes
 
