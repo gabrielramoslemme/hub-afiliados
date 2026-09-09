@@ -132,15 +132,22 @@ Se a conta já tiver o provider OIDC do GitHub, acrescente
 `CreateGitHubOidcProvider=false` — o segundo faz a stack falhar com
 `EntityAlreadyExists`, e o rollback derruba tudo.
 
-**2. Entregar o Elastic IP para a Porto.** O output `ElasticIpAddress` é o
-endereço do registro A. **A stack não cria registro de DNS** — a zona fica no
-servidor on premise deles, e é gente de lá que aponta o nome.
+**2. Entregar o `CloudFrontDomainName` para a Porto.** É esse output, e só ele,
+que sai da nossa mão: é o alvo dos dois CNAMEs e o origin da RDM da Imperva. O
+Elastic IP **não** vai para eles — virou detalhe interno, e é isso que o
+CloudFront comprou. **A stack não cria registro de DNS**: a zona fica no
+servidor on premise deles, e é gente de lá que aponta o nome. A tabela de *O que
+depende da Porto* diz o que pedir, a quem, e em que ordem.
 
-Confirme que o nome resolve **pela internet** antes de esperar HTTPS:
+Confirme que os dois nomes resolvem **pela internet** antes de esperar HTTPS:
 
 ```bash
-dig +short dev.hubafiliados.com.br @1.1.1.1     # tem que devolver o Elastic IP
+dig +short dev.hubafiliados.com.br @1.1.1.1      # CNAME -> <id>.cloudfront.net
+dig +short api-dev.hubafiliados.com.br @1.1.1.1  # idem
 ```
+
+Com a Imperva na frente o CNAME é dela, e o CloudFront aparece só como origin
+na RDM — nesse caso o que se confirma é que a resposta **não** é o Elastic IP.
 
 **3. Injetar a chave do Resend.** Nasce `REPLACE_ME`.
 

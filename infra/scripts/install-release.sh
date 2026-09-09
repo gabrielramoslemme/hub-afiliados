@@ -218,9 +218,16 @@ for _ in $(seq 1 30); do
 done
 
 curl -fsS --max-time 5 http://127.0.0.1:3000/v1/health > /dev/null || rollback
-# A web só existe na rede interna, então quem a alcança é o Caddy — e é
-# exatamente o caminho que o navegador vai fazer.
-compose exec -T caddy wget -q -O /dev/null http://web:3005/ || rollback
 
+# Pela 80 do host e com o `Host` do CloudFront, porque agora o roteamento é
+# lógica: são dois blocos casados por nome e um `respond 404` de fallback.
+# Bater em `web:3005` direto passaria por cima disso, e um nome errado no
+# Caddyfile — ou o bloco da API respondendo 404 no que deveria servir —
+# subiria dizendo que deu certo. É o caminho do navegador e o da Porto, sem
+# o TLS, que termina no CloudFront e não aqui.
+curl -fsS --max-time 5 -H "Host: ${DOMAIN_NAME}" http://127.0.0.1/ -o /dev/null \
+  || rollback
+curl -fsS --max-time 5 -H "Host: ${API_DOMAIN_NAME}" \
+  http://127.0.0.1/v1/health -o /dev/null || rollback
 
 echo "Release ${IMAGE_TAG_NEW} no ar."
