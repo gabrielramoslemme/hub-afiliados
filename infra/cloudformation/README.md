@@ -63,17 +63,23 @@ souber o Elastic IP não consegue nada com ele.
 > `OriginProtocolPolicy: https-only` fecham isso. Está marcado no template, no
 > ponto exato.
 
-## A API tem hostname, mas não é o navegador que fala com ela
+## A API pode ter hostname, e mesmo assim não é o navegador que fala com ela
 
 `CLAUDE.md`, regra inviolável: *"o navegador nunca fala com a API; quem chama é o
 servidor do Next"*. Ela continua valendo — a sessão é cookie `httpOnly` gravado
 pelo servidor do Next, e um token alcançável por JavaScript desmontaria isso.
+Nenhum `NEXT_PUBLIC_*` existe em `apps/web`, e é assim que se confere.
 
 O que o `ApiDomainName` existe para atender é **chamada servidor-a-servidor**: o
 serviço de cupom da Porto batendo em `/v1/webhooks`. Por isso o Caddy, nesse
 host, publica **só `/v1/webhooks` e `/v1/health`** e devolve 404 no resto. Os
 canais `/v1/admin` e `/v1/affiliate` seguem alcançáveis apenas pelo container da
 web, por `http://api:3000/v1` na rede interna do compose.
+
+**E por isso o hostname é opcional.** Enquanto `/v1/webhooks` não existir — hoje
+`apps/api/src/http/webhooks/` tem só o módulo, sem controller — esse host
+serviria apenas o health check, e o Caddy simplesmente não escreve o bloco.
+Deixe `ApiDomainName` vazio até a rota nascer: ninguém perde acesso a nada.
 
 É defesa em profundidade, não substituto de guard: os canais continuam
 protegidos por audiência de JWT. Ampliar é uma linha no `Caddyfile`, quando
@@ -208,16 +214,114 @@ de infra e o que publica as imagens rodam em paralelo, e o deploy só existe com
 Antes desse primeiro deploy a instância está de pé mas vazia — não há imagem no
 ECR, e o `https://` ainda não responde. É esperado.
 
+## Pelo console da AWS
+
+O caminho de CLI acima é o que a CI repete e o que se versiona. O console serve
+a criação única — quando quem sobe a stack não tem credencial de linha de
+comando na mão. São os mesmos cinco passos; o que muda é a navegação, e três
+coisas que não têm flag equivalente.
+
+### Antes de abrir o formulário
+
+| Console | Conferir | Se der ruim |
+|---|---|---|
+| Seletor de região | **N. Virginia (us-east-1)** | O ACM do CloudFront exige, e o origin é montado como `ec2-<ip>.compute-1.amazonaws.com`, que é o sufixo dessa região. Fora dela nada funciona |
+| **IAM → Identity providers** | Existe `token.actions.githubusercontent.com`? Se sim, abra e confirme que *Audiences* contém `sts.amazonaws.com` | Existindo, use `CreateGitHubOidcProvider=false`: criar o segundo falha com `EntityAlreadyExists` e o rollback leva a stack inteira. Audience diferente faz o assume-role ser recusado sem dizer por quê |
+| Prefix list do CloudFront | O id de `com.amazonaws.global.cloudfront.origin-facing` **nesta** região | Prefix list gerenciada tem id diferente por região, e o console da VPC esconde as da AWS. O comando está na descrição do parâmetro `CloudFrontPrefixListId`. Errando, o security group não cria e a stack para em segundos com `InvalidPrefixListID.NotFound` — antes do RDS e do CloudFront |
+
+### Criar a stack
+
+1. **CloudFormation → Stacks → Create stack → With new resources (standard)**.
+2. *Prepare template* → **Choose an existing template** → **Upload a template
+   file** → `infra/cloudformation/porto-hub-dev-stack.yaml`. O console o guarda
+   sozinho num bucket `cf-templates-*`.
+3. *Stack name*: `porto-hub-dev`.
+4. Parâmetros: **deixe `DomainName`, `ApiDomainName` e `CertificateArn`
+   vazios** — é o primeiro dos três modos. `GitHubRepo`, `DeployBranch`,
+   `GitHubEnvironment`, `MailProvider` e `MailFromEmail` já vêm com o valor
+   certo para este ambiente. `CreateGitHubOidcProvider=false` se a conferência
+   acima achou o provider.
+5. *Configure stack options*:
+   - **Stack failure options → Preserve successfully provisioned resources.** É
+     o `--disable-rollback`, e o motivo está acima: sem isso um UserData que
+     falhou vira erro sem causa. **Volte para *Roll back all stack resources*
+     nos updates seguintes.**
+   - Marque **"I acknowledge that AWS CloudFormation might create IAM resources
+     with custom names"** — é o `CAPABILITY_NAMED_IAM`.
+6. **Submit**, e acompanhe a aba *Events*. Conte **20 a 30 minutos**: o RDS come
+   ~10, o CloudFront ~10 a 15, e a instância sinaliza em até `PT15M`.
+
+Se falhar, a razão está na primeira linha `CREATE_FAILED` de baixo para cima em
+*Events*. Instância estourando o sinal → **Systems Manager → Session Manager →
+Start session** e `cat /var/log/cloud-init-output.log`. Para tentar de novo é
+preciso **deletar a stack primeiro**: com *Preserve* ela fica em `CREATE_FAILED`
+segurando os recursos, e nomes fixos — os repositórios do ECR, o bucket de
+deploy, a role de deploy — impedem a recriação enquanto o delete não terminar.
+
+### Depois do CREATE_COMPLETE
+
+Aba **Outputs**. Quatro importam agora:
+
+| Output | Para onde vai |
+|---|---|
+| `WebUrl` | A URL do ambiente, em `https://<id>.cloudfront.net` |
+| `GitHubOidcRoleArn` | Secret `AWS_DEPLOY_ROLE_ARN` no GitHub |
+| `ReadSeedPasswordCommand` | A senha inicial do operador do painel. Sem CLI: **Secrets Manager** → o segredo descrito *"Senha inicial dos operadores…"* → *Retrieve secret value* |
+| `CloudFrontDomainName` | Só quando for plugar o domínio — é o que vai para a Porto |
+
+O GitHub é o passo 4 da seção anterior, e não tem equivalente no console: o
+secret e o environment `development` com *Selected branches*. Depois disso, um
+push na `development` publica a primeira release.
+
+**Redeploy sem passar pela CI**, se precisar: as imagens têm que estar no ECR
+(quem as constrói é o job `images`), e então **S3** → bucket
+`porto-hub-dev-deploy-<conta>` → upload de `infra/compose/docker-compose.prod.yml`
+e `infra/scripts/install-release.sh` → **Systems Manager → Run Command** →
+documento `porto-hub-dev-deploy` → a instância → `imageTag` = o SHA. É
+exatamente o que o `cd.yml` faz.
+
+### Chave do Resend, sem CLI
+
+Só se for passar `MailProvider=resend`; com `logger` o link de definir senha sai
+no CloudWatch e nada disto é necessário. **Secrets Manager** → o segredo
+descrito *"Segredos de aplicacao do Hub de Afiliados"* → *Retrieve secret value*
+→ *Edit* → preencha `resend_api_key`.
+
+⚠️ Depois disso, **nunca mexa no `GenerateSecretString` desse segredo**:
+qualquer alteração nele regenera o segredo inteiro e leva a chave junto. O
+sintoma — e-mail parando de sair depois de um update de stack sem relação
+nenhuma — não aponta para lá sozinho.
+
+### Quando o certificado chegar
+
+1. **ACM → Certificates → Import certificate** (em us-east-1). Três campos:
+   *Certificate body*, *Certificate private key* e *Certificate chain*. Se a
+   Porto entregar um `.pfx`:
+
+   ```bash
+   openssl pkcs12 -in porto.pfx -clcerts -nokeys        -out cert.pem
+   openssl pkcs12 -in porto.pfx -nocerts -nodes         -out key.pem
+   openssl pkcs12 -in porto.pfx -cacerts -nokeys -chain -out chain.pem
+   ```
+
+2. **CloudFormation → a stack → Update → Use existing template**, e preencha
+   `DomainName` e `CertificateArn` (`ApiDomainName` só quando `/v1/webhooks`
+   existir). Desmarque o *Preserve* desta vez.
+3. Um deploy depois do update, para o `Caddyfile` pegar o nome. Um push na
+   `development` basta.
+
 ## O que depende da Porto, e em que ordem
 
-Nada disto está na nossa mão, e **os três são caminho crítico**. O certificado,
-nas palavras do Diego, *"não é rápido"* — então começa por ele.
+Nada disto está na nossa mão, e **os quatro são caminho crítico do domínio** —
+não do ambiente. O ambiente sobe sem nenhum deles, no domínio do CloudFront; o
+que eles destravam é publicar em `dev.<domínio>`. O certificado, nas palavras do
+Diego, *"não é rápido"* — então começa por ele, em paralelo com a subida.
 
 | # | O quê | Com quem | Trava o quê |
 |---|---|---|---|
-| 1 | **Certificado** do domínio, de preferência curinga | Segurança da informação (Lucas Paula / Thiago), por chamado interno | Tudo. *"Sem o certificado não vai ser externalizado."* |
+| 1 | **Certificado** do domínio, de preferência curinga | Segurança da informação (Lucas Paula / Thiago), por chamado interno | O domínio próprio. *"Sem o certificado não vai ser externalizado."* |
 | 2 | **Entrada TXT** para validar o domínio do certificado | DNS (Diego / Tiago) | O passo 1 |
-| 3 | **CNAME** de `DomainName` e `ApiDomainName` → `CloudFrontDomainName` | DNS (Diego / Tiago) | O acesso |
+| 3 | **CNAME** de `DomainName` (e de `ApiDomainName`, se houver) → `CloudFrontDomainName` | DNS (Diego / Tiago) | O acesso pelo nome |
 | 4 | **RDM do WAF**: registrar as URLs na Imperva, com o CloudFront como origin | Ricardo B (Diego participa) | A publicação |
 
 O divisor de águas é a frase do Tiago: *"o trabalho de administrar o domínio é
