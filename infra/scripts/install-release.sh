@@ -199,6 +199,31 @@ read_seed_password() {
     | python3 -c 'import json,sys;print(json.load(sys.stdin)["admin_password"])'
 }
 
+# `compose up -d` devolve quando o container **iniciou**, não quando ele atende.
+# Só a API tem healthcheck, e é a única que o compose espera; a web sobe depois
+# dela, por `depends_on`, e é a última a ficar de pé. Conferir qualquer uma
+# delas uma vez só, logo depois do `up`, é corrida perdida — e foi assim que um
+# deploy com migration e seed aplicados morreu num 502 do Caddy, que só queria
+# dizer "ainda não tem ninguém em web:3005".
+#
+# Por isso todo check aqui espera, e não só o primeiro. Sessenta segundos é
+# folga larga para um servidor Node que já subiu; o que passar disso é falha de
+# verdade, e aí a mensagem diz qual check ficou para trás.
+wait_for() {
+  local descricao="$1"
+  shift
+
+  for _ in $(seq 1 30); do
+    if "$@" > /dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+
+  echo "verificação falhou depois de 60s: ${descricao}" >&2
+  return 1
+}
+
 # ------------------------------------------------------------------- deploy
 aws ecr get-login-password --region "${AWS_REGION}" \
   | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
@@ -240,14 +265,8 @@ SEED_ADMIN_PASSWORD="$(read_seed_password)" \
 compose up -d --remove-orphans --quiet-pull
 
 # --------------------------------------------------------------- verificação
-for _ in $(seq 1 30); do
-  if curl -fsS --max-time 3 http://127.0.0.1:3000/v1/health > /dev/null 2>&1; then
-    break
-  fi
-  sleep 2
-done
-
-curl -fsS --max-time 5 http://127.0.0.1:3000/v1/health > /dev/null || rollback
+wait_for "API em 127.0.0.1:3000/v1/health" \
+  curl -fsS --max-time 3 http://127.0.0.1:3000/v1/health || rollback
 
 # Pela 80 do host e com o `Host` do CloudFront, porque agora o roteamento é
 # lógica: são dois blocos casados por nome e um `respond 404` de fallback.
@@ -255,12 +274,13 @@ curl -fsS --max-time 5 http://127.0.0.1:3000/v1/health > /dev/null || rollback
 # Caddyfile — ou o bloco da API respondendo 404 no que deveria servir —
 # subiria dizendo que deu certo. É o caminho do navegador e o da Porto, sem
 # o TLS, que termina no CloudFront e não aqui.
-curl -fsS --max-time 5 -H "Host: ${DOMAIN_NAME}" http://127.0.0.1/ -o /dev/null \
-  || rollback
+wait_for "web pelo Caddy, com Host ${DOMAIN_NAME}" \
+  curl -fsS --max-time 5 -H "Host: ${DOMAIN_NAME}" http://127.0.0.1/ || rollback
 
 if [ -n "${API_DOMAIN_NAME}" ]; then
-  curl -fsS --max-time 5 -H "Host: ${API_DOMAIN_NAME}" \
-    http://127.0.0.1/v1/health -o /dev/null || rollback
+  wait_for "API pelo Caddy, com Host ${API_DOMAIN_NAME}" \
+    curl -fsS --max-time 5 -H "Host: ${API_DOMAIN_NAME}" http://127.0.0.1/v1/health \
+    || rollback
 fi
 
 echo "Release ${IMAGE_TAG_NEW} no ar."
