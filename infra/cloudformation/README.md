@@ -100,6 +100,22 @@ Isso substitui a regra `DOCKER-USER` no iptables que a proposta original previa.
 É a mesma fronteira, declarada no compose em vez de configurada no host: não há
 o que dessincronizar depois, e o teste é uma linha (abaixo).
 
+## Por que a conexão com o RDS exige TLS
+
+O RDS roda PostgreSQL 16 sem parameter group próprio, e o padrão da AWS a partir
+do 15 traz `rds.force_ssl = 1`: **conexão sem TLS é recusada antes da senha**.
+Por isso o `install-release.sh` escreve `DATABASE_SSL=true` no `api.env`.
+
+A autoridade que assina o certificado do RDS não está no trust store do Node.
+Verificar de verdade exige o bundle da Amazon, versionado em
+`infra/certs/rds-global-bundle.pem` e copiado pelo `Dockerfile` da API para
+`/app/certs/`. Trocar o bundle é `curl` no
+`https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem`, commit e
+deploy — o arquivo é público e não tem segredo.
+
+Desligar a verificação (`rejectUnauthorized: false`) seria a saída fácil e é
+justamente o que não se faz aqui: a tabela guarda CPF e chave PIX.
+
 ## Subir pela primeira vez
 
 **1. Criar a stack.** O certificado da Porto **não** é pré-requisito: sem ele o
@@ -406,6 +422,22 @@ permissão `ssm:StartSession`, revogável por pessoa e auditável no CloudTrail.
 O seed roda a cada deploy e é idempotente (`ON CONFLICT DO NOTHING`): não
 devolve a senha do operador para a do seed, e garante que um ambiente
 recém-criado já tenha com quem entrar no painel.
+
+### O log do deploy tem 24 KB, e o SSM corta o fim
+
+`get-command-invocation` devolve no máximo 24 KB de `StandardOutputContent` e
+outros 24 KB de `StandardErrorContent`, **cortando o fim**. O progresso do
+`docker pull` — uma linha por camada e por atualização — enche isso sozinho, e o
+que se perde é justamente o erro que veio depois.
+
+Foi assim que um deploy quebrado chegou ao GitHub Actions mostrando apenas
+`Error during migration run:`, sem a linha seguinte, que dizia o porquê. Por
+isso `pull`, `run` e `up` no `install-release.sh` são silenciosos quanto a
+progresso (`--quiet` e `--quiet-pull`). **Não tire esses flags para "ver melhor
+o que está acontecendo"** — o efeito é o contrário.
+
+Precisa da saída inteira de um container? Ela está no CloudWatch, grupo
+`/porto-hub/dev`, que não tem esse limite.
 
 ### O que o rollback automático faz, e o que não faz
 

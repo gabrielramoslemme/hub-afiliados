@@ -74,7 +74,7 @@ AVISO
 
   echo "FALHA — voltando para ${IMAGE_TAG_PREVIOUS}" >&2
   write_env_file "${IMAGE_TAG_PREVIOUS}"
-  compose up -d --remove-orphans
+  compose up -d --remove-orphans --quiet-pull
   exit 1
 }
 
@@ -106,6 +106,10 @@ print("postgres://%s:%s@%s:5432/%s" % (
 NODE_ENV=production
 PORT=3000
 DATABASE_URL=${database_url}
+# O parameter group padrão do RDS PostgreSQL 16 traz rds.force_ssl = 1: sem TLS
+# o servidor recusa a conexão antes de olhar a senha. O bundle das CAs da Amazon
+# vai dentro da imagem, porque o trust store do Node não as conhece.
+DATABASE_SSL=true
 JWT_SECRET=${jwt_secret}
 JWT_EXPIRES_IN_SECONDS=28800
 APP_BASE_URL=https://${DOMAIN_NAME}
@@ -119,13 +123,18 @@ ENV
     # Nada de segredo aqui, e é essa a fronteira: a web não tem o que vazar.
     # `API_BASE_URL` aponta para o nome do serviço na rede interna do compose —
     # não é `NEXT_PUBLIC_`, e o navegador nunca a vê.
+    #
+    # ATENÇÃO: o delimitador é aberto (sem aspas) porque as variáveis abaixo
+    # precisam expandir. Isso vale para crase e para $(...) também, inclusive
+    # dentro de comentário: dentro deste bloco, crase é escapada com \` ou o
+    # bash tenta executar o que está entre elas.
     cat > "${APP_DIR}/web.env" <<ENV
 NODE_ENV=production
 PORT=3005
 HOSTNAME=0.0.0.0
 API_BASE_URL=http://api:3000/v1
 API_MOCKING=${API_MOCKING}
-# Alimenta o `allowedOrigins` das Server Actions no next.config.mjs. Atrás do
+# Alimenta o \`allowedOrigins\` das Server Actions no next.config.mjs. Atrás do
 # CloudFront, sem ele todo POST volta 500 — e são sete actions.
 PUBLIC_DOMAIN_NAME=${DOMAIN_NAME}
 ENV
@@ -205,7 +214,16 @@ write_env_file "${IMAGE_TAG_NEW}"
 # deploy de um jeito que não se parece com falta de espaço.
 docker image prune -af --filter 'until=168h' > /dev/null
 
-compose pull || rollback
+# `--quiet` não é cosmético: o SSM guarda no máximo 24 KB de stdout e outros
+# 24 KB de stderr por invocação, e corta o FIM. Uma linha de progresso por
+# camada e por atualização enche isso sozinha, e o erro que interessa — o que
+# vem depois, da migration — é justamente o que se perde. Foi assim que um
+# deploy quebrado chegou ao log dizendo apenas "Error during migration run:".
+#
+# Os `compose run` abaixo não levam flag de silêncio de propósito: a imagem já
+# veio deste pull, e é a saída deles — a da migration e a do seed — que se quer
+# ler inteira quando algo falha.
+compose pull --quiet || rollback
 
 
 # Instância única: não há corrida entre processos aplicando migration. Quando
@@ -219,7 +237,7 @@ MIGRATION_APPLIED=true
 SEED_ADMIN_PASSWORD="$(read_seed_password)" \
   compose run --rm -e SEED_ADMIN_PASSWORD api npm run seed:prod || rollback
 
-compose up -d --remove-orphans
+compose up -d --remove-orphans --quiet-pull
 
 # --------------------------------------------------------------- verificação
 for _ in $(seq 1 30); do
