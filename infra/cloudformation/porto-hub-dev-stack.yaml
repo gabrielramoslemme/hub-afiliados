@@ -209,6 +209,19 @@ Parameters:
       CloudTrail deixa de existir. Prefira a faixa de saida da VPN a
       0.0.0.0/0.
 
+  # So existe por causa de 0.0.0.0/0, e so faz sentido porque nao ha VPN: sem
+  # ponto de saida fixo para listar, a internet inteira e o valor que funciona,
+  # e a camada de rede deixa de ser um controle disponivel. O que sobra e
+  # tornar a abertura deliberada - um parametro a mais que o deploy distraido
+  # nao digita.
+  AcknowledgeDbOpenToInternet:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: >
+      Confirmacao de que DbAccessCidr=0.0.0.0/0 e intencional. Irrelevante com
+      qualquer outro CIDR, e ignorado com o banco fechado.
+
 # Os tres parametros de dominio se acoplam, e o tipo deles nao expressa isso.
 # Sem estas regras a combinacao errada falha dois minutos depois, no CloudFront,
 # com mensagem que nao aponta para o parametro. Com elas, falha na hora do
@@ -230,6 +243,17 @@ Rules:
           ApiDomainName exige DomainName. O host da API existe para o webhook
           servidor-a-servidor; publica-lo sem a aplicacao web nao e uma
           configuracao deste ambiente.
+
+  # Mesma classe do DomainRequiresCertificate acima: falha no gate do
+  # parametro, antes de existir change set e antes de qualquer modify no RDS.
+  DbAccessCidrOpenToInternetIsDeliberate:
+    RuleCondition: !Equals [!Ref DbAccessCidr, '0.0.0.0/0']
+    Assertions:
+      - Assert: !Equals [!Ref AcknowledgeDbOpenToInternet, 'true']
+        AssertDescription: >
+          DbAccessCidr=0.0.0.0/0 expoe CPF e chave PIX de afiliado com a senha
+          do master como unico controle. Passe AcknowledgeDbOpenToInternet=true
+          para confirmar que a exposicao e intencional.
 
 Conditions:
   CreateOidcProvider: !Equals [!Ref CreateGitHubOidcProvider, 'true']

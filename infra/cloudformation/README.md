@@ -426,6 +426,19 @@ aws cloudformation deploy \
   --parameter-overrides DbAccessCidr=200.201.202.0/24
 ```
 
+Para `0.0.0.0/0` é preciso confirmar junto:
+
+```bash
+  --parameter-overrides DbAccessCidr=0.0.0.0/0 AcknowledgeDbOpenToInternet=true
+```
+
+Sem o segundo parâmetro a stack falha no gate, antes de criar change set e antes
+de qualquer modify no RDS. Não é proteção contra quem decide abrir — é contra
+abrir sem perceber, que é o que sobra de controle: sem VPN não há faixa fixa
+para listar, então a camada de rede não está disponível como restrição. Como o
+`deploy` reusa o valor anterior de parâmetro não informado, a fricção é uma vez
+só.
+
 Depois é conectar direto no `RdsEndpoint`, porta 5432, com `porto` e a senha de
 `npm run db:password`.
 
