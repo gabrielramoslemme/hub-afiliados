@@ -28,6 +28,7 @@ async function submitValidForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('CPF'), values.cpf);
   await user.type(screen.getByLabelText('RG'), values.rg);
   await user.type(screen.getByLabelText('Chave PIX'), values.pixKey);
+  await user.click(screen.getByRole('checkbox'));
   await user.click(screen.getByRole('button', { name: 'Enviar cadastro' }));
 }
 
@@ -230,5 +231,40 @@ describe('RegistrationForm', () => {
     render(<RegistrationForm autoFocus />);
 
     expect(screen.getByLabelText('Nome completo')).toHaveFocus();
+  });
+
+  it('opens with the terms unchecked', () => {
+    render(<RegistrationForm />);
+
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
+  });
+
+  it('refuses a submission without accepting the terms, without reaching the api', async () => {
+    const user = userEvent.setup();
+    render(<RegistrationForm />);
+    const values = fillValidForm();
+
+    await user.type(screen.getByLabelText('Nome completo'), values.fullName);
+    await user.type(screen.getByLabelText('E-mail'), values.email);
+    await user.type(screen.getByLabelText('CPF'), values.cpf);
+    await user.type(screen.getByLabelText('RG'), values.rg);
+    await user.type(screen.getByLabelText('Chave PIX'), values.pixKey);
+    await user.click(screen.getByRole('button', { name: 'Enviar cadastro' }));
+
+    expect(
+      await screen.findByText('É preciso aceitar o Regulamento do programa.'),
+    ).toBeInTheDocument();
+    expect(action).not.toHaveBeenCalled();
+  });
+
+  it('sends the acceptance the person marked', async () => {
+    const user = userEvent.setup();
+    render(<RegistrationForm />);
+
+    await submitValidForm(user);
+
+    await waitFor(() =>
+      expect(action).toHaveBeenCalledWith(expect.objectContaining({ termsAccepted: true })),
+    );
   });
 });

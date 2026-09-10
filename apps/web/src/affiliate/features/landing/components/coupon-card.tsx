@@ -1,5 +1,4 @@
 import { Scissors } from 'lucide-react';
-import { CopyCoupon } from '@/affiliate/shared/components/copy-coupon';
 import { pendingFromPorto, pitch } from '@/affiliate/shared/content';
 
 /**
@@ -32,7 +31,18 @@ export function CouponCard() {
         />
 
         <div className="px-6 pb-7 pt-3">
-          <CopyCoupon code={pitch.sampleCoupon} className="flex-wrap" />
+          {/*
+            Amostra, e não o cupom da pessoa: sem botão de copiar, de propósito.
+            Um código copiável aqui é lido como um cupom que já existe — e o de
+            verdade só nasce na área do afiliado, depois da aprovação, onde o
+            `CopyCoupon` continua.
+          */}
+          <p
+            className="inline-flex rounded-md border border-ink-200 bg-white px-2.5 py-1.5 font-mono text-sm font-semibold tracking-[0.08em] text-ink-900"
+            data-tabular
+          >
+            {pitch.sampleCoupon}
+          </p>
 
           <p className="mt-2.5 text-[0.8125rem] text-ink-500">
             Exclusivo, intransferível e sempre o mesmo em todo canal.
@@ -52,7 +62,7 @@ export function CouponCard() {
                 Para você
               </dt>
               <dd className="mt-1 text-sm font-semibold text-blue-700">
-                {pendingFromPorto.incentivePerSale ?? 'Incentivo por venda'}
+                {pendingFromPorto.incentivePerSale ?? 'Ganho em cada venda'}
               </dd>
             </div>
           </dl>

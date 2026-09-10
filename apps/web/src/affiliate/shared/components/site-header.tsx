@@ -109,7 +109,7 @@ export function SiteHeader() {
       <div className="container-site flex h-16 items-center justify-between">
         <SiteLogo />
 
-        <nav className="hidden items-center gap-1 md:flex">
+        <nav className="hidden items-center gap-0.5 lg:flex">
           {nav.map((item) => {
             const isActive = active === item.href.replace('#', '');
 
@@ -119,7 +119,7 @@ export function SiteHeader() {
                 href={item.href}
                 aria-current={isActive ? 'true' : undefined}
                 className={cn(
-                  'relative rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'relative whitespace-nowrap rounded-md px-2.5 py-2 text-sm font-medium transition-colors',
                   isActive ? 'text-blue-700' : 'text-ink-700 hover:text-blue-600',
                 )}
               >
@@ -131,7 +131,7 @@ export function SiteHeader() {
                 <span
                   aria-hidden
                   className={cn(
-                    'absolute inset-x-3 -bottom-0.5 h-0.5 origin-left rounded-full bg-cyan-500',
+                    'absolute inset-x-2.5 -bottom-0.5 h-0.5 origin-left rounded-full bg-cyan-500',
                     'transition-transform duration-300',
                     isActive ? 'scale-x-100' : 'scale-x-0',
                   )}
@@ -147,7 +147,7 @@ export function SiteHeader() {
             de novo. O acesso fica ao lado do CTA e em peso menor: é o caminho
             de quem já converteu, não o que a página está vendendo.
           */}
-          <Button asChild size="sm" variant="ghost" className="hidden md:inline-flex">
+          <Button asChild size="sm" variant="ghost" className="hidden lg:inline-flex">
             <Link href={AFFILIATE_LOGIN_PATH}>{site.accountCta}</Link>
           </Button>
 
@@ -162,7 +162,7 @@ export function SiteHeader() {
             type="button"
             variant="ghost"
             size="icon"
-            className="md:hidden"
+            className="lg:hidden"
             aria-expanded={open}
             aria-controls="menu-mobile"
             aria-label={open ? 'Fechar menu' : 'Abrir menu'}
@@ -176,7 +176,7 @@ export function SiteHeader() {
       {open && (
         <nav
           id="menu-mobile"
-          className="animate-pop-in origin-top border-t border-ink-200 bg-white md:hidden"
+          className="animate-pop-in origin-top border-t border-ink-200 bg-white lg:hidden"
         >
           <ul className="container-site py-2">
             {[

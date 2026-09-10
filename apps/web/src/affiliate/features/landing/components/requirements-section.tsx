@@ -36,7 +36,15 @@ export function RequirementsSection() {
         </div>
 
         <div className="lg:col-span-7">
-          <ul className="reveal-stagger divide-y divide-ink-200 overflow-hidden rounded-panel border border-ink-200 bg-white">
+          {/*
+            A lista entra como uma peça só, e são duas coisas presas ao mesmo
+            motivo: `reveal` no painel (e não `reveal-stagger` nos itens) para a
+            opacidade, e `draw-check-group` para o traço do check. Preso ao
+            `view()` de cada item, o de baixo está sempre dezenas de pixels
+            atrás do de cima — o quarto ficava a meio traço e com cara de ícone
+            diferente dos outros três, que foi o que a Porto viu na validação.
+          */}
+          <ul className="reveal draw-check-group divide-y divide-ink-200 overflow-hidden rounded-panel border border-ink-200 bg-white">
             {requirements.items.map((item) => (
               <li key={item} className="flex items-start gap-4 px-6 py-5">
                 <span className="mt-px flex size-6 shrink-0 items-center justify-center rounded-pill bg-blue-50 text-blue-600">

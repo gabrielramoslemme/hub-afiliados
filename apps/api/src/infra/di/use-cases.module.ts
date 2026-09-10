@@ -42,7 +42,7 @@ function provideUseCase<TDependencies extends unknown[], TUseCase>(
 }
 
 const USE_CASES = [
-  provideUseCase(CreateAffiliateUseCase, [USER_REPOSITORY, AFFILIATE_REPOSITORY, MAILER]),
+  provideUseCase(CreateAffiliateUseCase, [USER_REPOSITORY, AFFILIATE_REPOSITORY, MAILER, CLOCK]),
   provideUseCase(AdminLoginUseCase, [USER_REPOSITORY, PASSWORD_HASHER, ACCESS_TOKEN_ISSUER, CLOCK]),
   provideUseCase(ListAffiliatesUseCase, [AFFILIATE_REPOSITORY]),
   provideUseCase(GetAffiliateUseCase, [AFFILIATE_REPOSITORY]),

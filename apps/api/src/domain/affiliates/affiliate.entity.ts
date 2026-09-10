@@ -13,6 +13,8 @@ export interface AffiliateEntity {
   socialNetwork: SocialNetworkEnum | null;
   socialHandle: string | null;
   status: AffiliateStatusEnum;
+  /** Quando a pessoa aceitou o Regulamento, no envio do cadastro. */
+  termsAcceptedAt: Date;
   approvedAt: Date | null;
   approvedByUserId: number | null;
   rejectionReason: string | null;

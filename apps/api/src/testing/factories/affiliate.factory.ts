@@ -19,6 +19,7 @@ export function buildAffiliate(overrides: Partial<AffiliateWithUser> = {}): Affi
     socialNetwork: null,
     socialHandle: null,
     status: AffiliateStatusEnum.PENDING_APPROVAL,
+    termsAcceptedAt: new Date('2026-08-17T12:00:00Z'),
     approvedAt: null,
     approvedByUserId: null,
     rejectionReason: null,

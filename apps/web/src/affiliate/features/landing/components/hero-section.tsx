@@ -14,8 +14,18 @@ import { Tilt } from './tilt';
 export function HeroSection() {
   return (
     <section className="surface-brand surface-mesh surface-grid relative isolate overflow-hidden">
-      <Container className="relative grid items-center gap-16 pb-24 pt-12 lg:grid-cols-12 lg:gap-10 lg:pb-32 lg:pt-20">
-        <div className="animate-rise lg:col-span-6">
+      {/*
+        Três blocos, e não dois: no celular a promessa vem primeiro, os dois
+        objetos que a pessoa recebe entram no meio como prova, e a ação fecha a
+        dobra. Empilhados como texto-inteiro-e-depois-os-cartões, eles liam como
+        dois blocos soltos no fim de um parágrafo comprido.
+
+        A partir de `lg` a grade recompõe as duas colunas de sempre: promessa e
+        ação uma sobre a outra à esquerda, os cartões ocupando as duas linhas à
+        direita.
+      */}
+      <Container className="relative flex flex-col gap-10 pb-24 pt-12 lg:grid lg:grid-cols-12 lg:gap-x-10 lg:gap-y-8 lg:pb-32 lg:pt-20">
+        <div className="animate-rise lg:col-span-6 lg:self-end">
           <p className="inline-flex items-center gap-2 rounded-pill border border-white/20 bg-white/10 px-3 py-1.5 text-eyebrow uppercase text-white">
             <Sparkles className="size-3.5 animate-sparkle text-cyan-300" aria-hidden />
             {hero.badge}
@@ -27,7 +37,28 @@ export function HeroSection() {
 
           <p className="text-lead mt-7 max-w-[52ch] text-blue-200">{hero.lead}</p>
 
-          <div className="mt-10 flex flex-col gap-3 sm:flex-row">
+          <p className="mt-4 max-w-[52ch] font-semibold text-white">{hero.kicker}</p>
+        </div>
+
+        {/*
+          Os dois objetos que a pessoa vai receber, na ordem em que ela os
+          recebe: o cupom primeiro, o extrato depois. A deriva é do grupo inteiro
+          e a inclinação é de cada cartão — separadas, porque as duas escrevem
+          `transform` e uma sobrescreveria a outra no mesmo elemento.
+        */}
+        <div className="animate-float flex justify-center lg:col-span-6 lg:row-span-2 lg:self-center lg:justify-end">
+          <div className="flex w-full max-w-sm flex-col gap-5">
+            <Tilt>
+              <CouponCard />
+            </Tilt>
+            <Tilt>
+              <EarningsCard />
+            </Tilt>
+          </div>
+        </div>
+
+        <div className="animate-rise lg:col-span-6 lg:col-start-1 lg:self-start">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <Button asChild size="lg" variant="inverse" className="group">
               <Link href="#cadastro">
                 {hero.primaryCta}
@@ -47,23 +78,6 @@ export function HeroSection() {
               </li>
             ))}
           </ul>
-        </div>
-
-        {/*
-          Os dois objetos que a pessoa vai receber, na ordem em que ela os
-          recebe: o cupom primeiro, o extrato depois. A deriva é do grupo inteiro
-          e a inclinação é de cada cartão — separadas, porque as duas escrevem
-          `transform` e uma sobrescreveria a outra no mesmo elemento.
-        */}
-        <div className="animate-float flex justify-center lg:col-span-6 lg:justify-end">
-          <div className="flex w-full max-w-sm flex-col gap-5">
-            <Tilt>
-              <CouponCard />
-            </Tilt>
-            <Tilt>
-              <EarningsCard />
-            </Tilt>
-          </div>
         </div>
       </Container>
     </section>

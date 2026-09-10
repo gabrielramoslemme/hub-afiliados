@@ -47,6 +47,7 @@ export interface CreateAffiliateWithUserInput {
   pixKey: string;
   socialNetwork: SocialNetworkEnum | null;
   socialHandle: string | null;
+  termsAcceptedAt: Date;
 }
 
 export interface AffiliateRepository {

@@ -13,12 +13,14 @@ import {
   InvalidRgError,
   PixKeyMismatchError,
   RgAlreadyRegisteredError,
+  TermsNotAcceptedError,
 } from '@Domain/affiliates/affiliates.errors';
 import { isValidCpf, sanitizeCpf } from '@Domain/affiliates/cpf.util';
 import { isValidPixKey, normalizePixKey } from '@Domain/affiliates/pix-key.util';
 import { isValidRg, sanitizeRg } from '@Domain/affiliates/rg.util';
 import { sanitizeSocialHandle } from '@Domain/affiliates/social-handle.util';
 import { Mailer } from '@Domain/notifications/mailer';
+import { Clock } from '@Domain/shared/clock';
 import { UserRepository } from '@Domain/users/user.repository';
 import { UseCase } from '../use-case';
 
@@ -31,6 +33,8 @@ export interface CreateAffiliateInput {
   pixKey: string;
   socialNetwork?: SocialNetworkEnum | null;
   socialHandle?: string | null;
+  /** Aceite do Regulamento, marcado no envio do formulário. */
+  termsAccepted: boolean;
 }
 
 export interface CreateAffiliateOutput {
@@ -45,9 +49,17 @@ export class CreateAffiliateUseCase
     private readonly userRepository: UserRepository,
     private readonly affiliateRepository: AffiliateRepository,
     private readonly mailer: Mailer,
+    private readonly clock: Clock,
   ) {}
 
   async execute(input: CreateAffiliateInput): Promise<CreateAffiliateOutput> {
+    /*
+      Primeira coisa conferida, e antes de qualquer consulta: sem o aceite não
+      há cadastro para nascer, e recusar depois de procurar CPF, RG e e-mail
+      seria trabalho feito por uma entrada que já estava reprovada.
+    */
+    if (!input.termsAccepted) throw new TermsNotAcceptedError();
+
     const cpf = sanitizeCpf(input.cpf);
     if (!isValidCpf(cpf)) throw new InvalidCpfError();
 
@@ -81,6 +93,7 @@ export class CreateAffiliateUseCase
       pixKey,
       socialNetwork,
       socialHandle,
+      termsAcceptedAt: this.clock.now(),
     });
 
     // O port nunca lança: e-mail não enviado é incidente operacional, não deve

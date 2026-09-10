@@ -46,7 +46,7 @@ export function AdminSidebar({ user }: { user: SessionUser }) {
   return (
     <aside className="surface-brand sticky top-0 hidden h-svh w-60 shrink-0 flex-col lg:flex">
       <div className="flex h-16 shrink-0 items-center px-6">
-        <Link href={DASHBOARD_PATH} aria-label="Painel do Hub de Afiliados">
+        <Link href={DASHBOARD_PATH} aria-label="Painel do programa Influenciadores">
           <PortoLogo tone="dark" />
         </Link>
       </div>

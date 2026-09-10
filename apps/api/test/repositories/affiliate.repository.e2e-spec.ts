@@ -63,6 +63,7 @@ describe('AffiliateRepository (integration)', () => {
       pixKeyType: PixKeyTypeEnum.EMAIL,
       pixKey: 'marina@example.com',
       status: AffiliateStatusEnum.PENDING_APPROVAL,
+      termsAcceptedAt: new Date('2026-08-17T12:00:00Z'),
     });
     affiliateId = affiliate.id;
   });
@@ -191,6 +192,7 @@ describe('AffiliateRepository (integration)', () => {
         pixKey: 'rogerio.bastos@email.com',
         socialNetwork: null,
         socialHandle: null,
+        termsAcceptedAt: new Date('2026-08-17T12:00:00Z'),
       });
       await affiliates.createWithUser({
         fullName: 'Cleide Nakamura',
@@ -201,6 +203,7 @@ describe('AffiliateRepository (integration)', () => {
         pixKey: 'cleide.nakamura@email.com',
         socialNetwork: null,
         socialHandle: null,
+        termsAcceptedAt: new Date('2026-08-17T12:00:00Z'),
       });
       await affiliates.changeStatus({
         affiliateId: rogerio.id,
@@ -281,6 +284,7 @@ describe('AffiliateRepository (integration)', () => {
       pixKey: 'bruno@example.com',
       socialNetwork: SocialNetworkEnum.YOUTUBE,
       socialHandle: 'brunoalves',
+      termsAcceptedAt: new Date('2026-08-17T12:00:00Z'),
     };
 
     it('creates user, affiliate and the first history row atomically', async () => {

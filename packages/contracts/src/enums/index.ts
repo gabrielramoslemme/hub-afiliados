@@ -72,6 +72,7 @@ export enum RegistrationErrorCodeEnum {
   PIX_KEY_INVALID = 'REG-005',
   RG_ALREADY_REGISTERED = 'REG-006',
   INVALID_RG = 'REG-007',
+  TERMS_NOT_ACCEPTED = 'REG-008',
 }
 
 /** Todo `code` que o corpo de erro da API pode carregar. */

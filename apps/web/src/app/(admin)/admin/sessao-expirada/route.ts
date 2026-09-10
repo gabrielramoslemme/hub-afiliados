@@ -1,6 +1,11 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { LOGIN_PATH } from '@/admin/shared/routes';
-import { SESSION_COOKIE, SESSION_USER_COOKIE } from '@/shared/lib/session-cookie';
+import {
+  LEGACY_SESSION_COOKIE_PATH,
+  SESSION_COOKIE,
+  SESSION_COOKIE_PATH,
+  SESSION_USER_COOKIE,
+} from '@/shared/lib/session-cookie';
 
 /**
  * O único lugar que pode apagar o cookie no meio de uma navegação: Server
@@ -12,8 +17,13 @@ import { SESSION_COOKIE, SESSION_USER_COOKIE } from '@/shared/lib/session-cookie
 export function GET(request: NextRequest): NextResponse {
   const response = NextResponse.redirect(new URL(LOGIN_PATH, request.url));
 
-  response.cookies.delete(SESSION_COOKIE);
-  response.cookies.delete(SESSION_USER_COOKIE);
+  // Mesmo par nome+caminho da escrita, pelo motivo do `destroySession` — e o
+  // caminho antigo junto, que é o que tira do laço quem virou com sessão aberta.
+  response.cookies.delete({ name: SESSION_COOKIE, path: SESSION_COOKIE_PATH });
+  response.cookies.delete({ name: SESSION_USER_COOKIE, path: SESSION_COOKIE_PATH });
+
+  response.cookies.delete({ name: SESSION_COOKIE, path: LEGACY_SESSION_COOKIE_PATH });
+  response.cookies.delete({ name: SESSION_USER_COOKIE, path: LEGACY_SESSION_COOKIE_PATH });
 
   return response;
 }
