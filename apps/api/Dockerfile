@@ -53,6 +53,12 @@ COPY --from=builder --chown=node:node /app/packages/contracts/dist ./packages/co
 COPY --from=builder --chown=node:node /app/apps/api/package.json ./apps/api/package.json
 COPY --from=builder --chown=node:node /app/apps/api/dist ./apps/api/dist
 
+# As autoridades do RDS não estão no trust store do Node. Sem o bundle, ligar
+# `DATABASE_SSL` só teria duas saídas — recusar toda conexão ou desligar a
+# verificação —, e o banco guarda CPF e chave PIX. O caminho é o mesmo que
+# `postgres-ssl.ts` assume; mudá-lo aqui exige mudar lá.
+COPY --chown=node:node infra/certs/rds-global-bundle.pem /app/certs/rds-global-bundle.pem
+
 USER node
 WORKDIR /app/apps/api
 EXPOSE 3000

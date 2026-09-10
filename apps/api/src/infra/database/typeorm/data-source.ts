@@ -1,4 +1,5 @@
 import { DataSource } from 'typeorm';
+import { postgresSslFromEnv } from './postgres-ssl';
 
 /**
  * Caminhos resolvidos por `__dirname` e com os dois sufixos, como o
@@ -9,6 +10,9 @@ import { DataSource } from 'typeorm';
 const dataSource = new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
+  // O CLI roda fora do Nest, então lê o ambiente direto — mas a opção é montada
+  // pela mesma função que o `typeorm.module.ts` usa. Ver `postgres-ssl.ts`.
+  ssl: postgresSslFromEnv(),
   entities: [`${__dirname}/entities/*.typeorm-entity{.ts,.js}`],
   migrations: [`${__dirname}/migrations/*{.ts,.js}`],
   synchronize: false,

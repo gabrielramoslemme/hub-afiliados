@@ -16,4 +16,13 @@
 **/*.md
 **/*.png
 apps/api/openapi.json
-infra
+
+# O que é do provisionamento não entra em camada de imagem. `infra/certs` fica
+# de fora desta lista de propósito: o `Dockerfile` da API copia o bundle de CAs
+# do RDS para `/app/certs/`, porque o trust store do Node não conhece as
+# autoridades da Amazon. São três linhas em vez de `infra` mais uma exceção com
+# `!` justamente para não depender da ordem das regras — pasta nova em `infra/`
+# que não deva ir para a imagem precisa ser acrescentada aqui.
+infra/cloudformation
+infra/compose
+infra/scripts

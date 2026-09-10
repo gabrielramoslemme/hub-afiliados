@@ -248,6 +248,12 @@ Contrato no domínio, implementação em infra. **Use case nunca recebe `Reposit
 
 O `DatabaseModule` continua sendo um DataSource à parte, o da aplicação, que lê o `EnvironmentVariableService`. Os globs dos dois são iguais de propósito; divergir volta a produzir migration que roda no CLI e some em runtime.
 
+**E o TLS dos dois sai da mesma função, `postgres-ssl.ts`.** O parameter group padrão do RDS PostgreSQL 16 traz `rds.force_ssl = 1`: sem TLS o servidor recusa a conexão antes de olhar a senha. Configurar só um dos dois DataSources é a mesma armadilha dos globs, de cabeça para baixo — a aplicação sobe e a migration não, ou o contrário.
+
+Não adianta pendurar `?sslmode=require` na `DATABASE_URL`: o TypeORM quebra a URL em host, porta, usuário, senha e banco, e não repassa o query string ao driver. A opção é `ssl`, montada por `buildPostgresSsl`.
+
+A CA da Amazon não está no trust store do Node, então a imagem carrega o bundle (`infra/certs/rds-global-bundle.pem` → `/app/certs/`) e a verificação fica ligada. Sem o arquivo a função **lança** em vez de cair para conexão sem verificação: o banco guarda CPF e chave PIX, e subir sem saber com quem se está falando é o que não se faz.
+
 ## Configuração
 
 Variável nova entra em **quatro** lugares, sempre os quatro:

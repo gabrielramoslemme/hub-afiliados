@@ -1,5 +1,6 @@
-import { readdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { DataSource } from 'typeorm';
 import dataSource, * as dataSourceModule from './data-source';
 
@@ -32,6 +33,34 @@ describe('TypeORM DataSource', () => {
   it('connects to postgres with synchronize off', () => {
     expect(dataSource.options.type).toBe('postgres');
     expect(dataSource.options.synchronize).toBe(false);
+  });
+
+  /**
+   * O RDS de produção roda com `rds.force_ssl = 1`: sem a opção `ssl` o CLI é
+   * recusado no aperto de mão e a migration nunca chega ao schema. Recarregar o
+   * módulo com o ambiente ligado é o que prova que ela vem do ambiente, e não
+   * um `false` fixo que passaria neste teste sem servir para nada.
+   */
+  it('takes the ssl the environment asks for, which is what RDS force_ssl demands', async () => {
+    const caPath = join(mkdtempSync(join(tmpdir(), 'rds-ca-')), 'bundle.pem');
+    writeFileSync(caPath, '-----BEGIN CERTIFICATE-----\ncontent\n-----END CERTIFICATE-----\n');
+
+    process.env.DATABASE_SSL = 'true';
+    process.env.DATABASE_CA_PATH = caPath;
+
+    let ssl: unknown;
+    await jest.isolateModulesAsync(async () => {
+      const reloaded = (await import('./data-source')).default;
+      ssl = (reloaded.options as { ssl?: unknown }).ssl;
+    });
+
+    delete process.env.DATABASE_SSL;
+    delete process.env.DATABASE_CA_PATH;
+
+    expect(ssl).toEqual({
+      ca: expect.stringContaining('BEGIN CERTIFICATE'),
+      rejectUnauthorized: true,
+    });
   });
 
   it('resolves the migrations from its own directory, in both extensions', () => {

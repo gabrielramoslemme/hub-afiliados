@@ -23,6 +23,17 @@ export class EnvironmentVariableService {
   get databaseUrl(): string {
     return this.required('DATABASE_URL');
   }
+  /**
+   * O Postgres do desenvolvimento não fala TLS; o RDS, com `rds.force_ssl = 1`,
+   * não fala outra coisa. Quem liga é o `install-release.sh`.
+   */
+  get databaseSsl(): boolean {
+    return this.configService.get<boolean>('DATABASE_SSL') ?? false;
+  }
+  /** Sem valor aqui, o caminho padrão é o que a imagem carrega. */
+  get databaseCaPath(): string | undefined {
+    return this.configService.get<string>('DATABASE_CA_PATH');
+  }
   get jwtSecret(): string {
     return this.required('JWT_SECRET');
   }
