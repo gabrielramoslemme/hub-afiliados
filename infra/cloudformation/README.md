@@ -427,12 +427,48 @@ aws cloudformation deploy \
 ```
 
 Depois é conectar direto no `RdsEndpoint`, porta 5432, com `porto` e a senha de
-`npm run db:password`. TLS continua obrigatório (`rds.force_ssl = 1`), então use
-`sslmode=require`.
+`npm run db:password`.
+
+**Num endpoint público, `sslmode=require` não basta.** No libpq o `require`
+cifra mas não verifica certificado nem hostname — protege de quem escuta, não de
+quem se põe no meio, que é o risco que a exposição pública acabou de criar. Use
+`verify-full` com o bundle das CAs da Amazon, já versionado no repositório:
+
+```bash
+psql "postgresql://porto@$RDS_HOST:5432/hub_afiliados?sslmode=verify-full&sslrootcert=infra/certs/rds-global-bundle.pem"
+```
+
+No DBeaver: aba SSL, `SSL mode: verify-full` e o mesmo arquivo em *Root
+certificate*. Pelo túnel continua sendo `require` — ali o certificado é emitido
+para o endpoint do RDS e o cliente fala com `localhost`, então `verify-full`
+falharia por hostname.
+
+O servidor recusa conexão sem TLS porque o `rds.force_ssl` vem em `1` no
+parameter group padrão do PostgreSQL 16. **Isso é default da AWS, não garantia
+deste template** — a stack não define `DBParameterGroupName`, então quem trocar
+o `DBEngineVersion` para uma família mais antiga, ou apontar um parameter group
+próprio, perde a obrigatoriedade sem nenhum aviso.
 
 Para fechar de novo, `DbAccessCidr=''` no mesmo comando. Nenhum dos dois sentidos
 substitui a instância nem perde dado: é `modify-db-instance` mais rota e regra de
 security group.
+
+Antes do primeiro deploy real, confirme isso com um change set em vez de confiar
+na afirmação. O `Database` carrega `DeletionPolicy: Delete` e
+`UpdateReplacePolicy: Delete` com `BackupRetentionPeriod: 1`: se a premissa não
+valesse, o banco iria embora sem snapshot.
+
+```bash
+aws cloudformation create-change-set --stack-name porto-hub-dev --change-set-name open-db \
+  --template-body file://infra/cloudformation/porto-hub-dev-stack.yaml \
+  --parameters ParameterKey=DbAccessCidr,ParameterValue=200.201.202.0/24 \
+  --capabilities CAPABILITY_NAMED_IAM
+
+aws cloudformation describe-change-set --stack-name porto-hub-dev --change-set-name open-db \
+  --query 'Changes[].ResourceChange.[LogicalResourceId,Action,Replacement]' --output table
+```
+
+Execute só com `Replacement: False` na linha do `Database`.
 
 **O que muda ao abrir.** A tabela guarda CPF e chave PIX de afiliado, e a senha
 do master passa a ser o único controle de quem entra — sem revogação por pessoa
