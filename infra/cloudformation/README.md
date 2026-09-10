@@ -407,7 +407,7 @@ id da instância, o endpoint do RDS e o ARN do segredo.
 O túnel exige o `session-manager-plugin` (`brew install --cask session-manager-plugin`),
 que não vem junto com o AWS CLI. Com ele instalado, qualquer cliente — psql,
 TablePlus, DBeaver, DataGrip — conecta em `localhost:5433` como se o banco fosse
-local. Nesse modo o RDS não tem rota para a internet: o controle de acesso é a
+local, com o usuário `hub_rw`. Nesse modo o RDS não tem rota para a internet: o controle de acesso é a
 permissão `ssm:StartSession`, revogável por pessoa e auditável no CloudTrail.
 
 ### Acesso direto ao banco, sem túnel
@@ -439,8 +439,15 @@ para listar, então a camada de rede não está disponível como restrição. Co
 `deploy` reusa o valor anterior de parâmetro não informado, a fricção é uma vez
 só.
 
-Depois é conectar direto no `RdsEndpoint`, porta 5432, com `porto` e a senha de
-`npm run db:password`.
+Depois é conectar direto no `RdsEndpoint`, porta 5432, com **`hub_rw`** e a
+senha de `npm run db:password`.
+
+O usuário não é o master. O `hub_rw` tem `SELECT`, `INSERT`, `UPDATE` e `DELETE`
+no schema `public` e nada de DDL: o que vazar dele não cria papel, não dropa
+tabela e não vira superusuário. É o papel que o deploy provisiona a cada
+release, logo depois das migrations — por isso tabela nova já nasce acessível.
+O master continua existindo para migration e seed, e sai do
+`ReadDbPasswordCommand` quando alguém realmente precisar dele.
 
 **Num endpoint público, `sslmode=require` não basta.** No libpq o `require`
 cifra mas não verifica certificado nem hostname — protege de quem escuta, não de
@@ -448,7 +455,7 @@ quem se põe no meio, que é o risco que a exposição pública acabou de criar.
 `verify-full` com o bundle das CAs da Amazon, já versionado no repositório:
 
 ```bash
-psql "postgresql://porto@$RDS_HOST:5432/hub_afiliados?sslmode=verify-full&sslrootcert=infra/certs/rds-global-bundle.pem"
+psql "postgresql://hub_rw@$RDS_HOST:5432/hub_afiliados?sslmode=verify-full&sslrootcert=infra/certs/rds-global-bundle.pem"
 ```
 
 No DBeaver: aba SSL, `SSL mode: verify-full` e o mesmo arquivo em *Root
@@ -494,8 +501,9 @@ aplicação e deixar o master fora de circulação.
 |---|---|
 | Shell na máquina | `aws ssm start-session --target <id>` |
 | Swagger | túnel do output `SwaggerTunnelCommand`, depois `http://localhost:3000/v1/docs` |
-| psql no RDS | `npm run db:tunnel` na raiz, depois `psql -h localhost -p 5433 -U porto hub_afiliados` (ou direto no `RdsEndpoint`, se `DbAccessCidr` estiver preenchido) |
-| Senha do RDS | `npm run db:password` na raiz |
+| psql no RDS | `npm run db:tunnel` na raiz, depois `psql -h localhost -p 5433 -U hub_rw hub_afiliados` (ou direto no `RdsEndpoint`, se `DbAccessCidr` estiver preenchido) |
+| Senha do `hub_rw` | `npm run db:password` na raiz |
+| Senha do master | output `ReadDbPasswordCommand` — só para o que exige DDL |
 | Senha inicial do painel | output `ReadSeedPasswordCommand` |
 | Logs | CloudWatch, grupo `/porto-hub/dev`, streams `api`, `web` e `caddy` |
 | Rollback | *Actions → CD → Run workflow*, com o `imageTag` anterior (o ECR guarda as 10 últimas) |

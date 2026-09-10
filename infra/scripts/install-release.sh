@@ -191,6 +191,13 @@ CADDY
 }
 
 # A senha inicial dos operadores nao entra em arquivo nenhum: e lida na hora e
+# passada so para o container dos grants, que a aplica no papel hub_rw.
+read_rw_password() {
+  aws secretsmanager get-secret-value --secret-id "${DB_RW_SECRET_ARN}" \
+    --region "${AWS_REGION}" --query SecretString --output text \
+    | python3 -c 'import json,sys;print(json.load(sys.stdin)["password"])'
+}
+
 # passada so para o container do seed, que a grava ja com bcrypt.
 read_seed_password() {
   set +x
@@ -255,6 +262,12 @@ compose pull --quiet || rollback
 # aparecer a segunda, este passo sai daqui e vira job à parte, antes do fan-out.
 compose run --rm api npm run typeorm:run:prod || rollback
 MIGRATION_APPLIED=true
+
+# Depois da migration, e nao antes: GRANT ON ALL TABLES so alcanca o que ja
+# existe, e a release de hoje pode ter criado tabela. A senha vai por -e, como
+# a do seed - o api.env continua com a do master, que e quem pode criar papel.
+DB_RW_PASSWORD="$(read_rw_password)" \
+  compose run --rm -e DB_RW_PASSWORD api npm run db:grants:prod || rollback
 
 # Idempotente por `ON CONFLICT DO NOTHING`: rodar a cada deploy não devolve a
 # senha do operador para a do seed, e garante que um ambiente recém-criado já

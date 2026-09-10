@@ -474,6 +474,20 @@ Resources:
         PasswordLength: 48
         ExcludePunctuation: true
 
+  # A senha que circula entre pessoas: e ela que vai para o DBeaver, e com o
+  # banco aberto na internet e ela que atravessa. Separada do master de
+  # proposito - o papel hub_rw tem DML e nada de DDL, entao o que vaza daqui
+  # nao cria papel, nao dropa tabela e nao vira superusuario.
+  DbRwSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Credenciais do papel de leitura e escrita do Hub de Afiliados
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"hub_rw"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludePunctuation: true
+
   # Secret proprio - e nao um campo do anterior - porque GenerateSecretString
   # gera UMA chave por segredo. Vale os US$ 0,40/mes: a alternativa era a senha
   # publicada no README (MudarAgora!2026) valendo num painel exposto a internet.
@@ -671,6 +685,7 @@ Resources:
           DB_HOST=${Database.Endpoint.Address}
           DB_NAME=hub_afiliados
           DB_SECRET_ARN=${DbSecret}
+          DB_RW_SECRET_ARN=${DbRwSecret}
           APP_SECRET_ARN=${AppSecret}
           SEED_SECRET_ARN=${SeedSecret}
           DOMAIN_NAME=${EffectiveDomainName}
@@ -706,6 +721,7 @@ Resources:
                 Action: secretsmanager:GetSecretValue
                 Resource:
                   - !Ref DbSecret
+                  - !Ref DbRwSecret
                   - !Ref AppSecret
                   - !Ref SeedSecret
               - Effect: Allow
@@ -1169,6 +1185,10 @@ Outputs:
   DbSecretArn:
     Description: Segredo com usuario e senha do master do RDS
     Value: !Ref DbSecret
+
+  DbRwSecretArn:
+    Description: Segredo do papel hub_rw - o que as pessoas usam no cliente
+    Value: !Ref DbRwSecret
 
   ReadDbPasswordCommand:
     Description: Senha do master do RDS, para o psql pelo tunel
