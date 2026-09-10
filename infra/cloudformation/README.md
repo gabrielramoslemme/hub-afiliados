@@ -86,7 +86,9 @@ protegidos por audiência de JWT. Ampliar é uma linha no `Caddyfile`, quando
 houver motivo.
 
 Consequência prática: **Swagger e psql saem por túnel do SSM**, com os comandos
-prontos nos outputs `SwaggerTunnelCommand` e `RdsTunnelCommand`.
+prontos nos outputs `SwaggerTunnelCommand` e `RdsTunnelCommand`. O psql tem uma
+saída alternativa quando `DbAccessCidr` está preenchido — ver *Acesso direto ao
+banco, sem túnel*.
 
 ## Por que a web fica numa rede `internal`
 
@@ -405,14 +407,45 @@ id da instância, o endpoint do RDS e o ARN do segredo.
 O túnel exige o `session-manager-plugin` (`brew install --cask session-manager-plugin`),
 que não vem junto com o AWS CLI. Com ele instalado, qualquer cliente — psql,
 TablePlus, DBeaver, DataGrip — conecta em `localhost:5433` como se o banco fosse
-local. O RDS continua sem rota para a internet: o controle de acesso é a
+local. Nesse modo o RDS não tem rota para a internet: o controle de acesso é a
 permissão `ssm:StartSession`, revogável por pessoa e auditável no CloudTrail.
+
+### Acesso direto ao banco, sem túnel
+
+O parâmetro `DbAccessCidr` abre o Postgres na 5432 para um CIDR. Vazio — o
+padrão — nada muda e o acesso continua sendo só pelo túnel. Preenchido, três
+coisas passam a valer juntas: as subnets do banco ganham rota para o internet
+gateway, a instância recebe IP público e o security group libera o CIDR.
+
+```bash
+aws cloudformation deploy \
+  --template-file infra/cloudformation/porto-hub-dev-stack.yaml \
+  --stack-name porto-hub-dev \
+  --region us-east-1 \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides DbAccessCidr=200.201.202.0/24
+```
+
+Depois é conectar direto no `RdsEndpoint`, porta 5432, com `porto` e a senha de
+`npm run db:password`. TLS continua obrigatório (`rds.force_ssl = 1`), então use
+`sslmode=require`.
+
+Para fechar de novo, `DbAccessCidr=''` no mesmo comando. Nenhum dos dois sentidos
+substitui a instância nem perde dado: é `modify-db-instance` mais rota e regra de
+security group.
+
+**O que muda ao abrir.** A tabela guarda CPF e chave PIX de afiliado, e a senha
+do master passa a ser o único controle de quem entra — sem revogação por pessoa
+e sem o rastro que o `ssm:StartSession` deixa no CloudTrail. `0.0.0.0/0` expõe
+isso para a internet inteira; a faixa de saída da VPN é uma decisão bem
+diferente. Se abrir para valer, vale criar um usuário só com DML no schema da
+aplicação e deixar o master fora de circulação.
 
 | O quê | Como |
 |---|---|
 | Shell na máquina | `aws ssm start-session --target <id>` |
 | Swagger | túnel do output `SwaggerTunnelCommand`, depois `http://localhost:3000/v1/docs` |
-| psql no RDS | `npm run db:tunnel` na raiz, depois `psql -h localhost -p 5433 -U porto hub_afiliados` |
+| psql no RDS | `npm run db:tunnel` na raiz, depois `psql -h localhost -p 5433 -U porto hub_afiliados` (ou direto no `RdsEndpoint`, se `DbAccessCidr` estiver preenchido) |
 | Senha do RDS | `npm run db:password` na raiz |
 | Senha inicial do painel | output `ReadSeedPasswordCommand` |
 | Logs | CloudWatch, grupo `/porto-hub/dev`, streams `api`, `web` e `caddy` |

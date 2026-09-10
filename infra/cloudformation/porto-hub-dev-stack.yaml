@@ -184,6 +184,27 @@ Parameters:
       ja tiver um, deixe 'false' - criar o segundo faz a stack falhar com
       EntityAlreadyExists e o rollback leva tudo junto.
 
+  # Nasce VAZIO, e o vazio e o modo seguro: o banco fica sem rota de entrada,
+  # alcancavel so pela instancia da aplicacao e pelo port-forward do SSM.
+  #
+  # Preencher inverte isso em tres lugares de uma vez - as subnets do banco
+  # ganham rota para o internet gateway, a instancia recebe IP publico e o
+  # security group abre a 5432 para o CIDR. Sao os tres juntos que funcionam:
+  # qualquer um sozinho nao abre nada, e por isso os tres pendem desta mesma
+  # condicao.
+  DbAccessCidr:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^(\d{1,3}\.){3}\d{1,3}/(3[0-2]|[12]?\d)$'
+    Description: >
+      CIDR que alcanca o Postgres na 5432 pela internet, ex. 200.201.202.0/24.
+      VAZIO mantem o banco fechado - acesso so por `npm run db:tunnel`.
+      Preenchido, o banco passa a atender de fora e a senha do master vira o
+      unico controle de quem entra: a tabela guarda CPF e chave PIX de
+      afiliado, e o registro por pessoa que o ssm:StartSession deixa no
+      CloudTrail deixa de existir. Prefira a faixa de saida da VPN a
+      0.0.0.0/0.
+
 # Os tres parametros de dominio se acoplam, e o tipo deles nao expressa isso.
 # Sem estas regras a combinacao errada falha dois minutos depois, no CloudFront,
 # com mensagem que nao aponta para o parametro. Com elas, falha na hora do
@@ -212,6 +233,7 @@ Conditions:
   # API - o host da API so existe para o webhook, que ainda nao foi escrito.
   HasDomain: !Not [!Equals [!Ref DomainName, '']]
   HasApiDomain: !Not [!Equals [!Ref ApiDomainName, '']]
+  DbIsPublic: !Not [!Equals [!Ref DbAccessCidr, '']]
 
 Resources:
   # =========================================================== Rede
@@ -253,9 +275,13 @@ Resources:
         - Key: Name
           Value: !Sub 'porto-hub-${EnvironmentName}-public-a'
 
-  # Duas subnets privadas porque o DBSubnetGroup exige duas AZs, mesmo com a
-  # instancia single-AZ. Sem route table propria: o RDS nao precisa de saida
-  # para a internet, e por isso nao ha NAT nenhum para pagar.
+  # Duas subnets porque o DBSubnetGroup exige duas AZs, mesmo com a instancia
+  # single-AZ. Sem route table por padrao: o RDS nao precisa de saida para a
+  # internet, e por isso nao ha NAT nenhum para pagar. Com DbAccessCidr
+  # preenchido elas passam a apontar para a PublicRouteTable - ver
+  # DbSubnetARouteTableAssociation. O nome 'private' fica: mudar a tag e
+  # cosmetico, e o logical id nao muda sem substituir a subnet, o que levaria
+  # o banco junto.
   PrivateSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
@@ -296,6 +322,24 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  # PubliclyAccessible sozinho nao abre o banco: o RDS ganha IP publico, o
+  # pacote chega pelo internet gateway e a resposta nao acha caminho de volta,
+  # porque a subnet do banco nao tem rota default. O sintoma e timeout, o mesmo
+  # de quando nao ha rota nenhuma - por isso as duas coisas andam juntas.
+  DbSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: DbIsPublic
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  DbSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: DbIsPublic
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
       RouteTableId: !Ref PublicRouteTable
 
   # =========================================================== Security groups
@@ -340,6 +384,17 @@ Resources:
           ToPort: 5432
           SourceSecurityGroupId: !Ref AppSecurityGroup
           Description: Postgres a partir da instancia da aplicacao
+        # A regra da aplicacao continua valendo em qualquer modo: de dentro da
+        # VPC o endpoint resolve para o IP privado, e o trafego da API nunca
+        # sai pelo internet gateway nem quando o banco esta publico.
+        - !If
+          - DbIsPublic
+          - IpProtocol: tcp
+            FromPort: 5432
+            ToPort: 5432
+            CidrIp: !Ref DbAccessCidr
+            Description: Postgres a partir do CIDR de DbAccessCidr
+          - !Ref 'AWS::NoValue'
       # O RDS so responde, nunca inicia conexao. Declarar a saida substitui o
       # "permite tudo" que a EC2 adiciona sozinha quando o campo fica de fora; o
       # destino e o loopback justamente por nao existir destino legitimo.
@@ -443,9 +498,11 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       VPCSecurityGroups:
         - !Ref DbSecurityGroup
-      # A referencia do bolao abre o banco de dev para 0.0.0.0/0. Aqui nao:
-      # o acesso de fora e por port-forward do SSM, comando no output.
-      PubliclyAccessible: false
+      # Fechado por padrao - o acesso de fora e por port-forward do SSM,
+      # comando no output. DbAccessCidr preenchido abre, e a decisao fica no
+      # parametro em vez de escondida aqui. Trocar este valor e um modify do
+      # RDS: sem substituicao e sem perder dado.
+      PubliclyAccessible: !If [DbIsPublic, true, false]
       MultiAZ: false
       BackupRetentionPeriod: 1
       DeletionProtection: false
