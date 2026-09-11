@@ -100,6 +100,14 @@ O kit oficial mora em `public/brand/`: a trava em horizontal e vertical, cada um
 
 Por isso `PortoLogo` monta a trava em duas partes: os dois `porto-servico-wordmark-*.svg`, que são só traçado recortado do arquivo oficial, mais o descritor como texto do documento em Open Sans. **Ao trocar o logotipo, refaça os dois `wordmark` a partir do kit** — não aponte o componente para a trava inteira. As versões `positive` e `negative` do kit ainda trazem um retângulo de fundo chapado, que também precisa sair.
 
+### Ícone da aba
+
+Três arquivos na raiz de `src/app/`, que o App Router injeta em toda rota sem ninguém escrever `<link>`: `icon.svg` para o navegador moderno, `favicon.ico` (16, 32 e 48) para quem não lê SVG e `apple-icon.png` (180) para a tela de início do iOS. **Por morarem na raiz de `src/app/`, valem para as duas fatias** — landing, cadastro, área do afiliado e painel. Um segmento só ganha ícone próprio se receber um `icon.*` na pasta dele.
+
+O desenho é o símbolo do kit, o mesmo traçado de `porto-servico-horizontal-primary.svg` sem redesenho — `icon.spec.ts` compara os dois e fecha em vermelho se o kit for revisado e o ícone ficar para trás. Duas particularidades que não são enfeite: as velas, no kit, são **vazado** e não forma branca, então o `icon.svg` leva o contorno do azulejo em branco por baixo — sem essa camada o desenho apareceria invertido na aba em tema escuro; e o `apple-icon` é **sangrado, sem canto arredondado**, porque o iOS compõe transparência sobre preto e aplica a própria máscara de canto.
+
+**Os dois raster saem do `icon.svg`**, e não do kit: mexeu no SVG, refaça os dois com o `sharp` que o Next já traz.
+
 ### Gráfico
 
 `recharts` por baixo do `chart.tsx` do shadcn, em `src/shared/components/ui/` — a única biblioteca de desenho do app, e ela entra só na rota que a usa. **Cor de série sai de `--color-chart-1..4`**, nunca de literal no `ChartConfig`: o `ChartContainer` publica cada uma como `var(--color-<série>)`, e é isso que o traço lê. O gráfico é ilha `'use client'` porque o recharts mede o container para desenhar; a tela em volta continua Server Component.
