@@ -10,7 +10,7 @@ import { type ResetPasswordRequest, resetPasswordSchema } from '@porto/contracts
 import { AFFILIATE_LOGIN_PATH } from '@/affiliate/shared/routes';
 import { Button } from '@/shared/components/ui/button';
 import { Field, fieldAria } from '@/shared/components/ui/field';
-import { Input } from '@/shared/components/ui/input';
+import { PasswordInput } from '@/shared/components/ui/password-input';
 import { setPassword } from '../set-password.action';
 
 /**
@@ -70,11 +70,10 @@ export function SetPasswordForm({ token }: { token: string }) {
 
       {/* A tela existe para este formulário: o cursor já começa nele. */}
       <Field id="password" label="Nova senha" required error={errors.password?.message}>
-        <Input
+        <PasswordInput
           {...register('password')}
           {...fieldAria('password', { error: errors.password?.message, required: true })}
           autoFocus
-          type="password"
           autoComplete="new-password"
           placeholder="Ao menos 8 caracteres"
         />
@@ -86,13 +85,12 @@ export function SetPasswordForm({ token }: { token: string }) {
         required
         error={errors.passwordConfirmation?.message}
       >
-        <Input
+        <PasswordInput
           {...register('passwordConfirmation')}
           {...fieldAria('passwordConfirmation', {
             error: errors.passwordConfirmation?.message,
             required: true,
           })}
-          type="password"
           autoComplete="new-password"
         />
       </Field>

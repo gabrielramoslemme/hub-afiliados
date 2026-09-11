@@ -8,6 +8,7 @@ import { type AdminLoginRequest, adminLoginSchema } from '@porto/contracts';
 import { Button } from '@/shared/components/ui/button';
 import { Field, fieldAria } from '@/shared/components/ui/field';
 import { Input } from '@/shared/components/ui/input';
+import { PasswordInput } from '@/shared/components/ui/password-input';
 import { signIn } from '../sign-in.action';
 
 export function SignInForm({ target }: { target?: string }) {
@@ -59,10 +60,9 @@ export function SignInForm({ target }: { target?: string }) {
       </Field>
 
       <Field id="password" label="Senha" required error={errors.password?.message}>
-        <Input
+        <PasswordInput
           {...register('password')}
           {...fieldAria('password', { error: errors.password?.message, required: true })}
-          type="password"
           autoComplete="current-password"
         />
       </Field>
