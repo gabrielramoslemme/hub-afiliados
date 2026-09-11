@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="72.31 43.22 490 490" role="img" aria-label="Porto">
+  <!--
+    O ícone do painel. Mesmo símbolo do portal (src/app/icon.svg), mesmo traçado
+    do kit, e a única diferença é o tom do azulejo — que é o ponto: quem analisa
+    cadastro abre o painel e o portal lado a lado, e a 16px a cor do azulejo é o
+    que separa uma aba da outra. Só a cor diferencia porque o desenho não pode:
+    a marca é uma só.
+
+    O tom é o `color-blue-900` do `globals.css`, a ponta escura do
+    `gradient-brand`. Literal porque SVG servido como arquivo não enxerga o
+    `@theme` — ao mexer no token, mexa aqui também.
+
+    Não é o `positive` do kit (o preto #1d1d1b): preto sobre a barra escura do
+    navegador perde a borda do azulejo e sobra a vela solta no vazio. O azulejo
+    tem de se sustentar nos dois temas, e só o tom médio faz isso. O traçado
+    segue o kit; o tom do painel é sinalização deste produto, não da marca.
+
+    Sobre as duas camadas e o viewBox quadrado, ver src/app/icon.svg.
+  -->
+  <path fill="#ffffff" d="M501.37,43.22H133.23c-31.64,0-57.28,26.04-57.28,58.15v373.7c0,32.12,25.65,58.15,57.28,58.15h368.14c31.64,0,57.29-26.03,57.29-58.15V101.37c0-32.11-25.65-58.15-57.29-58.15"/>
+  <path fill="#081e44" d="M504.55,306.38c-43.11-52.83-185.26-25.19-296,10.19-1.4.48-2.85-.47-2.8-1.82.17-5.59.26-11.24.26-16.95,0-31.02-2.54-57.71-7.07-83.98-.16-.94.45-1.81,1.46-2.08,91.67-33.43,276.32-43.79,307.92,93.11l.02.03c.52,2.02-2.46,3.2-3.78,1.5M411.77,459.95c-3.02,2.25-6.99-1.44-4.39-4.09,44.62-45.62,81.29-117.98-242.02,29.21-1.97.9-3.96-1.17-2.66-2.79,17.81-25.45,33.71-66.5,40.9-124.67.07-.7.55-1.33,1.26-1.61,202.59-81.41,431.41-78.4,206.91,103.95M141.3,95.93c-1.84-.94-1.07-3.49,1.04-3.48,56.07.17,224.91-4.03,311.93,106.89,1.19,1.9-1.53,3.84-3.26,2.33-26.26-22.86-97.35-61.57-261.18-27.68-1.14.28-2.33-.35-2.6-1.39-13.04-41.71-29.62-64.24-45.92-76.66M501.37,43.22H133.23c-31.64,0-57.28,26.04-57.28,58.15v373.7c0,32.12,25.65,58.15,57.28,58.15h368.14c31.64,0,57.29-26.03,57.29-58.15V101.37c0-32.11-25.65-58.15-57.29-58.15"/>
+</svg>

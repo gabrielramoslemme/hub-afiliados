@@ -23,3 +23,23 @@ export const SESSION_EXPIRED_PATH = '/admin/sessao-expirada';
 
 /** Query string que carrega o destino original através do login. */
 export const REDIRECT_PARAM = 'next';
+
+/**
+ * O ícone da aba do painel. O App Router o serve de dentro do próprio segmento,
+ * em `/admin/icon-<hash>.svg`, e por isso ele nasce atrás do `middleware`, que
+ * devolveria o HTML do login no lugar do SVG. O resultado seria aba sem ícone
+ * justamente na tela de login, que é a única do painel que abre sem sessão.
+ *
+ * O `<hash>` é nome interno do Next, não contrato — daí ele ser opcional aqui:
+ * se uma versão passar a servir `/admin/icon.svg`, a exceção continua de pé.
+ *
+ * É arquivo de marca, não dado: deixá-lo passar não conta nada a ninguém que a
+ * própria tela de login pública já não conte. A regex é estreita de propósito —
+ * um segmento só, nome fixo, extensão fixa —, porque isto é um furo na negação
+ * por omissão da área logada e tem de caber num arquivo.
+ */
+const PANEL_ICON_PATH = /^\/admin\/icon(-[a-z0-9]+)?\.svg$/i;
+
+export function isPanelIconPath(pathname: string): boolean {
+  return PANEL_ICON_PATH.test(pathname);
+}

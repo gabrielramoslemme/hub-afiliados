@@ -102,11 +102,25 @@ Por isso `PortoLogo` monta a trava em duas partes: os dois `porto-servico-wordma
 
 ### Ícone da aba
 
-Três arquivos na raiz de `src/app/`, que o App Router injeta em toda rota sem ninguém escrever `<link>`: `icon.svg` para o navegador moderno, `favicon.ico` (16, 32 e 48) para quem não lê SVG e `apple-icon.png` (180) para a tela de início do iOS. **Por morarem na raiz de `src/app/`, valem para as duas fatias** — landing, cadastro, área do afiliado e painel. Um segmento só ganha ícone próprio se receber um `icon.*` na pasta dele.
+O App Router injeta os `<link>` sozinho a partir do nome do arquivo. São dois conjuntos, um por fatia:
 
-O desenho é o símbolo do kit, o mesmo traçado de `porto-servico-horizontal-primary.svg` sem redesenho — `icon.spec.ts` compara os dois e fecha em vermelho se o kit for revisado e o ícone ficar para trás. Duas particularidades que não são enfeite: as velas, no kit, são **vazado** e não forma branca, então o `icon.svg` leva o contorno do azulejo em branco por baixo — sem essa camada o desenho apareceria invertido na aba em tema escuro; e o `apple-icon` é **sangrado, sem canto arredondado**, porque o iOS compõe transparência sobre preto e aplica a própria máscara de canto.
+| Arquivo | Vale em | Para quê |
+|---|---|---|
+| `src/app/icon.svg` | tudo que não é `/admin` | navegador moderno |
+| `src/app/favicon.ico` | toda rota | 16, 32 e 48, para quem não lê SVG |
+| `src/app/apple-icon.png` | toda rota | 180, tela de início do iOS |
+| `src/app/(admin)/admin/icon.svg` | `/admin/**` | a aba do painel |
 
-**Os dois raster saem do `icon.svg`**, e não do kit: mexeu no SVG, refaça os dois com o `sharp` que o Next já traz.
+O desenho é o mesmo nos dois: o símbolo do kit, traçado idêntico ao de `porto-servico-horizontal-primary.svg`, sem redesenho. **A diferença é só o tom do azulejo** — `#4499d4` do kit no portal, `color-blue-900` no painel —, porque quem analisa cadastro abre os dois lado a lado e a 16px a cor é o que separa uma aba da outra. `icon.spec.ts` trava as duas coisas: que o traçado continua vindo do kit e que os dois tons continuam diferentes.
+
+Particularidades que não são enfeite:
+
+- **As velas, no kit, são vazado e não forma branca.** Por isso cada `icon.svg` leva o contorno do azulejo em branco por baixo — sem essa camada elas mostrariam o fundo da aba, e no tema escuro o desenho apareceria invertido.
+- **O `apple-icon` é sangrado, sem canto arredondado**, porque o iOS compõe transparência sobre preto e aplica a própria máscara de canto.
+- **O painel não tem `.ico` nem `apple-icon` próprios.** Com `icon.ico` e `icon.svg` na mesma pasta o Next linka o `.ico` e **descarta o SVG em silêncio** — a precedência de extensão do `icon.*` escolhe um só. Quem não lê SVG cai no `favicon.ico` da raiz, que o painel continua linkando.
+- **O ícone do painel é a única exceção do `middleware`.** Ele é servido de dentro do segmento guardado (`/admin/icon-<hash>.svg`); sem o desvio de `isPanelIconPath`, a tela de login — a única do painel que abre sem sessão — receberia o HTML do redirecionamento no lugar do SVG.
+
+**Os dois raster saem do `src/app/icon.svg`**, e não do kit: mexeu no SVG, refaça os dois com o `sharp` que o Next já traz.
 
 ### Gráfico
 
