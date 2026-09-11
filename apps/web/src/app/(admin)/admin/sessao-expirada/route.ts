@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { LOGIN_PATH } from '@/admin/shared/routes';
 import {
-  LEGACY_SESSION_COOKIE_PATH,
   SESSION_COOKIE,
   SESSION_COOKIE_PATH,
   SESSION_USER_COOKIE,
@@ -17,13 +16,11 @@ import {
 export function GET(request: NextRequest): NextResponse {
   const response = NextResponse.redirect(new URL(LOGIN_PATH, request.url));
 
-  // Mesmo par nome+caminho da escrita, pelo motivo do `destroySession` — e o
-  // caminho antigo junto, que é o que tira do laço quem virou com sessão aberta.
+  // Mesmo par nome+caminho da escrita, e uma chamada por cookie, pelo motivo do
+  // `destroySession`: o jar indexa por nome, e um segundo caminho sobrescreveria
+  // o primeiro em vez de somar.
   response.cookies.delete({ name: SESSION_COOKIE, path: SESSION_COOKIE_PATH });
   response.cookies.delete({ name: SESSION_USER_COOKIE, path: SESSION_COOKIE_PATH });
-
-  response.cookies.delete({ name: SESSION_COOKIE, path: LEGACY_SESSION_COOKIE_PATH });
-  response.cookies.delete({ name: SESSION_USER_COOKIE, path: LEGACY_SESSION_COOKIE_PATH });
 
   return response;
 }

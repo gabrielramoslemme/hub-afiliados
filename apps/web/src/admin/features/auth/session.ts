@@ -3,7 +3,6 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import type { AdminLoginResponse } from '@porto/contracts';
 import {
-  LEGACY_SESSION_COOKIE_PATH,
   SESSION_COOKIE,
   SESSION_COOKIE_PATH,
   SESSION_MAX_AGE_SECONDS,
@@ -52,9 +51,10 @@ export async function destroySession(): Promise<void> {
   // Apagar exige o mesmo `path` da escrita: o navegador guarda um cookie por
   // par nome+caminho, então `delete(nome)` sozinho não alcança o que foi
   // gravado em `/admin` — a pessoa veria a tela de login com a sessão viva.
+  //
+  // E **um** `delete` por cookie: o jar do Next indexa por nome, então apagar o
+  // mesmo nome num segundo caminho não soma — sobrescreve, e só o último vira
+  // `Set-Cookie`.
   jar.delete({ name: SESSION_COOKIE, path: SESSION_COOKIE_PATH });
   jar.delete({ name: SESSION_USER_COOKIE, path: SESSION_COOKIE_PATH });
-
-  jar.delete({ name: SESSION_COOKIE, path: LEGACY_SESSION_COOKIE_PATH });
-  jar.delete({ name: SESSION_USER_COOKIE, path: LEGACY_SESSION_COOKIE_PATH });
 }

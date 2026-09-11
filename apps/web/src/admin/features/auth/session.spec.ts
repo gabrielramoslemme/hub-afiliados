@@ -65,35 +65,49 @@ describe('createSession', () => {
   });
 });
 
+/**
+ * O jar do Next indexa cookie por **nome**, não por nome+caminho:
+ * `ResponseCookies` guarda um `Map` chaveado pelo nome e regrava os `Set-Cookie`
+ * a partir dele. Dois `delete` do mesmo cookie saem como um só — o último. Sem
+ * reproduzir isso aqui, o teste mede "a chamada aconteceu" e não "o navegador
+ * recebeu", que é onde o logout quebrou.
+ */
+function survivingDeletes(): Record<string, string | undefined> {
+  const surviving: Record<string, string | undefined> = {};
+
+  for (const call of mockJar.delete.mock.calls) {
+    const { name, path } = call[0] as { name: string; path?: string };
+
+    surviving[name] = path;
+  }
+
+  return surviving;
+}
+
 describe('destroySession', () => {
   /**
-   * Cookie só morre quando nome **e** caminho batem. Apagar sem o `path`
+   * Cookie só morre quando nome **e** caminho batem. Apagar em outro caminho
    * deixaria a sessão viva no navegador com a tela mostrando login — o pior
    * formato de falha para quem clicou em "sair".
    */
   it('deletes both cookies on the same path they were written to', async () => {
     await destroySession();
 
-    expect(mockJar.delete).toHaveBeenCalledWith({
-      name: SESSION_COOKIE,
-      path: SESSION_COOKIE_PATH,
-    });
-    expect(mockJar.delete).toHaveBeenCalledWith({
-      name: SESSION_USER_COOKIE,
-      path: SESSION_COOKIE_PATH,
+    expect(survivingDeletes()).toEqual({
+      [SESSION_COOKIE]: SESSION_COOKIE_PATH,
+      [SESSION_USER_COOKIE]: SESSION_COOKIE_PATH,
     });
   });
 
   /**
-   * Quem já estava logado quando isto subiu tem o cookie em `/`. Alcançar só
-   * `/admin` deixaria essa sessão viva e sem como sair: o `middleware` enxerga
-   * o cookie antigo, manda para o painel, a leitura toma 401 e volta para o
-   * login — em laço, até os oito horas do `maxAge` vencerem.
+   * Um `delete` por cookie, e nenhum a mais. Apagar o mesmo nome num segundo
+   * caminho não é zelo redundante: o segundo sobrescreve o primeiro no jar, o
+   * `Set-Cookie` sai só para o caminho errado e a sessão sobrevive ao "sair" —
+   * o `middleware` então devolve a pessoa ao painel, em laço.
    */
-  it('also clears the legacy root-path cookies, so an open session can still sign out', async () => {
+  it('deletes each cookie once, so no second path can overwrite the first', async () => {
     await destroySession();
 
-    expect(mockJar.delete).toHaveBeenCalledWith({ name: SESSION_COOKIE, path: '/' });
-    expect(mockJar.delete).toHaveBeenCalledWith({ name: SESSION_USER_COOKIE, path: '/' });
+    expect(mockJar.delete).toHaveBeenCalledTimes(2);
   });
 });

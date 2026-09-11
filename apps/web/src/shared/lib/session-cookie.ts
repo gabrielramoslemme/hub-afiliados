@@ -23,17 +23,6 @@ export const SESSION_USER_COOKIE = 'porto_session_user';
  */
 export const SESSION_COOKIE_PATH = '/admin';
 
-/**
- * Transitório: o caminho em que o cookie do operador era gravado antes de ser
- * escopado. Quem estava logado na virada carrega o cookie antigo, e o `delete`
- * só alcança o par nome+caminho exato — sem apagar este também, essa sessão
- * fica presa num laço entre o login e o painel até o `maxAge` vencer.
- *
- * Pode sair oito horas depois de a mudança estar em produção, junto com os dois
- * `delete` que o usam.
- */
-export const LEGACY_SESSION_COOKIE_PATH = '/';
-
 /*
   O afiliado tem cookie próprio, e não o mesmo com outro conteúdo. É o que
   impede a sessão de um afiliado de valer como sessão de operador: o
