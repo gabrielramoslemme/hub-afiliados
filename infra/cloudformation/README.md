@@ -308,6 +308,40 @@ qualquer alteração nele regenera o segredo inteiro e leva a chave junto. O
 sintoma — e-mail parando de sair depois de um update de stack sem relação
 nenhuma — não aponta para lá sozinho.
 
+### Credenciais da Porto (cupons, INT-01)
+
+`CouponProvider` nasce `fake`: a aprovação registra o cupom só em memória e o afiliado
+recebe por e-mail um código que **não vale no checkout**. Serve para exercitar o
+fluxo enquanto as credenciais do gateway Sensedia não chegam; não serve para
+afiliado de verdade.
+
+Com as credenciais em mãos, preencha o segredo *"Credenciais do gateway Sensedia
+da Porto para o Hub de Afiliados"* — pelo console, em *Retrieve secret value* →
+*Edit*, ou pelo output `SetPortoCredentialsCommand`, que lê de arquivo:
+
+```bash
+echo -n 'o_client_id'     > porto_client_id.txt
+echo -n 'o_client_secret' > porto_client_secret.txt
+# depois, o comando do output SetPortoCredentialsCommand
+```
+
+Aí passe `CouponProvider=porto` e rode um deploy. O `install-release.sh` recusa
+`porto` enquanto o segredo estiver em `REPLACE_ME` — a release no ar continua
+de pé, e a mensagem diz o motivo. `PortoOauthUrl` e `PortoApiBaseUrl` já vêm com
+os endereços de homologação; produção troca os dois.
+
+Se a aprovação responder *"A Porto Serviços recusou o acesso da integração"*
+(`CPN-004`), o gateway recusou a credencial do segredo — errada, revogada, sem
+permissão para `/porto-assistencia/campanhasneo`, ou de outro ambiente (a de
+homologação apontada para produção). Repetir não resolve: confira o segredo e o
+log da API, que guarda o status e o corpo da recusa. *"A Porto Serviços não
+respondeu"* (`CPN-002`) é o outro caso — timeout, rede ou 5xx —, e esse passa
+com uma nova tentativa.
+
+⚠️ Mesmo cuidado do segredo do Resend: **não mexa no `SecretString` do
+`PortoSecret` no template** depois do primeiro create, ou o update sobrescreve
+as credenciais com o placeholder.
+
 ### Quando o certificado chegar
 
 1. **ACM → Certificates → Import certificate** (em us-east-1). Três campos:
@@ -373,7 +407,8 @@ literal no YAML.
 
 ## Mudar configuração
 
-`DomainName`, `ApiDomainName`, `MailProvider`, `MailFromEmail` e `ApiMocking` são
+`DomainName`, `ApiDomainName`, `MailProvider`, `MailFromEmail`, `ApiMocking`,
+`CouponProvider`, `PortoOauthUrl` e `PortoApiBaseUrl` são
 parâmetros da stack, mas **não vivem no UserData** — vivem no parâmetro
 `/porto-hub/dev/config` do Parameter Store, que o `install-release.sh` lê a cada
 deploy. Trocar um valor é:

@@ -129,6 +129,31 @@ Parameters:
       no CloudWatch, nao na caixa de entrada. Passe a `resend` no dia em que o
       dominio aparecer verificado la, ou o cadastro do afiliado para no meio.
 
+  CouponProvider:
+    Type: String
+    Default: fake
+    AllowedValues: [porto, fake]
+    Description: >
+      `fake` registra o cupom so em memoria, sem falar com a Porto: o afiliado recebe
+      por e-mail um codigo que NAO vale no checkout. E o default porque as
+      credenciais do gateway Sensedia ainda nao chegaram a esta conta. Passe a
+      `porto` no dia em que o PortoSecret tiver os valores reais - o deploy
+      recusa `porto` enquanto eles estiverem em REPLACE_ME.
+
+  PortoOauthUrl:
+    Type: String
+    Default: https://hml.api.portoseguro.com.br/oauth/v2/access-token
+    Description: >
+      OAuth do gateway Sensedia (INT-01). O default e o de homologacao; o de
+      producao e https://api.portoseguro.com.br/oauth/v2/access-token.
+
+  PortoApiBaseUrl:
+    Type: String
+    Default: https://portoapicloud-hml.portoseguro.com.br
+    Description: >
+      Host da API de cupons (INT-01). O default e o de homologacao; o de
+      producao e https://portoapicloud.portoseguro.com.br.
+
   MailFromEmail:
     Type: String
     Default: nao-responda@influencersportoservico.com.br
@@ -357,7 +382,7 @@ Resources:
   # Nenhum valor sensivel no template, na CLI ou nos eventos da stack: o RDS
   # consome a senha por {{resolve:secretsmanager:}}.
   #
-  # Nenhum dos tres tem `Name` fixo, e isso e deliberado. O DeleteSecret do
+  # Nenhum dos quatro tem `Name` fixo, e isso e deliberado. O DeleteSecret do
   # CloudFormation agenda a exclusao com janela de recuperacao, nao apaga na
   # hora: com nome fixo, recriar a stack falharia por 30 dias com "already
   # scheduled for deletion" - justamente o contrario do que um ambiente de
@@ -397,7 +422,7 @@ Resources:
   SeedSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      # "Hub de Afiliados" nos tres: e por essa descricao que o comando de
+      # "Hub de Afiliados" nos quatro: e por essa descricao que o comando de
       # limpeza do README acha os segredos, agora que nao ha mais nome fixo.
       Description: Senha inicial dos operadores do painel do Hub de Afiliados, trocada no primeiro login
       GenerateSecretString:
@@ -405,6 +430,18 @@ Resources:
         GenerateStringKey: admin_password
         PasswordLength: 24
         ExcludePunctuation: true
+
+  # Credenciais do gateway Sensedia para o INT-01. Segredo proprio - e nao
+  # campos no AppSecret - porque mexer no GenerateSecretString de la regenera o
+  # jwt_secret e leva a chave do Resend junto. Nasce REPLACE_ME e e preenchido
+  # pelo output SetPortoCredentialsCommand. Pela mesma razao do AppSecret, nao
+  # mexa no SecretString abaixo depois do create: o update sobrescreveria as
+  # credenciais reais com o placeholder.
+  PortoSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Credenciais do gateway Sensedia da Porto para o Hub de Afiliados
+      SecretString: '{"client_id":"REPLACE_ME","client_secret":"REPLACE_ME"}'
 
   # =========================================================== Banco
   DbSubnetGroup:
@@ -579,6 +616,10 @@ Resources:
           API_DOMAIN_NAME=${ApiDomainName}
           MAIL_PROVIDER=${MailProvider}
           MAIL_FROM_EMAIL=${MailFromEmail}
+          COUPON_PROVIDER=${CouponProvider}
+          PORTO_OAUTH_URL=${PortoOauthUrl}
+          PORTO_API_BASE_URL=${PortoApiBaseUrl}
+          PORTO_SECRET_ARN=${PortoSecret}
           API_MOCKING=${ApiMocking}
         - EffectiveDomainName: !If
             - HasDomain
@@ -609,6 +650,7 @@ Resources:
                 Resource:
                   - !Ref DbSecret
                   - !Ref AppSecret
+                  - !Ref PortoSecret
                   - !Ref SeedSecret
               - Effect: Allow
                 Action: ecr:GetAuthorizationToken
@@ -1085,3 +1127,8 @@ Outputs:
   SetResendKeyCommand:
     Description: Injeta o RESEND_API_KEY lendo de ./resend_key.txt, preservando os demais campos
     Value: !Sub 'aws secretsmanager get-secret-value --secret-id ${AppSecret} --region ${AWS::Region} --query SecretString --output text | python3 -c ''import json,sys;s=json.load(sys.stdin);s["resend_api_key"]=open("resend_key.txt").read().strip();sys.stdout.write(json.dumps(s))'' > secret.json && aws secretsmanager put-secret-value --secret-id ${AppSecret} --region ${AWS::Region} --secret-string file://secret.json && rm -f secret.json resend_key.txt'
+
+  # Mesmo cuidado do comando acima: os dois valores vem de arquivo, nunca de argv.
+  SetPortoCredentialsCommand:
+    Description: Injeta client_id e client_secret do Sensedia lendo de ./porto_client_id.txt e ./porto_client_secret.txt
+    Value: !Sub 'python3 -c ''import json;json.dump({"client_id":open("porto_client_id.txt").read().strip(),"client_secret":open("porto_client_secret.txt").read().strip()},open("secret.json","w"))'' && aws secretsmanager put-secret-value --secret-id ${PortoSecret} --region ${AWS::Region} --secret-string file://secret.json && rm -f secret.json porto_client_id.txt porto_client_secret.txt'

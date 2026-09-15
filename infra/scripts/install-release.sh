@@ -29,6 +29,16 @@ aws ssm get-parameter --name "${CONFIG_PARAM}" --region "${AWS_REGION}" \
 # shellcheck source=/dev/null
 source "${APP_DIR}/stack.env"
 
+# Chegam com a versão da stack que trouxe o INT-01. Faltando, o deploy para aqui,
+# antes de tocar nos containers: a API recusaria subir sem saber qual emissor de
+# cupom usar, e o rollback que viria depois não diria por quê.
+for required in COUPON_PROVIDER PORTO_OAUTH_URL PORTO_API_BASE_URL PORTO_SECRET_ARN; do
+  if [ -z "${!required:-}" ]; then
+    echo "FALHA: ${required} não veio do Parameter Store. Atualize a stack antes deste deploy." >&2
+    exit 1
+  fi
+done
+
 compose() {
   docker compose -f "${COMPOSE_FILE}" --project-directory "${APP_DIR}" "$@"
 }
@@ -82,6 +92,7 @@ write_secret_files() {
   set +x
 
   local db_secret app_secret database_url jwt_secret resend_key
+  local porto_secret porto_client_id porto_client_secret
 
   db_secret="$(aws secretsmanager get-secret-value --secret-id "${DB_SECRET_ARN}" \
     --region "${AWS_REGION}" --query SecretString --output text)"
@@ -98,6 +109,19 @@ print("postgres://%s:%s@%s:5432/%s" % (
 
   jwt_secret="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["jwt_secret"])' "${app_secret}")"
   resend_key="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["resend_api_key"])' "${app_secret}")"
+
+  porto_secret="$(aws secretsmanager get-secret-value --secret-id "${PORTO_SECRET_ARN}" \
+    --region "${AWS_REGION}" --query SecretString --output text)"
+  porto_client_id="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["client_id"])' "${porto_secret}")"
+  porto_client_secret="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["client_secret"])' "${porto_secret}")"
+
+  # `porto` com o segredo ainda no placeholder subiria, e toda aprovação voltaria
+  # 503 do OAuth com a analista na frente do diálogo. Falhar o deploy aqui, antes
+  # de trocar a release, deixa no ar a que estava e diz o motivo.
+  if [ "${COUPON_PROVIDER}" = porto ] && [ "${porto_client_id}" = REPLACE_ME ]; then
+    echo "FALHA: CouponProvider=porto com as credenciais do Sensedia em REPLACE_ME (output SetPortoCredentialsCommand)." >&2
+    exit 1
+  fi
 
   # `umask 077` antes de escrever: criar e depois `chmod` deixa uma janela em
   # que o arquivo com a senha do banco é legível por qualquer usuário do host.
@@ -118,6 +142,13 @@ MAIL_PROVIDER=${MAIL_PROVIDER}
 RESEND_API_KEY=${resend_key}
 MAIL_FROM_EMAIL=${MAIL_FROM_EMAIL}
 MAIL_FROM_NAME=Hub de Afiliados
+# Explícito sempre, inclusive quando é \`fake\`: fora de desenvolvimento a API não
+# tem padrão para o emissor de cupom e recusa subir sem ele.
+COUPON_PROVIDER=${COUPON_PROVIDER}
+PORTO_OAUTH_URL=${PORTO_OAUTH_URL}
+PORTO_API_BASE_URL=${PORTO_API_BASE_URL}
+PORTO_CLIENT_ID=${porto_client_id}
+PORTO_CLIENT_SECRET=${porto_client_secret}
 ENV
 
     # Nada de segredo aqui, e é essa a fronteira: a web não tem o que vazar.
@@ -135,7 +166,7 @@ HOSTNAME=0.0.0.0
 API_BASE_URL=http://api:3000/v1
 API_MOCKING=${API_MOCKING}
 # Alimenta o \`allowedOrigins\` das Server Actions no next.config.mjs. Atrás do
-# CloudFront, sem ele todo POST volta 500 — e são sete actions.
+# CloudFront, sem ele todo POST volta 500 — e são nove actions.
 PUBLIC_DOMAIN_NAME=${DOMAIN_NAME}
 ENV
   )
