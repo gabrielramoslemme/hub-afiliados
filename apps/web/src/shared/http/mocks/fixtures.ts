@@ -4,6 +4,7 @@ import {
   type AffiliateStatementEntry,
   AffiliateStatusEnum,
   type AffiliateWalletResponse,
+  CouponStatusEnum,
   PixKeyTypeEnum,
   SocialNetworkEnum,
   StatementEntryKindEnum,
@@ -137,6 +138,29 @@ function socialProfileFor(
   };
 }
 
+/**
+ * Só cadastro aprovado tem cupom: ele nasce na aprovação, que o cria e o registra
+ * na Porto. O par código/percentual sai do nome e do índice para duas execuções
+ * devolverem o mesmo cupom — e para o código do dublê parecer o que uma analista
+ * de fato digitaria.
+ */
+function couponFor(index: number, name: string, status: AffiliateStatusEnum) {
+  if (status !== AffiliateStatusEnum.APPROVED) return null;
+
+  const discountPercent = 10 + (index % 3) * 5;
+  const firstName = name
+    .split(' ')[0]
+    .normalize('NFD')
+    .replace(/[^A-Za-z]/g, '')
+    .toUpperCase();
+
+  return {
+    code: `${firstName}${discountPercent}`,
+    discountPercent,
+    status: CouponStatusEnum.ACTIVE,
+  };
+}
+
 export type MockAffiliate = AffiliateDetail;
 
 function build(index: number): MockAffiliate {
@@ -161,6 +185,7 @@ function build(index: number): MockAffiliate {
     approvedAt: status === AffiliateStatusEnum.PENDING_APPROVAL ? null : decidedAt,
     approvedByName: status === AffiliateStatusEnum.PENDING_APPROVAL ? null : actorName,
     rejectionReason: status === AffiliateStatusEnum.REJECTED ? REJECTION_REASONS[index % 3] : null,
+    coupon: couponFor(index, name, status),
   };
 }
 
@@ -203,7 +228,7 @@ export const mockAffiliateAccount: AffiliateMeResponse = {
   pixKeyType: account.pixKeyType,
   maskedPixKey: maskPixKey(account.pixKeyType, account.pixKey),
   status: account.status,
-  coupon: 'CLEIDE25',
+  coupon: account.coupon?.code ?? null,
   createdAt: account.createdAt,
 };
 

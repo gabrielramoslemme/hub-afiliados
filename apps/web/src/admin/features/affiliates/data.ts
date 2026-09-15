@@ -5,6 +5,7 @@ import type {
   AffiliateDetail,
   AffiliateListItem,
   AffiliateStatusHistoryItem,
+  CouponHistoryItem,
   PaginatedResult,
 } from '@porto/contracts';
 import { SESSION_EXPIRED_PATH } from '@/admin/shared/routes';
@@ -61,5 +62,11 @@ export function fetchAffiliate(publicId: string): Promise<AffiliateDetail> {
 export function fetchAffiliateHistory(publicId: string): Promise<AffiliateStatusHistoryItem[]> {
   return readOrSignIn(() =>
     authedApiFetch<AffiliateStatusHistoryItem[]>(`/admin/affiliates/${publicId}/history`, FRESH),
+  );
+}
+
+export function fetchCouponHistory(publicId: string): Promise<CouponHistoryItem[]> {
+  return readOrSignIn(() =>
+    authedApiFetch<CouponHistoryItem[]>(`/admin/affiliates/${publicId}/coupon/history`, FRESH),
   );
 }

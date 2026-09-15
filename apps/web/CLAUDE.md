@@ -212,10 +212,11 @@ rastreamento.
 
 O ambiente provisionado tem CloudFront (e a Imperva da Porto na frente dele). O
 Next compara o header `Origin` com `X-Forwarded-Host` e **aborta a ação** quando
-divergem — `Invalid Server Actions request`, HTTP 500. Como são sete actions e
+divergem — `Invalid Server Actions request`, HTTP 500. Como são nove actions e
 elas são todo o caminho de escrita — cadastro, os dois logins, definir senha,
-aprovar/reprovar e os dois logouts —, errar isso derruba a aplicação inteira com
-a tela carregando normalmente.
+aprovar/reprovar, a consulta de disponibilidade e a alteração do cupom, e os
+dois logouts —, errar isso derruba a aplicação inteira com a tela carregando
+normalmente.
 
 `next.config.mjs` resolve com `experimental.serverActions.allowedOrigins`,
 alimentado por `PUBLIC_DOMAIN_NAME`, que o `install-release.sh` grava no

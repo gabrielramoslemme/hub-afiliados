@@ -1,7 +1,7 @@
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { AffiliateStatusEnum, PixKeyTypeEnum } from '@porto/contracts';
+import { AffiliateStatusEnum, CouponStatusEnum, PixKeyTypeEnum } from '@porto/contracts';
 import { QUEUE_PATH } from '@/admin/shared/routes';
 import {
   formatCpfDisplay,
@@ -9,8 +9,10 @@ import {
   formatPixKeyDisplay,
   formatSocialProfile,
 } from '@/shared/lib/format';
-import { fetchAffiliate, fetchAffiliateHistory } from '../data';
-import { AffiliateStatusBadge, statusLabel } from './affiliate-status';
+import { fetchAffiliate, fetchAffiliateHistory, fetchCouponHistory } from '../data';
+import { buildTrail } from '../trail';
+import { AffiliateStatusBadge } from './affiliate-status';
+import { CouponActions } from './coupon-actions';
 import { DecisionActions } from './decision-actions';
 
 const PIX_KEY_LABELS: Record<PixKeyTypeEnum, string> = {
@@ -29,10 +31,13 @@ function DataRow({ label, children }: { label: string; children: ReactNode }) {
 }
 
 export async function AffiliateDetailScreen({ publicId }: { publicId: string }) {
-  const [affiliate, history] = await Promise.all([
+  const [affiliate, history, couponHistory] = await Promise.all([
     fetchAffiliate(publicId),
     fetchAffiliateHistory(publicId),
+    fetchCouponHistory(publicId),
   ]);
+
+  const trail = buildTrail(history, couponHistory);
 
   const pending = affiliate.status === AffiliateStatusEnum.PENDING_APPROVAL;
   const social = formatSocialProfile(affiliate.socialNetwork, affiliate.socialHandle);
@@ -92,6 +97,28 @@ export async function AffiliateDetailScreen({ publicId }: { publicId: string }) 
             {affiliate.approvedByName && (
               <DataRow label="Decidido por">{affiliate.approvedByName}</DataRow>
             )}
+            {/*
+              A analista escolhe o cupom no diálogo e nunca mais o vê. Aqui é
+              onde ela responde "qual é o cupom desta pessoa?"
+              quando o afiliado liga dias depois.
+            */}
+            {affiliate.coupon && (
+              <DataRow label="Cupom">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <span>
+                    <span data-tabular className="font-semibold">
+                      {affiliate.coupon.code}
+                    </span>
+                    <span className="text-ink-500">
+                      {' · '}
+                      {affiliate.coupon.discountPercent}% de desconto
+                      {affiliate.coupon.status === CouponStatusEnum.INACTIVE && ' · inativo'}
+                    </span>
+                  </span>
+                  <CouponActions publicId={affiliate.publicId} coupon={affiliate.coupon} />
+                </div>
+              </DataRow>
+            )}
             {affiliate.rejectionReason && (
               <DataRow label="Motivo da reprovação">
                 <span className="block max-w-prose leading-relaxed">
@@ -110,24 +137,17 @@ export async function AffiliateDetailScreen({ publicId }: { publicId: string }) 
             A trilha é o que transforma a decisão em prova, e não em estado.
           */}
           <ol className="mt-5 flex flex-col">
-            {history.map((entry, index) => (
-              <li
-                key={`${entry.createdAt}-${entry.toStatus}`}
-                className="relative flex gap-4 pb-6 last:pb-0"
-              >
+            {trail.map((entry, index) => (
+              <li key={entry.key} className="relative flex gap-4 pb-6 last:pb-0">
                 <div className="flex flex-col items-center">
                   <span className="mt-1 size-2.5 shrink-0 rounded-full bg-blue-600" aria-hidden />
-                  {index < history.length - 1 && (
+                  {index < trail.length - 1 && (
                     <span className="mt-1 w-px flex-1 bg-ink-200" aria-hidden />
                   )}
                 </div>
 
                 <div className="pb-1">
-                  <p className="text-[0.9375rem] font-semibold text-ink-900">
-                    {entry.fromStatus === null
-                      ? 'Cadastro recebido'
-                      : `${statusLabel(entry.fromStatus)} → ${statusLabel(entry.toStatus)}`}
-                  </p>
+                  <p className="text-[0.9375rem] font-semibold text-ink-900">{entry.title}</p>
                   <p className="mt-0.5 text-[0.8125rem] text-ink-500" data-tabular>
                     {formatDateTime(entry.createdAt)}
                     {entry.actorName ? ` · ${entry.actorName}` : ' · pelo próprio afiliado'}
