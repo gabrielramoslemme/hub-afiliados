@@ -1,5 +1,5 @@
 import { UserRoleEnum, UserTypeEnum } from '@porto/contracts';
-import { AffiliateEntity } from '@Domain/affiliates/affiliate.entity';
+import { AffiliateWithCoupon } from '@Domain/affiliates/affiliate.entity';
 
 /** Identidade unificada: afiliado e operador dividem a tabela, separados por `type`. */
 export interface UserEntity {
@@ -20,5 +20,9 @@ export interface UserEntity {
 }
 
 export interface UserWithAffiliate extends UserEntity {
-  affiliate: AffiliateEntity | null;
+  /**
+   * O cupom vem junto: a área do afiliado e a resposta do login mostram o
+   * código, e resolvê-lo depois seria uma segunda ida ao banco em toda tela.
+   */
+  affiliate: AffiliateWithCoupon | null;
 }

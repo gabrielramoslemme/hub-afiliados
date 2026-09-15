@@ -2,10 +2,23 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   AffiliateDetail,
   AffiliateStatusEnum,
+  CouponStatusEnum,
+  CouponSummary,
   PixKeyTypeEnum,
   SocialNetworkEnum,
 } from '@porto/contracts';
 import { AffiliateDetailOutput } from '@Application/affiliates/get-affiliate.use-case';
+
+export class CouponSummaryResponseDto implements CouponSummary {
+  @ApiProperty({ example: 'MARINA25' })
+  code: string;
+
+  @ApiProperty({ minimum: 1, maximum: 25, example: 10 })
+  discountPercent: number;
+
+  @ApiProperty({ enum: CouponStatusEnum })
+  status: CouponStatusEnum;
+}
 
 export class AffiliateDetailResponseDto implements AffiliateDetail {
   @ApiProperty({ format: 'uuid' })
@@ -49,6 +62,13 @@ export class AffiliateDetailResponseDto implements AffiliateDetail {
 
   @ApiProperty({ nullable: true })
   rejectionReason: string | null;
+
+  @ApiProperty({
+    type: CouponSummaryResponseDto,
+    nullable: true,
+    description: 'Emitido na aprovação; nulo em cadastro que ainda não passou por ela',
+  })
+  coupon: CouponSummaryResponseDto | null;
 
   @ApiProperty({ format: 'date-time' })
   createdAt: string;

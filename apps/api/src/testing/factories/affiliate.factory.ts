@@ -1,10 +1,12 @@
 import { AffiliateStatusEnum, PixKeyTypeEnum } from '@porto/contracts';
-import { AffiliateWithUser } from '@Domain/affiliates/affiliate.entity';
+import { AffiliateWithCoupon, AffiliateWithUser } from '@Domain/affiliates/affiliate.entity';
 import { buildUser } from './user.factory';
 
 let sequence = 0;
 
-export function buildAffiliate(overrides: Partial<AffiliateWithUser> = {}): AffiliateWithUser {
+type BuiltAffiliate = AffiliateWithUser & AffiliateWithCoupon;
+
+export function buildAffiliate(overrides: Partial<BuiltAffiliate> = {}): BuiltAffiliate {
   sequence += 1;
   const user = overrides.user ?? buildUser();
   return {
@@ -23,6 +25,7 @@ export function buildAffiliate(overrides: Partial<AffiliateWithUser> = {}): Affi
     approvedAt: null,
     approvedByUserId: null,
     rejectionReason: null,
+    coupon: null,
     createdAt: new Date('2026-08-17T12:00:00Z'),
     updatedAt: new Date('2026-08-17T12:00:00Z'),
     ...overrides,

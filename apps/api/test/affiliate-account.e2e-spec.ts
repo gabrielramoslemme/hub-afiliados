@@ -59,21 +59,37 @@ describe('Affiliate account (e2e)', () => {
     return response.body.accessToken;
   }
 
+  /*
+    Cada aprovação estreia um código porque o emissor — o falso como o real —
+    nunca esquece o que já emitiu, e o `TRUNCATE` do `beforeEach` não alcança a
+    memória dele.
+  */
+  let issuedCoupons = 0;
+
   /** Cadastra e aprova, devolvendo o token em claro que foi para o e-mail. */
-  async function approvedAffiliate(): Promise<{ publicId: string; token: string }> {
+  async function approvedAffiliate(): Promise<{
+    publicId: string;
+    token: string;
+    couponCode: string;
+  }> {
     const created = await request(app.getHttpServer())
       .post('/v1/affiliates')
       .send(signUp)
       .expect(201);
 
+    issuedCoupons += 1;
+    const couponCode = `CUPOM${issuedCoupons}`;
+
     await request(app.getHttpServer())
       .post(`/v1/admin/affiliates/${created.body.publicId}/approve`)
       .set('Authorization', `Bearer ${await operatorToken()}`)
+      .send({ couponCode, couponDiscountPercent: 10 })
       .expect(204);
 
     return {
       publicId: created.body.publicId,
       token: new URL(sentLink()).searchParams.get('token') ?? '',
+      couponCode,
     };
   }
 
@@ -165,7 +181,7 @@ describe('Affiliate account (e2e)', () => {
 
   describe('POST /v1/affiliate/auth/login', () => {
     it('signs an approved affiliate in', async () => {
-      const { token } = await approvedAffiliate();
+      const { token, couponCode } = await approvedAffiliate();
       await request(app.getHttpServer())
         .post('/v1/affiliate/auth/set-password')
         .send({ token, password: PASSWORD })
@@ -183,7 +199,7 @@ describe('Affiliate account (e2e)', () => {
           name: 'Marina Ferraz',
           email: signUp.email,
           status: AffiliateStatusEnum.APPROVED,
-          coupon: null,
+          coupon: couponCode,
         },
       });
     });
@@ -227,8 +243,8 @@ describe('Affiliate account (e2e)', () => {
   });
 
   describe('GET /v1/affiliate/me', () => {
-    async function signedInToken(): Promise<string> {
-      const { token } = await approvedAffiliate();
+    async function signedIn(): Promise<{ accessToken: string; couponCode: string }> {
+      const { token, couponCode } = await approvedAffiliate();
       await request(app.getHttpServer())
         .post('/v1/affiliate/auth/set-password')
         .send({ token, password: PASSWORD })
@@ -239,15 +255,15 @@ describe('Affiliate account (e2e)', () => {
         .send({ email: signUp.email, password: PASSWORD })
         .expect(200);
 
-      return response.body.accessToken;
+      return { accessToken: response.body.accessToken, couponCode };
     }
 
     it('answers the account with cpf, rg and pix key masked', async () => {
-      const token = await signedInToken();
+      const { accessToken, couponCode } = await signedIn();
 
       const response = await request(app.getHttpServer())
         .get('/v1/affiliate/me')
-        .set('Authorization', `Bearer ${token}`)
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
 
       expect(response.body).toMatchObject({
@@ -258,7 +274,7 @@ describe('Affiliate account (e2e)', () => {
         socialHandle: 'marina.ferraz',
         maskedPixKey: 'ma***********@email.com',
         status: AffiliateStatusEnum.APPROVED,
-        coupon: null,
+        coupon: couponCode,
       });
       expect(JSON.stringify(response.body)).not.toContain('52998224725');
       expect(JSON.stringify(response.body)).not.toContain('12345678X');

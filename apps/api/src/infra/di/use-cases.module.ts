@@ -9,12 +9,18 @@ import { RejectAffiliateUseCase } from '@Application/affiliates/reject-affiliate
 import { AdminLoginUseCase } from '@Application/auth/admin-login.use-case';
 import { AffiliateLoginUseCase } from '@Application/auth/affiliate-login.use-case';
 import { SetPasswordUseCase } from '@Application/auth/set-password.use-case';
+import { ChangeAffiliateCouponUseCase } from '@Application/coupons/change-affiliate-coupon.use-case';
+import { CheckCouponAvailabilityUseCase } from '@Application/coupons/check-coupon-availability.use-case';
+import { ListCouponHistoryUseCase } from '@Application/coupons/list-coupon-history.use-case';
 import { AFFILIATE_REPOSITORY } from '@Domain/affiliates/affiliate.repository';
 import { AFFILIATE_STATUS_HISTORY_REPOSITORY } from '@Domain/affiliates/affiliate-status-history.repository';
 import { ACCESS_TOKEN_ISSUER } from '@Domain/auth/access-token';
 import { PASSWORD_HASHER } from '@Domain/auth/password-hasher';
 import { PASSWORD_RESET_TOKEN_REPOSITORY } from '@Domain/auth/password-reset-token.repository';
 import { TOKEN_GENERATOR } from '@Domain/auth/token-generator';
+import { COUPON_REPOSITORY } from '@Domain/coupons/coupon.repository';
+import { COUPON_GATEWAY } from '@Domain/coupons/coupon-gateway';
+import { COUPON_HISTORY_REPOSITORY } from '@Domain/coupons/coupon-history.repository';
 import { LINK_BUILDER } from '@Domain/notifications/link-builder';
 import { MAILER } from '@Domain/notifications/mailer';
 import { CLOCK } from '@Domain/shared/clock';
@@ -53,12 +59,22 @@ const USE_CASES = [
   provideUseCase(ApproveAffiliateUseCase, [
     AFFILIATE_REPOSITORY,
     USER_REPOSITORY,
+    COUPON_REPOSITORY,
+    COUPON_GATEWAY,
     PASSWORD_RESET_TOKEN_REPOSITORY,
     TOKEN_GENERATOR,
     LINK_BUILDER,
     MAILER,
     CLOCK,
   ]),
+  provideUseCase(CheckCouponAvailabilityUseCase, [COUPON_REPOSITORY, COUPON_GATEWAY]),
+  provideUseCase(ChangeAffiliateCouponUseCase, [
+    AFFILIATE_REPOSITORY,
+    USER_REPOSITORY,
+    COUPON_REPOSITORY,
+    COUPON_GATEWAY,
+  ]),
+  provideUseCase(ListCouponHistoryUseCase, [AFFILIATE_REPOSITORY, COUPON_HISTORY_REPOSITORY]),
   provideUseCase(RejectAffiliateUseCase, [AFFILIATE_REPOSITORY, USER_REPOSITORY, MAILER]),
   provideUseCase(AffiliateLoginUseCase, [
     USER_REPOSITORY,

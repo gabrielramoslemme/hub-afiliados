@@ -21,8 +21,11 @@ import {
   RgAlreadyRegisteredError,
 } from '@Domain/affiliates/affiliates.errors';
 import { sanitizeCpf } from '@Domain/affiliates/cpf.util';
+import { CouponCodeUnavailableError } from '@Domain/coupons/coupons.errors';
 import { AffiliateTypeormEntity } from '@Infra/database/typeorm/entities/affiliate.typeorm-entity';
 import { AffiliateStatusHistoryTypeormEntity } from '@Infra/database/typeorm/entities/affiliate-status-history.typeorm-entity';
+import { CouponTypeormEntity } from '@Infra/database/typeorm/entities/coupon.typeorm-entity';
+import { CouponHistoryTypeormEntity } from '@Infra/database/typeorm/entities/coupon-history.typeorm-entity';
 import { UserTypeormEntity } from '@Infra/database/typeorm/entities/user.typeorm-entity';
 
 const UNIQUE_VIOLATION = '23505';
@@ -55,8 +58,8 @@ function criteriaFor(search: string): [string, Record<string, string>] {
 
 /**
  * A checagem prévia do use case dá a mensagem boa no caso comum; o índice único
- * é o que decide quando dois cadastros chegam juntos. Sem esta tradução a
- * corrida vira 500.
+ * é o que decide quando dois cadastros chegam juntos, ou duas aprovações com o
+ * mesmo código de cupom. Sem esta tradução a corrida vira 500.
  */
 function translateUniqueViolation(error: unknown): unknown {
   const constraint = error as { code?: string; constraint?: string };
@@ -64,6 +67,9 @@ function translateUniqueViolation(error: unknown): unknown {
   if (constraint.constraint === 'users_email_key') return new EmailAlreadyRegisteredError();
   if (constraint.constraint === 'affiliates_cpf_key') return new CpfAlreadyRegisteredError();
   if (constraint.constraint === 'affiliates_rg_key') return new RgAlreadyRegisteredError();
+  if (constraint.constraint === 'affiliate_coupons_code_key') {
+    return new CouponCodeUnavailableError();
+  }
   return error;
 }
 
@@ -86,7 +92,7 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
   findByPublicId(publicId: string): Promise<AffiliateDetail | null> {
     return this.repository.findOne({
       where: { publicId },
-      relations: { user: true, approvedBy: true },
+      relations: { user: true, approvedBy: true, coupon: true },
     });
   }
 
@@ -121,33 +127,64 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
     return this.repository.save(this.repository.create(affiliate));
   }
 
-  changeStatus(input: ChangeAffiliateStatusInput): Promise<AffiliateEntity | null> {
-    return this.dataSource.transaction(async (manager) => {
-      // O lock serializa duas decisões concorrentes sobre o mesmo afiliado:
-      // sem ele, dois analistas gravariam transições partindo do mesmo status.
-      const affiliate = await manager.findOne(AffiliateTypeormEntity, {
-        where: { id: input.affiliateId },
-        lock: { mode: 'pessimistic_write' },
+  async changeStatus(input: ChangeAffiliateStatusInput): Promise<AffiliateEntity | null> {
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        // O lock serializa duas decisões concorrentes sobre o mesmo afiliado:
+        // sem ele, dois analistas gravariam transições partindo do mesmo status.
+        const affiliate = await manager.findOne(AffiliateTypeormEntity, {
+          where: { id: input.affiliateId },
+          lock: { mode: 'pessimistic_write' },
+        });
+
+        // A guarda vale aqui dentro, com a linha travada: lida antes do lock, duas
+        // decisões simultâneas veriam o mesmo status e gravariam as duas.
+        if (!affiliate || affiliate.status !== input.expectedStatus) {
+          return null;
+        }
+
+        const fromStatus = affiliate.status;
+        Object.assign(affiliate, { status: input.toStatus }, input.changes ?? {});
+        const updated = await manager.save(affiliate);
+
+        await manager.insert(AffiliateStatusHistoryTypeormEntity, {
+          affiliateId: affiliate.id,
+          fromStatus,
+          toStatus: input.toStatus,
+          reason: input.reason ?? null,
+          actorUserId: input.actorUserId ?? null,
+        });
+
+        /*
+          O cupom entra na mesma transação do status e da trilha porque o código
+          já existe na Porto quando chega aqui: gravar o status e perder a linha
+          do cupom deixaria um afiliado aprovado sem o cupom que já foi emitido
+          em nome dele, e sem como descobrir qual era.
+        */
+        if (input.coupon) {
+          const inserted = await manager.insert(CouponTypeormEntity, {
+            affiliateId: affiliate.id,
+            code: input.coupon.code,
+            discountPercent: input.coupon.discountPercent,
+            status: input.coupon.status,
+          });
+
+          // A emissão é o primeiro registro da trilha do cupom, e sai com quem aprovou.
+          await manager.insert(CouponHistoryTypeormEntity, {
+            couponId: inserted.identifiers[0].id,
+            fromStatus: null,
+            toStatus: input.coupon.status,
+            fromDiscountPercent: null,
+            toDiscountPercent: input.coupon.discountPercent,
+            actorUserId: input.actorUserId ?? null,
+          });
+        }
+
+        return updated;
       });
-
-      if (!affiliate) {
-        return null;
-      }
-
-      const fromStatus = affiliate.status;
-      Object.assign(affiliate, { status: input.toStatus }, input.changes ?? {});
-      const updated = await manager.save(affiliate);
-
-      await manager.insert(AffiliateStatusHistoryTypeormEntity, {
-        affiliateId: affiliate.id,
-        fromStatus,
-        toStatus: input.toStatus,
-        reason: input.reason ?? null,
-        actorUserId: input.actorUserId ?? null,
-      });
-
-      return updated;
-    });
+    } catch (error) {
+      throw translateUniqueViolation(error);
+    }
   }
 
   async createWithUser(input: CreateAffiliateWithUserInput): Promise<AffiliateWithUser> {

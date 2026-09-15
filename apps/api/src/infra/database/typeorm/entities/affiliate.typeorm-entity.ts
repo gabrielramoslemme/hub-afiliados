@@ -13,6 +13,7 @@ import {
 } from 'typeorm';
 import { AffiliateStatusEnum, type PixKeyTypeEnum, type SocialNetworkEnum } from '@porto/contracts';
 import { AffiliateEntity } from '@Domain/affiliates/affiliate.entity';
+import { CouponTypeormEntity } from './coupon.typeorm-entity';
 import { UserTypeormEntity } from './user.typeorm-entity';
 
 @Entity('affiliates')
@@ -78,6 +79,13 @@ export class AffiliateTypeormEntity implements AffiliateEntity {
 
   @Column({ name: 'rejection_reason', type: 'text', nullable: true })
   rejectionReason: string | null;
+
+  /** Emitido na aprovação; nulo enquanto o cadastro não for aprovado. */
+  @OneToOne(
+    () => CouponTypeormEntity,
+    (coupon) => coupon.affiliate,
+  )
+  coupon: CouponTypeormEntity | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

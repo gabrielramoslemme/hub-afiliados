@@ -6,12 +6,19 @@ Provider selecionado por `MAIL_PROVIDER`: `logger` em desenvolvimento e teste,
 | Template | Gatilho | Variáveis |
 |---|---|---|
 | `REGISTRATION_RECEIVED` | Pré-cadastro concluído | `name` |
-| `REGISTRATION_APPROVED` | Operador aprova o cadastro | `name`, `link` (definir senha, 48h) |
+| `REGISTRATION_APPROVED` | Operador aprova o cadastro | `name`, `link` (definir senha, 48h), `coupon`, `discountPercent` |
 | `REGISTRATION_REJECTED` | Operador reprova o cadastro | `name`, `reason` |
 | `PASSWORD_RECOVERY` | Pedido de recuperação | `name`, `link` (2h) |
 
 `PASSWORD_RECOVERY` ainda não tem use case que o dispare — o template existe
 para o fluxo de recuperação, que é trabalho à parte.
+
+`REGISTRATION_APPROVED` só sai depois de o cupom estar emitido na Porto e
+gravado aqui, e mostra o código e o percentual acima do botão de criar a senha
+— o assunto é "Cadastro aprovado — seu cupom já está valendo". `discountPercent`
+chega como texto (`'10'`), porque toda variável de template é string. Sem
+`coupon` ou `discountPercent`, o render recusa, como com qualquer variável
+obrigatória.
 
 ## Onde o conteúdo mora
 

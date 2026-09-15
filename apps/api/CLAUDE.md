@@ -59,9 +59,10 @@ POST /v1/admin/affiliates/:publicId/approve
 │
 ├─ application/affiliates/approve-affiliate.use-case.ts
 │     a regra: só PENDING_APPROVAL vira APPROVED; senão lança DomainError.
-│     Classe pura — sem decorator, sem Nest, sem infra. Conhece sete interfaces,
+│     Classe pura — sem decorator, sem Nest, sem infra. Conhece nove interfaces,
 │     entre elas:
 │       AffiliateRepository → domain/affiliates/affiliate.repository.ts
+│       CouponGateway       → domain/coupons/coupon-gateway.ts
 │       TokenGenerator      → domain/auth/token-generator.ts
 │       Clock               → domain/shared/clock.ts
 │       Mailer              → domain/notifications/mailer.ts
@@ -70,7 +71,8 @@ POST /v1/admin/affiliates/:publicId/approve
 │     o wiring: liga cada token a um parâmetro do construtor.
 │
 ├─ infra/database/typeorm/repositories/affiliate.typeorm-repository.ts
-│     implementa o contrato: SELECT ... FOR UPDATE, status e histórico na mesma transação.
+│     implementa o contrato: SELECT ... FOR UPDATE, confere o status esperado debaixo do
+│     lock, grava status, histórico e cupom na mesma transação.
 │
 ├─ infra/services/email/mail.service.ts
 │     implementa Mailer: envia e nunca lança.
@@ -89,6 +91,7 @@ Quem liga token a implementação é `*.module.ts`, em dois passos: o `Repositor
 |---|---|---|
 | Postgres, via TypeORM | `AffiliateRepository` (`src/domain/affiliates/`) | `AffiliateTypeormRepository` |
 | Resend | `Mailer` (`src/domain/notifications/`) | `MailService` e o `ResendProvider` |
+| Porto Serviços (INT-01), via Sensedia | `CouponGateway` (`src/domain/coupons/`) | `PortoCouponGateway` e o `SensediaTokenProvider` |
 | React Email | `Mailer` (`src/domain/notifications/`) | `ReactEmailRenderer` e os templates |
 | `@nestjs/jwt` | `AccessTokenIssuer` e `AccessTokenVerifier` (`src/domain/auth/`) | `JwtAccessTokenService` |
 | bcrypt | `PasswordHasher` (`src/domain/auth/`) | `BcryptPasswordHasher` |
@@ -286,8 +289,8 @@ O `HttpExceptionFilter` global normaliza toda resposta de erro:
   }
   ```
 
-- **Traduzir `kind` para status é do filtro**, e é a tabela inteira: `NOT_FOUND` 404 · `CONFLICT` 409 · `INVALID_INPUT` 400 · `UNAUTHORIZED` 401 · `FORBIDDEN` 403.
-- `code` vem de `AuthErrorCodeEnum` quando o cliente precisa distinguir o caso para escolher a mensagem; nas demais respostas é `null`.
+- **Traduzir `kind` para status é do filtro**, e é a tabela inteira: `NOT_FOUND` 404 · `CONFLICT` 409 · `INVALID_INPUT` 400 · `UNAUTHORIZED` 401 · `FORBIDDEN` 403 · `UNAVAILABLE` 503.
+- `code` vem de um `*ErrorCodeEnum` de `@porto/contracts` (`AuthErrorCodeEnum`, `RegistrationErrorCodeEnum`, `CouponErrorCodeEnum`) quando o cliente precisa distinguir o caso para escolher a mensagem; nas demais respostas é `null`.
 - **Guard e controller continuam podendo lançar exceção do Nest** — eles já são a camada de HTTP.
 - 5xx é logado com stack e responde `Erro interno`: a mensagem original pode carregar nome de coluna ou detalhe de schema. 4xx não é logado. **Não logue a exceção você mesmo** — o filtro já faz.
 - O `ValidationPipe` global usa `whitelist`, `forbidNonWhitelisted` e `transform`: campo fora do DTO devolve 400 sozinho.
@@ -307,9 +310,46 @@ O use case recebe o port `Mailer` (`src/domain/notifications/mailer.ts`) pelo co
 
 Dentro de infra o trabalho se parte em dois contratos: `MailRenderer` monta o conteúdo e `MailProvider` despacha. `MAIL_PROVIDER` escolhe o fornecedor concreto (`logger` em dev e teste, `resend` fora) — três ports em camadas diferentes, de propósito: o domínio quer enviar, infra sabe o que escrever e por onde mandar. **O template mora em código**, como componente React Email em `services/email/templates/`, nunca no painel do fornecedor: o registry é um `Record<MailTemplateEnum, …>`, então template novo sem entrada ali é erro de type-check. Templates, gatilhos e variáveis em [`docs/EMAILS.md`](docs/EMAILS.md).
 
+## Cupons
+
+**O cupom é nosso: nasce e é gerenciado aqui, e a Porto Serviços só o registra**, pelo INT-01, para ele valer no checkout. `affiliate_coupons` é a fonte da verdade — código, percentual e situação são o que a analista escolheu, nunca o eco que a Porto devolve. O use case recebe o port `CouponGateway` (`src/domain/coupons/coupon-gateway.ts`) e não conhece fornecedor nenhum: `codigoCupom`, `percentualDesconto` e `flagCupomCumulativo` vivem inteiros em `services/coupons/`, e é isso que permite trocar quem registra sem tocar um arquivo de regra.
+
+`COUPON_PROVIDER` escolhe o concreto — `fake` registra em memória, sem credencial e sem rede, e é o que sustenta dev e e2e; `porto` fala com o gateway. Dentro de infra o trabalho se parte em dois, como no e-mail: `AccessTokenProvider` autentica, `CouponGateway` sabe o que é um cupom.
+
+**Fora de `development` e `test`, `COUPON_PROVIDER` não tem padrão** e a API não sobe sem ele. O falso num ambiente real manda ao afiliado, por e-mail, um cupom que a Porto não registrou — herdar isso de um default é o que a regra fecha. O `install-release.sh` grava a variável a partir do parâmetro `CouponProvider` da stack e recusa o deploy com `porto` enquanto as credenciais estiverem em `REPLACE_ME` ([`infra/cloudformation/README.md`](../../infra/cloudformation/README.md)).
+
+**O registro na Porto vem antes de qualquer escrita nossa.** Ser dono não é gravar primeiro: um cupom gravado aqui e não registrado lá chegaria ao afiliado sem valer no checkout. Se a Porto recusar ou não responder, o erro sobe e o cadastro fica exatamente como estava — em análise, sem e-mail enviado e sem trilha registrando decisão que não houve. As falhas são separadas pelo que a analista faz em seguida:
+
+| Erro | Resposta | O que a analista faz |
+|---|---|---|
+| `CouponCodeUnavailableError` | 409 `CPN-001` | escolhe outro código |
+| `CouponProviderUnavailableError` | 503 `CPN-002` | tenta de novo com o mesmo |
+| `CouponRefusedError` | 409 `CPN-003` | revê o que pediu — é o 400 do INT-01, e trocar o código pode não ser o caso |
+| `CouponProviderAccessDeniedError` | 503 `CPN-004` | avisa o suporte — a credencial da integração foi recusada, e repetir não resolve |
+
+**Credencial recusada não é queda.** O OAuth que responde 400, 401 ou 403, o 401 que volta mesmo depois de trocar o token e o 403 do gateway viram `CPN-004`: dizer "tente novamente" mandaria a analista insistir no que só quem configura o ambiente corrige. O corpo da recusa fica no log. Timeout, rede, 5xx e 429 continuam `CPN-002` — e só eles levam a emissão a confirmar o cupom pela consulta, porque só eles deixam dúvida se o registro entrou.
+
+**Resposta fora do INT-01 também é queda, nunca 500.** Um 200 que não é JSON, ou que não traz o campo que a rota documenta — `disponivel` na disponibilidade, `access_token` e `expires_in` no OAuth —, é página de proxy ou corpo cortado: vira `CPN-002`, e o token assim não fica guardado.
+
+**`issue` e `change` não devolvem cupom nenhum.** O contrato só diz se a Porto registrou; o que ela responde não chega à regra e não sobrescreve nada aqui. Na alteração, o `PortoCouponGateway` compara a resposta com o pedido e deixa um aviso no log quando divergem — desencontro de integração, para alguém olhar, não um valor a adotar.
+
+**Cupom registrado não fica sem dono.** Cada caminho que deixaria um cupom valendo no checkout sem afiliado do lado de cá tem a sua proteção:
+
+- **Resposta perdida.** `PortoCouponGateway.issue` pergunta a disponibilidade antes de registrar. Se o registro ficar sem resposta — timeout, rede ou 5xx —, ele consulta `GET /cupons/{codigo}`: encontrado ativo e com o percentual pedido, o cupom é deste pedido, porque o código estava livre um instante antes, e a aprovação segue.
+- **Duas aprovações ao mesmo tempo.** `changeStatus` recebe `expectedStatus` e o confere com a linha travada — a checagem do começo do use case não segura nada. Quem perde a corrida recebe 409. O mesmo código em dois cadastros diferentes é decidido pelo índice único de `affiliate_coupons.code`, que o adapter traduz para `CouponCodeUnavailableError` em vez de 500.
+- **Aprovação que não grava.** Se `changeStatus` devolver nulo ou lançar depois do registro, o use case desativa o cupom na Porto antes de o erro subir — **só se nenhum afiliado tiver gravado aquele código aqui**. O código existe uma vez na Porto: se outra aprovação o gravou primeiro, o cupom de lá é dela, e desativá-lo derrubaria o desconto de quem ganhou a corrida. É o que acontece quando a consulta de uma resposta perdida confirma, com o mesmo percentual, o cupom que a outra aprovação acabou de registrar. Sem conseguir perguntar ao banco — o caso comum quando a gravação acabou de falhar —, desativa.
+
+O que sobra é o registro **e** a consulta ficarem sem resposta seguidas: o cupom pode ter entrado lá, e a nova tentativa ouve "código em uso". Reconciliar esse caso pede à Porto um jeito de distinguir cupom de afiliado dos demais (P8).
+
+**Alterar é `PATCH /v1/admin/affiliates/:publicId/coupon`** — desativar, reativar ou mudar o percentual, nunca o código, que é a chave da atribuição das vendas. Mesma ordem da aprovação: a Porto registra a mudança, e só então se grava o que a analista pediu.
+
+**Toda mudança de cupom vai para `affiliate_coupon_history`**, na mesma transação da mudança: a criação dentro do `changeStatus`, cada alteração dentro do `CouponRepository.change`. Tabela própria, e não a trilha do cadastro, porque o antes e o depois são outros; o painel junta as duas numa linha do tempo só, lendo `GET .../coupon/history`.
+
+**O registro nunca esquece um código, nem o falso.** Teste e2e que aprova duas vezes precisa de dois códigos: o `TRUNCATE` entre os testes limpa a nossa tabela, não a memória de quem registrou.
+
 ## Testes
 
-- **Unitário** — `*.spec.ts` ao lado do arquivo, sem banco. Factories em `src/testing/factories/` (`buildUser`, `buildAdminUser`, `buildAffiliate`) e mocks em `src/testing/mocks/`. Obrigatório por caso de uso.
+- **Unitário** — `*.spec.ts` ao lado do arquivo, sem banco. Factories em `src/testing/factories/` (`buildUser`, `buildAdminUser`, `buildAffiliate`, `buildCoupon`) e mocks em `src/testing/mocks/`. Obrigatório por caso de uso.
 - **Integração** — `test/*.e2e-spec.ts`, Postgres real, `--runInBand`, compilando o `AppModule` inteiro. Isolamento por `TRUNCATE <tabelas> RESTART IDENTITY CASCADE` no `beforeEach`, `dataSource.destroy()` no `afterAll`.
 - Descrição em inglês, pelo comportamento: `it('responds 200 with status ok')`.
 - Objeto de teste reutilizável vira factory em `src/testing/`, não literal repetido.

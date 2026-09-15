@@ -20,22 +20,47 @@ describe('ReactEmailRenderer', () => {
     expect(rendered.text).toContain('Marina');
   });
 
+  const approved = { name: 'Marina', link, coupon: 'MARINA25', discountPercent: '10' };
+
   it('renders the approval email carrying the set-password link', async () => {
     const rendered = await renderer.render(
-      inputFor(MailTemplateEnum.REGISTRATION_APPROVED, { name: 'Marina', link }),
+      inputFor(MailTemplateEnum.REGISTRATION_APPROVED, approved),
     );
 
-    expect(rendered.subject).toBe('Cadastro aprovado — crie sua senha');
+    expect(rendered.subject).toBe('Cadastro aprovado — seu cupom já está valendo');
     expect(rendered.html).toContain(link);
     expect(rendered.text).toContain(link);
   });
 
   it('warns in the approval email that the link expires', async () => {
     const rendered = await renderer.render(
-      inputFor(MailTemplateEnum.REGISTRATION_APPROVED, { name: 'Marina', link }),
+      inputFor(MailTemplateEnum.REGISTRATION_APPROVED, approved),
     );
 
     expect(rendered.text).toContain('48 horas');
+  });
+
+  it('shows the issued coupon in the approval email', async () => {
+    const rendered = await renderer.render(
+      inputFor(MailTemplateEnum.REGISTRATION_APPROVED, approved),
+    );
+
+    expect(rendered.html).toContain('MARINA25');
+    expect(rendered.text).toContain('MARINA25');
+  });
+
+  it('shows the discount of the issued coupon in the approval email', async () => {
+    const rendered = await renderer.render(
+      inputFor(MailTemplateEnum.REGISTRATION_APPROVED, approved),
+    );
+
+    expect(rendered.text).toContain('10%');
+  });
+
+  it('refuses to render the approval email without the coupon', async () => {
+    await expect(
+      renderer.render(inputFor(MailTemplateEnum.REGISTRATION_APPROVED, { name: 'Marina', link })),
+    ).rejects.toThrow('coupon');
   });
 
   it('renders the rejection email with the reason given by the operator', async () => {

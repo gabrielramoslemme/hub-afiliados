@@ -12,12 +12,23 @@ export class UserTypeormRepository implements UserRepository {
     private readonly repository: Repository<UserTypeormEntity>,
   ) {}
 
+  /*
+    O cupom vem no mesmo `findOne` porque o tipo promete que ele está lá: o
+    login e a área do afiliado mostram o código, e carregar só o perfil devolve
+    `undefined` em produção sem o compilador reclamar.
+  */
   findByEmail(email: string): Promise<UserWithAffiliate | null> {
-    return this.repository.findOne({ where: { email }, relations: { affiliate: true } });
+    return this.repository.findOne({
+      where: { email },
+      relations: { affiliate: { coupon: true } },
+    });
   }
 
   findByPublicId(publicId: string): Promise<UserWithAffiliate | null> {
-    return this.repository.findOne({ where: { publicId }, relations: { affiliate: true } });
+    return this.repository.findOne({
+      where: { publicId },
+      relations: { affiliate: { coupon: true } },
+    });
   }
 
   findById(id: number): Promise<UserEntity | null> {

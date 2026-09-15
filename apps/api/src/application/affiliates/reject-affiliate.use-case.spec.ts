@@ -45,6 +45,7 @@ describe('RejectAffiliateUseCase', () => {
 
     expect(affiliateRepository.changeStatus).toHaveBeenCalledWith({
       affiliateId: affiliate.id,
+      expectedStatus: AffiliateStatusEnum.PENDING_APPROVAL,
       toStatus: AffiliateStatusEnum.REJECTED,
       reason,
       actorUserId: operator.id,
@@ -60,6 +61,14 @@ describe('RejectAffiliateUseCase', () => {
 
     await expect(useCase.execute(input())).rejects.toThrow(AffiliateAlreadyDecidedError);
     expect(affiliateRepository.changeStatus).not.toHaveBeenCalled();
+  });
+
+  /* A checagem do começo não segura a linha: quem decide a corrida é o lock. */
+  it('refuses when another decision got there first', async () => {
+    affiliateRepository.changeStatus.mockResolvedValue(null);
+
+    await expect(useCase.execute(input())).rejects.toThrow(AffiliateAlreadyDecidedError);
+    expect(mailer.send).not.toHaveBeenCalled();
   });
 
   it('reports an affiliate that does not exist', async () => {

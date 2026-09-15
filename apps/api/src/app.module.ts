@@ -9,6 +9,7 @@ import { AppConfigModule } from '@Infra/config/config.module';
 import { DatabaseModule } from '@Infra/database/typeorm/typeorm.module';
 import { AuthServicesModule } from '@Infra/services/auth/auth-services.module';
 import { ClockModule } from '@Infra/services/clock/clock.module';
+import { CouponGatewayModule } from '@Infra/services/coupons/coupon-gateway.module';
 import { MailModule } from '@Infra/services/email/mail.module';
 
 @Module({
@@ -18,6 +19,7 @@ import { MailModule } from '@Infra/services/email/mail.module';
     AuthServicesModule,
     ClockModule,
     MailModule,
+    CouponGatewayModule,
     HealthModule,
     AffiliateChannelModule,
     AdminModule,

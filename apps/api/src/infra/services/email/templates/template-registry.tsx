@@ -26,10 +26,17 @@ export const MAIL_TEMPLATES: Record<MailTemplateEnum, MailTemplateDefinition> = 
     },
   },
   [MailTemplateEnum.REGISTRATION_APPROVED]: {
-    subject: 'Cadastro aprovado — crie sua senha',
-    requiredVariables: ['name', 'link'],
+    subject: 'Cadastro aprovado — seu cupom já está valendo',
+    requiredVariables: ['name', 'link', 'coupon', 'discountPercent'],
     build(variables) {
-      return <RegistrationApproved name={variables.name} link={variables.link} />;
+      return (
+        <RegistrationApproved
+          name={variables.name}
+          link={variables.link}
+          coupon={variables.coupon}
+          discountPercent={variables.discountPercent}
+        />
+      );
     },
   },
   [MailTemplateEnum.REGISTRATION_REJECTED]: {

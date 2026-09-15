@@ -5,6 +5,8 @@ import request from 'supertest';
 import { DataSource } from 'typeorm';
 import {
   AffiliateStatusEnum,
+  CouponErrorCodeEnum,
+  CouponStatusEnum,
   MailTemplateEnum,
   PixKeyTypeEnum,
   SocialNetworkEnum,
@@ -14,6 +16,12 @@ import {
   AFFILIATE_REPOSITORY,
   AffiliateRepository,
 } from '../src/domain/affiliates/affiliate.repository';
+import {
+  COUPON_GATEWAY,
+  CouponGateway,
+  IssueCouponInput,
+} from '../src/domain/coupons/coupon-gateway';
+import { CouponProviderUnavailableError } from '../src/domain/coupons/coupons.errors';
 import { MAILER } from '../src/domain/notifications/mailer';
 import { HttpExceptionFilter } from '../src/infra/shared/filters/http-exception.filter';
 import { mailerMock } from '../src/testing/mocks/services/mailer.mock';
@@ -68,6 +76,7 @@ describe('Admin affiliates (e2e)', () => {
     });
     await affiliates.changeStatus({
       affiliateId: cleide.id,
+      expectedStatus: AffiliateStatusEnum.PENDING_APPROVAL,
       toStatus: AffiliateStatusEnum.APPROVED,
     });
 
@@ -99,7 +108,7 @@ describe('Admin affiliates (e2e)', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     await dataSource.query(
-      'TRUNCATE affiliate_status_history, password_reset_tokens, affiliates, users RESTART IDENTITY CASCADE',
+      'TRUNCATE affiliate_coupon_history, affiliate_coupons, affiliate_status_history, password_reset_tokens, affiliates, users RESTART IDENTITY CASCADE',
     );
     token = await signIn();
   });
@@ -234,6 +243,20 @@ describe('Admin affiliates (e2e)', () => {
     });
   });
 
+  let issuedCoupons = 0;
+
+  /*
+    Aprovar passou a exigir o cupom, registrado na Porto no mesmo passo. Cada
+    chamada estreia um código porque o emissor — o falso como o real — nunca
+    esquece o que já emitiu, e o `TRUNCATE` do `beforeEach` não alcança a memória
+    dele. Teste que precisa do mesmo código duas vezes guarda o retorno.
+  */
+  function coupon(overrides: Record<string, unknown> = {}) {
+    issuedCoupons += 1;
+
+    return { couponCode: `CUPOM${issuedCoupons}`, couponDiscountPercent: 10, ...overrides };
+  }
+
   describe('POST /v1/admin/affiliates/:publicId/approve', () => {
     it('approves and records who decided', async () => {
       const { pending } = await seedQueue();
@@ -241,6 +264,7 @@ describe('Admin affiliates (e2e)', () => {
       await request(app.getHttpServer())
         .post(`/v1/admin/affiliates/${pending}/approve`)
         .set('Authorization', `Bearer ${token}`)
+        .send(coupon())
         .expect(204);
 
       const detail = await request(app.getHttpServer())
@@ -261,6 +285,7 @@ describe('Admin affiliates (e2e)', () => {
       await request(app.getHttpServer())
         .post(`/v1/admin/affiliates/${pending}/approve`)
         .set('Authorization', `Bearer ${token}`)
+        .send(coupon())
         .expect(204);
 
       const history = await request(app.getHttpServer())
@@ -281,6 +306,7 @@ describe('Admin affiliates (e2e)', () => {
       await request(app.getHttpServer())
         .post(`/v1/admin/affiliates/${pending}/approve`)
         .set('Authorization', `Bearer ${token}`)
+        .send(coupon())
         .expect(204);
 
       const rows = await dataSource.query(
@@ -299,6 +325,7 @@ describe('Admin affiliates (e2e)', () => {
       await request(app.getHttpServer())
         .post(`/v1/admin/affiliates/${pending}/approve`)
         .set('Authorization', `Bearer ${token}`)
+        .send(coupon())
         .expect(204);
 
       expect(mailer.send).toHaveBeenCalledWith(
@@ -316,6 +343,7 @@ describe('Admin affiliates (e2e)', () => {
       await request(app.getHttpServer())
         .post(`/v1/admin/affiliates/${approved}/approve`)
         .set('Authorization', `Bearer ${token}`)
+        .send(coupon())
         .expect(409);
     });
 
@@ -323,6 +351,7 @@ describe('Admin affiliates (e2e)', () => {
       await request(app.getHttpServer())
         .post('/v1/admin/affiliates/00000000-0000-4000-8000-000000000000/approve')
         .set('Authorization', `Bearer ${token}`)
+        .send(coupon())
         .expect(404);
     });
 
@@ -331,7 +360,181 @@ describe('Admin affiliates (e2e)', () => {
 
       await request(app.getHttpServer())
         .post(`/v1/admin/affiliates/${pending}/approve`)
+        .send(coupon())
         .expect(401);
+    });
+
+    it('issues the coupon and answers it in the detail', async () => {
+      const { pending } = await seedQueue();
+
+      await request(app.getHttpServer())
+        .post(`/v1/admin/affiliates/${pending}/approve`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(coupon({ couponCode: 'marina25', couponDiscountPercent: 15 }))
+        .expect(204);
+
+      const detail = await request(app.getHttpServer())
+        .get(`/v1/admin/affiliates/${pending}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      // O código é gravado em maiúsculas, e não como foi digitado.
+      expect(detail.body.coupon).toEqual({
+        code: 'MARINA25',
+        discountPercent: 15,
+        status: CouponStatusEnum.ACTIVE,
+      });
+    });
+
+    it('sends the approval email carrying the issued coupon', async () => {
+      const { pending } = await seedQueue();
+      const issued = coupon();
+
+      await request(app.getHttpServer())
+        .post(`/v1/admin/affiliates/${pending}/approve`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(issued)
+        .expect(204);
+
+      expect(mailer.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          variables: expect.objectContaining({
+            coupon: issued.couponCode,
+            discountPercent: '10',
+          }),
+        }),
+      );
+    });
+
+    it('refuses to approve without a coupon', async () => {
+      const { pending } = await seedQueue();
+
+      await request(app.getHttpServer())
+        .post(`/v1/admin/affiliates/${pending}/approve`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({})
+        .expect(400);
+    });
+
+    it('refuses a discount above the ceiling the provider accepts', async () => {
+      const { pending } = await seedQueue();
+
+      await request(app.getHttpServer())
+        .post(`/v1/admin/affiliates/${pending}/approve`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(coupon({ couponDiscountPercent: 30 }))
+        .expect(400);
+    });
+
+    it('refuses a coupon code already issued to another affiliate', async () => {
+      const { pending } = await seedQueue();
+      const other = await affiliates.createWithUser({
+        fullName: 'Rui Barbosa',
+        email: 'rui.barbosa@email.com',
+        cpf: '15350946056',
+        rg: '11223344',
+        pixKeyType: PixKeyTypeEnum.CPF,
+        pixKey: '15350946056',
+        socialNetwork: null,
+        socialHandle: null,
+        termsAcceptedAt: new Date('2026-08-17T12:00:00Z'),
+      });
+
+      // O mesmo código nas duas chamadas: é o conflito que o teste persegue.
+      const taken = coupon();
+
+      await request(app.getHttpServer())
+        .post(`/v1/admin/affiliates/${other.publicId}/approve`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(taken)
+        .expect(204);
+
+      const conflict = await request(app.getHttpServer())
+        .post(`/v1/admin/affiliates/${pending}/approve`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(taken)
+        .expect(409);
+
+      expect(conflict.body.code).toBe(CouponErrorCodeEnum.CODE_UNAVAILABLE);
+    });
+
+    /*
+      A ordem é a promessa do fluxo: se o cupom não sai, nada é gravado. Aqui o
+      emissor recusa o código, e o cadastro tem que continuar em análise.
+    */
+    it('leaves the registration pending when the coupon cannot be issued', async () => {
+      const { pending } = await seedQueue();
+      jest
+        .spyOn(app.get<CouponGateway>(COUPON_GATEWAY), 'issue')
+        .mockRejectedValueOnce(new CouponProviderUnavailableError());
+
+      await request(app.getHttpServer())
+        .post(`/v1/admin/affiliates/${pending}/approve`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(coupon())
+        .expect(503);
+
+      const detail = await request(app.getHttpServer())
+        .get(`/v1/admin/affiliates/${pending}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(detail.body).toMatchObject({
+        status: AffiliateStatusEnum.PENDING_APPROVAL,
+        coupon: null,
+      });
+      expect(mailer.send).not.toHaveBeenCalled();
+    });
+
+    /*
+      Duas analistas no mesmo cadastro, ao mesmo tempo. O dublê segura as duas
+      emissões até ambas chegarem lá, para a corrida acontecer sempre, e não só
+      quando o agendador quiser.
+    */
+    it('lets only one of two simultaneous approvals through and withdraws the other coupon', async () => {
+      const { pending } = await seedQueue();
+      const gateway = app.get<CouponGateway>(COUPON_GATEWAY);
+      const issue = gateway.issue.bind(gateway);
+      const change = jest.spyOn(gateway, 'change');
+
+      let arrived = 0;
+      let releaseBoth: () => void = () => undefined;
+      const bothArrived = new Promise<void>((resolve) => {
+        releaseBoth = resolve;
+      });
+
+      async function heldIssue(input: IssueCouponInput) {
+        arrived += 1;
+        if (arrived === 2) releaseBoth();
+        await bothArrived;
+        return issue(input);
+      }
+
+      jest
+        .spyOn(gateway, 'issue')
+        .mockImplementationOnce(heldIssue)
+        .mockImplementationOnce(heldIssue);
+
+      const bodies = [coupon(), coupon()];
+      const responses = await Promise.all(
+        bodies.map((body) =>
+          request(app.getHttpServer())
+            .post(`/v1/admin/affiliates/${pending}/approve`)
+            .set('Authorization', `Bearer ${token}`)
+            .send(body),
+        ),
+      );
+
+      expect(responses.map((response) => response.status).sort()).toEqual([204, 409]);
+
+      const rows = await dataSource.query('SELECT code FROM affiliate_coupons');
+      expect(rows).toHaveLength(1);
+
+      const loser = bodies[responses.findIndex((response) => response.status === 409)];
+      expect(change).toHaveBeenCalledWith({
+        code: loser.couponCode,
+        status: CouponStatusEnum.INACTIVE,
+      });
     });
   });
 
@@ -419,6 +622,141 @@ describe('Admin affiliates (e2e)', () => {
       const rows = await dataSource.query('SELECT count(*) FROM password_reset_tokens');
 
       expect(rows[0].count).toBe('0');
+    });
+  });
+  /** Aprova um cadastro pelo caminho de produção e devolve o código do cupom criado. */
+  async function approvedWithCoupon(): Promise<{ publicId: string; code: string }> {
+    const { pending } = await seedQueue();
+    const issued = coupon();
+
+    await request(app.getHttpServer())
+      .post(`/v1/admin/affiliates/${pending}/approve`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(issued)
+      .expect(204);
+
+    return { publicId: pending, code: issued.couponCode };
+  }
+
+  describe('PATCH /v1/admin/affiliates/:publicId/coupon', () => {
+    it('deactivates the coupon and answers it as it ended up', async () => {
+      const { publicId, code } = await approvedWithCoupon();
+
+      const response = await request(app.getHttpServer())
+        .patch(`/v1/admin/affiliates/${publicId}/coupon`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ status: CouponStatusEnum.INACTIVE })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        code,
+        discountPercent: 10,
+        status: CouponStatusEnum.INACTIVE,
+      });
+    });
+
+    it('shows the new discount in the detail', async () => {
+      const { publicId } = await approvedWithCoupon();
+
+      await request(app.getHttpServer())
+        .patch(`/v1/admin/affiliates/${publicId}/coupon`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ discountPercent: 15 })
+        .expect(200);
+
+      const detail = await request(app.getHttpServer())
+        .get(`/v1/admin/affiliates/${publicId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(detail.body.coupon).toMatchObject({
+        discountPercent: 15,
+        status: CouponStatusEnum.ACTIVE,
+      });
+    });
+
+    it('refuses a change that carries nothing', async () => {
+      const { publicId } = await approvedWithCoupon();
+
+      await request(app.getHttpServer())
+        .patch(`/v1/admin/affiliates/${publicId}/coupon`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({})
+        .expect(400);
+    });
+
+    it('refuses a discount above the ceiling the provider accepts', async () => {
+      const { publicId } = await approvedWithCoupon();
+
+      await request(app.getHttpServer())
+        .patch(`/v1/admin/affiliates/${publicId}/coupon`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ discountPercent: 30 })
+        .expect(400);
+    });
+
+    it('reports a registration that has no coupon yet', async () => {
+      const { pending } = await seedQueue();
+
+      await request(app.getHttpServer())
+        .patch(`/v1/admin/affiliates/${pending}/coupon`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ status: CouponStatusEnum.INACTIVE })
+        .expect(404);
+    });
+
+    it('refuses a request without a token', async () => {
+      const { publicId } = await approvedWithCoupon();
+
+      await request(app.getHttpServer())
+        .patch(`/v1/admin/affiliates/${publicId}/coupon`)
+        .send({ status: CouponStatusEnum.INACTIVE })
+        .expect(401);
+    });
+  });
+
+  describe('GET /v1/admin/affiliates/:publicId/coupon/history', () => {
+    it('lists the issue and every change, newest first, with who did them', async () => {
+      const { publicId } = await approvedWithCoupon();
+
+      await request(app.getHttpServer())
+        .patch(`/v1/admin/affiliates/${publicId}/coupon`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ status: CouponStatusEnum.INACTIVE })
+        .expect(200);
+
+      const history = await request(app.getHttpServer())
+        .get(`/v1/admin/affiliates/${publicId}/coupon/history`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(history.body).toMatchObject([
+        {
+          fromStatus: CouponStatusEnum.ACTIVE,
+          toStatus: CouponStatusEnum.INACTIVE,
+          fromDiscountPercent: 10,
+          toDiscountPercent: 10,
+          actorName: 'Analista Porto',
+        },
+        {
+          fromStatus: null,
+          toStatus: CouponStatusEnum.ACTIVE,
+          fromDiscountPercent: null,
+          toDiscountPercent: 10,
+          actorName: 'Analista Porto',
+        },
+      ]);
+    });
+
+    it('answers an empty trail before the approval', async () => {
+      const { pending } = await seedQueue();
+
+      const history = await request(app.getHttpServer())
+        .get(`/v1/admin/affiliates/${pending}/coupon/history`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(history.body).toEqual([]);
     });
   });
 });

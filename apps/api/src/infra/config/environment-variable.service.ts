@@ -64,4 +64,33 @@ export class EnvironmentVariableService {
   get mailFromName(): string {
     return this.required('MAIL_FROM_NAME');
   }
+
+  /** `fake` emite o cupom em memória; `porto` fala com o gateway Sensedia. */
+  get couponProvider(): 'porto' | 'fake' {
+    return (this.configService.get<string>('COUPON_PROVIDER') ?? 'fake') as 'porto' | 'fake';
+  }
+  get portoOauthUrl(): string {
+    return this.required('PORTO_OAUTH_URL');
+  }
+  get portoApiBaseUrl(): string {
+    return this.required('PORTO_API_BASE_URL');
+  }
+  /** O prefixo do produto no gateway, antes do `/v1` do INT-01. */
+  get portoApiBasePath(): string {
+    return this.required('PORTO_API_BASE_PATH');
+  }
+  get portoClientId(): string {
+    return this.configService.get<string>('PORTO_CLIENT_ID') ?? '';
+  }
+  get portoClientSecret(): string {
+    return this.configService.get<string>('PORTO_CLIENT_SECRET') ?? '';
+  }
+  /**
+   * O teto é curto de propósito: a aprovação espera esta chamada, e a analista
+   * está olhando para um diálogo aberto. Melhor pedir para tentar de novo do
+   * que segurar a tela.
+   */
+  get portoApiTimeoutMs(): number {
+    return Number(this.configService.get('PORTO_API_TIMEOUT_MS') ?? 10000);
+  }
 }

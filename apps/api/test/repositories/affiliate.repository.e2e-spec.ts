@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 import {
   AffiliateStatusEnum,
+  CouponStatusEnum,
   PixKeyTypeEnum,
   SocialNetworkEnum,
   UserRoleEnum,
@@ -20,12 +21,18 @@ import {
   CpfAlreadyRegisteredError,
   RgAlreadyRegisteredError,
 } from '../../src/domain/affiliates/affiliates.errors';
+import {
+  COUPON_HISTORY_REPOSITORY,
+  CouponHistoryRepository,
+} from '../../src/domain/coupons/coupon-history.repository';
+import { CouponCodeUnavailableError } from '../../src/domain/coupons/coupons.errors';
 import { USER_REPOSITORY, UserRepository } from '../../src/domain/users/user.repository';
 
 describe('AffiliateRepository (integration)', () => {
   let dataSource: DataSource;
   let affiliates: AffiliateRepository;
   let history: AffiliateStatusHistoryRepository;
+  let couponHistory: CouponHistoryRepository;
   let users: UserRepository;
   let affiliateId: number;
   let analystId: number;
@@ -37,12 +44,13 @@ describe('AffiliateRepository (integration)', () => {
     dataSource = app.get(DataSource);
     affiliates = app.get<AffiliateRepository>(AFFILIATE_REPOSITORY);
     history = app.get<AffiliateStatusHistoryRepository>(AFFILIATE_STATUS_HISTORY_REPOSITORY);
+    couponHistory = app.get<CouponHistoryRepository>(COUPON_HISTORY_REPOSITORY);
     users = app.get<UserRepository>(USER_REPOSITORY);
   });
 
   beforeEach(async () => {
     await dataSource.query(
-      'TRUNCATE affiliate_status_history, password_reset_tokens, affiliates, users RESTART IDENTITY CASCADE',
+      'TRUNCATE affiliate_coupon_history, affiliate_coupons, affiliate_status_history, password_reset_tokens, affiliates, users RESTART IDENTITY CASCADE',
     );
     const owner = await users.save({
       name: 'Marina Ferraz',
@@ -75,6 +83,7 @@ describe('AffiliateRepository (integration)', () => {
   it('returns the affiliate with the new status', async () => {
     const changed = await affiliates.changeStatus({
       affiliateId,
+      expectedStatus: AffiliateStatusEnum.PENDING_APPROVAL,
       toStatus: AffiliateStatusEnum.APPROVED,
       actorUserId: analystId,
     });
@@ -89,6 +98,7 @@ describe('AffiliateRepository (integration)', () => {
     expect(
       await affiliates.changeStatus({
         affiliateId: 999_999,
+        expectedStatus: AffiliateStatusEnum.PENDING_APPROVAL,
         toStatus: AffiliateStatusEnum.APPROVED,
         actorUserId: analystId,
       }),
@@ -98,11 +108,13 @@ describe('AffiliateRepository (integration)', () => {
   it('derives the previous status from the stored row instead of trusting the caller', async () => {
     await affiliates.changeStatus({
       affiliateId,
+      expectedStatus: AffiliateStatusEnum.PENDING_APPROVAL,
       toStatus: AffiliateStatusEnum.APPROVED,
       actorUserId: analystId,
     });
     await affiliates.changeStatus({
       affiliateId,
+      expectedStatus: AffiliateStatusEnum.APPROVED,
       toStatus: AffiliateStatusEnum.REJECTED,
       reason: 'Denúncia de uso indevido do cupom',
       actorUserId: analystId,
@@ -126,6 +138,7 @@ describe('AffiliateRepository (integration)', () => {
   it('records the actor that requested the change', async () => {
     await affiliates.changeStatus({
       affiliateId,
+      expectedStatus: AffiliateStatusEnum.PENDING_APPROVAL,
       toStatus: AffiliateStatusEnum.REJECTED,
       reason: 'CPF divergente do titular da chave PIX',
       actorUserId: analystId,
@@ -143,6 +156,7 @@ describe('AffiliateRepository (integration)', () => {
 
     const changed = await affiliates.changeStatus({
       affiliateId,
+      expectedStatus: AffiliateStatusEnum.PENDING_APPROVAL,
       toStatus: AffiliateStatusEnum.APPROVED,
       actorUserId: analystId,
       changes: { approvedAt, approvedByUserId: analystId },
@@ -161,6 +175,7 @@ describe('AffiliateRepository (integration)', () => {
     await expect(
       affiliates.changeStatus({
         affiliateId,
+        expectedStatus: AffiliateStatusEnum.PENDING_APPROVAL,
         toStatus: AffiliateStatusEnum.APPROVED,
         actorUserId: unknownActor,
       }),
@@ -170,6 +185,100 @@ describe('AffiliateRepository (integration)', () => {
       status: AffiliateStatusEnum.PENDING_APPROVAL,
     });
     expect(await history.listByAffiliateId(affiliateId)).toHaveLength(0);
+  });
+
+  /*
+    A guarda que decide duas decisões simultâneas: quem chega ao lock depois
+    encontra a linha fora do status esperado e não grava nada — nem status, nem
+    coluna, nem trilha.
+  */
+  it('writes nothing when the affiliate is no longer in the expected status', async () => {
+    await affiliates.changeStatus({
+      affiliateId,
+      expectedStatus: AffiliateStatusEnum.PENDING_APPROVAL,
+      toStatus: AffiliateStatusEnum.APPROVED,
+      actorUserId: analystId,
+    });
+
+    const late = await affiliates.changeStatus({
+      affiliateId,
+      expectedStatus: AffiliateStatusEnum.PENDING_APPROVAL,
+      toStatus: AffiliateStatusEnum.REJECTED,
+      reason: 'Decisão que chegou atrasada',
+      actorUserId: analystId,
+      changes: { rejectionReason: 'Decisão que chegou atrasada' },
+    });
+
+    expect(late).toBeNull();
+    expect(await affiliates.findByCpf('52998224725')).toMatchObject({
+      status: AffiliateStatusEnum.APPROVED,
+      rejectionReason: null,
+    });
+    expect(await history.listByAffiliateId(affiliateId)).toHaveLength(1);
+  });
+
+  it('records the coupon issue as the first entry of the coupon trail', async () => {
+    await affiliates.changeStatus({
+      affiliateId,
+      expectedStatus: AffiliateStatusEnum.PENDING_APPROVAL,
+      toStatus: AffiliateStatusEnum.APPROVED,
+      actorUserId: analystId,
+      coupon: { code: 'MARINA25', discountPercent: 10, status: CouponStatusEnum.ACTIVE },
+    });
+
+    const [coupon] = await dataSource.query(
+      `SELECT id FROM affiliate_coupons WHERE code = 'MARINA25'`,
+    );
+    const entries = await couponHistory.listByCouponId(coupon.id);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      fromStatus: null,
+      toStatus: CouponStatusEnum.ACTIVE,
+      fromDiscountPercent: null,
+      toDiscountPercent: 10,
+      actorUserId: analystId,
+    });
+    expect(entries[0].actor?.name).toBe('Analista Porto');
+  });
+
+  /*
+    Duas aprovações com o mesmo código passam juntas pela checagem do use case,
+    e é o índice único que decide. Sem a tradução, quem perde a corrida recebe
+    500 em vez de "código em uso" — e o use case não sabe que o cupom é de outro.
+  */
+  it('translates the coupon code unique index into a domain conflict', async () => {
+    await affiliates.changeStatus({
+      affiliateId,
+      expectedStatus: AffiliateStatusEnum.PENDING_APPROVAL,
+      toStatus: AffiliateStatusEnum.APPROVED,
+      actorUserId: analystId,
+      coupon: { code: 'MARINA25', discountPercent: 10, status: CouponStatusEnum.ACTIVE },
+    });
+    const otherOwner = await users.save({
+      name: 'Bruno Alves',
+      email: 'bruno@example.com',
+      type: UserTypeEnum.AFFILIATE,
+    });
+    const other = await affiliates.save({
+      userId: otherOwner.id,
+      cpf: '11144477735',
+      rg: '11223344',
+      pixKeyType: PixKeyTypeEnum.EMAIL,
+      pixKey: 'bruno@example.com',
+      status: AffiliateStatusEnum.PENDING_APPROVAL,
+      termsAcceptedAt: new Date('2026-08-17T12:00:00Z'),
+    });
+
+    await expect(
+      affiliates.changeStatus({
+        affiliateId: other.id,
+        expectedStatus: AffiliateStatusEnum.PENDING_APPROVAL,
+        toStatus: AffiliateStatusEnum.APPROVED,
+        actorUserId: analystId,
+        coupon: { code: 'MARINA25', discountPercent: 10, status: CouponStatusEnum.ACTIVE },
+      }),
+    ).rejects.toThrow(CouponCodeUnavailableError);
   });
 
   describe('search', () => {
@@ -207,6 +316,7 @@ describe('AffiliateRepository (integration)', () => {
       });
       await affiliates.changeStatus({
         affiliateId: rogerio.id,
+        expectedStatus: AffiliateStatusEnum.PENDING_APPROVAL,
         toStatus: AffiliateStatusEnum.APPROVED,
         actorUserId: analystId,
       });

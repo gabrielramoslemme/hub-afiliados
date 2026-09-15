@@ -42,13 +42,15 @@ export class RejectAffiliateUseCase implements UseCase<RejectAffiliateInput, voi
 
     const rejected = await this.affiliateRepository.changeStatus({
       affiliateId: affiliate.id,
+      expectedStatus: AffiliateStatusEnum.PENDING_APPROVAL,
       toStatus: AffiliateStatusEnum.REJECTED,
       reason: input.reason,
       actorUserId: actor.id,
       changes: { rejectionReason: input.reason },
     });
 
-    if (!rejected) throw new AffiliateNotFoundError();
+    // A checagem do começo não segura a linha: quem decide a corrida é o lock.
+    if (!rejected) throw new AffiliateAlreadyDecidedError();
 
     await this.mailer.send({
       template: MailTemplateEnum.REGISTRATION_REJECTED,

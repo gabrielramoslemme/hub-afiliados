@@ -1,4 +1,9 @@
-import { AffiliateStatusEnum, PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
+import {
+  AffiliateStatusEnum,
+  CouponSummary,
+  PixKeyTypeEnum,
+  SocialNetworkEnum,
+} from '@porto/contracts';
 import { AffiliateRepository } from '@Domain/affiliates/affiliate.repository';
 import { AffiliateNotFoundError } from '@Domain/affiliates/affiliates.errors';
 import { maskCpf } from '@Domain/affiliates/cpf.util';
@@ -23,6 +28,8 @@ export interface AffiliateDetailOutput {
   approvedAt: Date | null;
   approvedByName: string | null;
   rejectionReason: string | null;
+  /** Emitido na aprovação; nulo em cadastro que ainda não passou por ela. */
+  coupon: CouponSummary | null;
   createdAt: Date;
 }
 
@@ -49,6 +56,13 @@ export class GetAffiliateUseCase implements UseCase<string, AffiliateDetailOutpu
       approvedAt: affiliate.approvedAt,
       approvedByName: affiliate.approvedBy?.name ?? null,
       rejectionReason: affiliate.rejectionReason,
+      coupon: affiliate.coupon
+        ? {
+            code: affiliate.coupon.code,
+            discountPercent: affiliate.coupon.discountPercent,
+            status: affiliate.coupon.status,
+          }
+        : null,
       createdAt: affiliate.createdAt,
     };
   }

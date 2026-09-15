@@ -24,7 +24,7 @@ export interface AffiliateLoginOutput {
     name: string;
     email: string;
     status: AffiliateStatusEnum;
-    /** Nulo enquanto a Porto não emitir o cupom do afiliado aprovado. */
+    /** Emitido na aprovação; nulo em cadastro que ainda não passou por ela. */
     coupon: string | null;
   };
 }
@@ -85,7 +85,7 @@ export class AffiliateLoginUseCase implements UseCase<AffiliateLoginInput, Affil
         name: user.name,
         email: user.email,
         status: user.affiliate.status,
-        coupon: null,
+        coupon: user.affiliate.coupon?.code ?? null,
       },
     };
   }

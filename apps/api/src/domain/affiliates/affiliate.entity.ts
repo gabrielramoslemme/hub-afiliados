@@ -1,4 +1,5 @@
 import { AffiliateStatusEnum, PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
+import { CouponEntity } from '@Domain/coupons/coupon.entity';
 import { UserEntity } from '@Domain/users/user.entity';
 
 export interface AffiliateEntity {
@@ -26,6 +27,11 @@ export interface AffiliateWithUser extends AffiliateEntity {
   user: UserEntity;
 }
 
-export interface AffiliateDetail extends AffiliateWithUser {
+/** Nulo até a aprovação: é ela que emite o cupom na Porto Serviços. */
+export interface AffiliateWithCoupon extends AffiliateEntity {
+  coupon: CouponEntity | null;
+}
+
+export interface AffiliateDetail extends AffiliateWithUser, AffiliateWithCoupon {
   approvedBy: UserEntity | null;
 }

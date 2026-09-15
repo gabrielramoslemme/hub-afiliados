@@ -1,6 +1,7 @@
 import { AffiliateStatusEnum, PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
 import { UnknownAffiliateError } from '@Domain/auth/auth.errors';
 import { buildAffiliate } from '@Testing/factories/affiliate.factory';
+import { buildCoupon } from '@Testing/factories/coupon.factory';
 import { buildUser } from '@Testing/factories/user.factory';
 import { userRepositoryMock } from '@Testing/mocks/repositories/user.repository.mock';
 import { GetAffiliateAccountUseCase } from './get-affiliate-account.use-case';
@@ -19,6 +20,7 @@ describe('GetAffiliateAccountUseCase', () => {
     status: AffiliateStatusEnum.APPROVED,
     socialNetwork: SocialNetworkEnum.TIKTOK,
     socialHandle: 'marina.ferraz',
+    coupon: buildCoupon({ code: 'MARINA25' }),
   });
 
   beforeEach(() => {
@@ -39,7 +41,7 @@ describe('GetAffiliateAccountUseCase', () => {
       pixKeyType: PixKeyTypeEnum.EMAIL,
       maskedPixKey: 'ma***********@email.com',
       status: AffiliateStatusEnum.APPROVED,
-      coupon: null,
+      coupon: 'MARINA25',
       createdAt: new Date('2026-08-17T12:00:00Z'),
     });
   });
@@ -50,6 +52,15 @@ describe('GetAffiliateAccountUseCase', () => {
     expect(JSON.stringify(account)).not.toContain('52998224725');
     expect(JSON.stringify(account)).not.toContain('12345678X');
     expect(JSON.stringify(account)).not.toContain('marina.ferraz@email.com');
+  });
+
+  it('answers without a coupon while the registration was not approved', async () => {
+    userRepository.findByPublicId.mockResolvedValue({
+      ...user,
+      affiliate: buildAffiliate({ user, coupon: null }),
+    });
+
+    await expect(useCase.execute(user.publicId)).resolves.toMatchObject({ coupon: null });
   });
 
   it('refuses a token of a user that is gone', async () => {

@@ -11,6 +11,8 @@ export enum DomainErrorKindEnum {
   INVALID_INPUT = 'INVALID_INPUT',
   UNAUTHORIZED = 'UNAUTHORIZED',
   FORBIDDEN = 'FORBIDDEN',
+  /** Um fornecedor de fora não respondeu. A falha não é de quem chamou. */
+  UNAVAILABLE = 'UNAVAILABLE',
 }
 
 export abstract class DomainError extends Error {

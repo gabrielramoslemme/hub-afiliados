@@ -50,7 +50,7 @@ export class GetAffiliateAccountUseCase implements UseCase<string, AffiliateAcco
       pixKeyType: affiliate.pixKeyType,
       maskedPixKey: maskPixKey(affiliate.pixKeyType, affiliate.pixKey),
       status: affiliate.status,
-      coupon: null,
+      coupon: affiliate.coupon?.code ?? null,
       createdAt: affiliate.createdAt,
     };
   }

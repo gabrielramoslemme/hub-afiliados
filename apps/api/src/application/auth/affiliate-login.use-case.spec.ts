@@ -7,6 +7,7 @@ import {
   RegistrationUnderReviewError,
 } from '@Domain/auth/auth.errors';
 import { buildAffiliate } from '@Testing/factories/affiliate.factory';
+import { buildCoupon } from '@Testing/factories/coupon.factory';
 import { buildAdminUser, buildUser } from '@Testing/factories/user.factory';
 import { userRepositoryMock } from '@Testing/mocks/repositories/user.repository.mock';
 import { accessTokenIssuerMock } from '@Testing/mocks/services/access-token-issuer.mock';
@@ -31,7 +32,14 @@ describe('AffiliateLoginUseCase', () => {
       type: UserTypeEnum.AFFILIATE,
     });
 
-    return { ...user, affiliate: buildAffiliate({ user, status }) };
+    return {
+      ...user,
+      affiliate: buildAffiliate({
+        user,
+        status,
+        coupon: status === AffiliateStatusEnum.APPROVED ? buildCoupon({ code: 'MARINA25' }) : null,
+      }),
+    };
   }
 
   beforeEach(() => {
@@ -61,7 +69,7 @@ describe('AffiliateLoginUseCase', () => {
         name: 'Marina Ferraz',
         email: credentials.email,
         status: AffiliateStatusEnum.APPROVED,
-        coupon: null,
+        coupon: 'MARINA25',
       },
     });
   });

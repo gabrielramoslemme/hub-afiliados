@@ -1,7 +1,13 @@
-import { AffiliateStatusEnum, PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
+import {
+  AffiliateStatusEnum,
+  CouponStatusEnum,
+  PixKeyTypeEnum,
+  SocialNetworkEnum,
+} from '@porto/contracts';
 import { AffiliateDetail } from '@Domain/affiliates/affiliate.entity';
 import { AffiliateNotFoundError } from '@Domain/affiliates/affiliates.errors';
 import { buildAffiliate } from '@Testing/factories/affiliate.factory';
+import { buildCoupon } from '@Testing/factories/coupon.factory';
 import { buildAdminUser, buildUser } from '@Testing/factories/user.factory';
 import { affiliateRepositoryMock } from '@Testing/mocks/repositories/affiliate.repository.mock';
 import { GetAffiliateUseCase } from './get-affiliate.use-case';
@@ -46,7 +52,22 @@ describe('GetAffiliateUseCase', () => {
       approvedAt: null,
       approvedByName: null,
       rejectionReason: null,
+      coupon: null,
       createdAt: new Date('2026-08-17T12:00:00Z'),
+    });
+  });
+
+  it('answers the coupon issued on the approval', async () => {
+    affiliateRepository.findByPublicId.mockResolvedValue({
+      ...buildAffiliate({
+        status: AffiliateStatusEnum.APPROVED,
+        coupon: buildCoupon({ code: 'MARINA25', discountPercent: 15 }),
+      }),
+      approvedBy: null,
+    });
+
+    await expect(useCase.execute('any-public-id')).resolves.toMatchObject({
+      coupon: { code: 'MARINA25', discountPercent: 15, status: CouponStatusEnum.ACTIVE },
     });
   });
 
