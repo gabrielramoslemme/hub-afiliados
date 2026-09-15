@@ -16,7 +16,7 @@ Fonte única do vocabulário entre a API e a web: quando um DTO muda na API, a w
 
 - **Enum:** sufixo `Enum`, chave e valor iguais em `SCREAMING_SNAKE`. Duas exceções:
   - `AuthAudienceEnum`, com valores minúsculos porque vão direto para a claim `aud` do JWT.
-  - Todo `*ErrorCodeEnum` (`AuthErrorCodeEnum`, `RegistrationErrorCodeEnum`): a chave continua semântica em `SCREAMING_SNAKE`, mas o valor é um código curto `PREFIXO-NNN` (`AUTH-001`, `REG-004`) — um prefixo por enum, numeração sequencial de 3 dígitos na ordem de declaração. É esse valor que o front mapeia pra escolher a mensagem, então **número aposentado nunca é reaproveitado** e categoria nova ganha prefixo novo, nunca reusa um existente.
+  - Todo `*ErrorCodeEnum` (`AuthErrorCodeEnum`, `RegistrationErrorCodeEnum`, `CouponErrorCodeEnum`): a chave continua semântica em `SCREAMING_SNAKE`, mas o valor é um código curto `PREFIXO-NNN` (`AUTH-001`, `REG-004`, `CPN-003`) — um prefixo por enum, numeração sequencial de 3 dígitos na ordem de declaração. É esse valor que o front mapeia pra escolher a mensagem, então **número aposentado nunca é reaproveitado** e categoria nova ganha prefixo novo, nunca reusa um existente.
 - **Tipo de resposta:** `interface` com sufixo semântico — `AffiliateListItem` para a linha da lista, `AffiliateDetail` para a tela de detalhe.
 - **Requisição com validação:** `export const xSchema = z.object({...})` seguido de `export type XRequest = z.infer<typeof xSchema>`. A mensagem de erro em pt-BR mora no schema — é ela que aparece no formulário correspondente em `apps/web`.
 - **Tudo passa por `src/index.ts`.** Arquivo novo exige linha nova de reexport, senão ele não existe para quem consome.
@@ -36,4 +36,4 @@ Sem isso, a API e a web continuam enxergando os tipos antigos, e o erro aparece 
 
 ## Atenção: o valor do enum está gravado no banco
 
-`AffiliateStatusEnum`, `UserRoleEnum`, `UserTypeEnum`, `PixKeyTypeEnum` e `TokenPurposeEnum` são persistidos como `varchar` nas tabelas do Postgres. Adicionar valor novo é seguro; **renomear ou remover é migration de dados, não refactor** — o type-check passa e o banco fica inconsistente em silêncio.
+`AffiliateStatusEnum`, `CouponStatusEnum`, `UserRoleEnum`, `UserTypeEnum`, `PixKeyTypeEnum` e `TokenPurposeEnum` são persistidos como `varchar` nas tabelas do Postgres. Adicionar valor novo é seguro; **renomear ou remover é migration de dados, não refactor** — o type-check passa e o banco fica inconsistente em silêncio.

@@ -15,6 +15,16 @@ export enum AffiliateStatusEnum {
   REJECTED = 'REJECTED',
 }
 
+/**
+ * Situação do cupom do afiliado, decidida no painel. A Porto chama os mesmos
+ * estados de `ATIVO` e `INATIVO`; a tradução mora no adapter, em
+ * `infra/services/coupons/`.
+ */
+export enum CouponStatusEnum {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+}
+
 export enum PixKeyTypeEnum {
   EMAIL = 'EMAIL',
   PHONE = 'PHONE',
@@ -75,5 +85,19 @@ export enum RegistrationErrorCodeEnum {
   TERMS_NOT_ACCEPTED = 'REG-008',
 }
 
+/** Falhas da emissão do cupom, que o painel distingue para escolher a mensagem. */
+export enum CouponErrorCodeEnum {
+  CODE_UNAVAILABLE = 'CPN-001',
+  /** A Porto Serviços não respondeu — a analista pode tentar de novo. */
+  PROVIDER_UNAVAILABLE = 'CPN-002',
+  /** A Porto Serviços recusou os dados — repetir não resolve, a analista muda o pedido. */
+  REFUSED = 'CPN-003',
+  /**
+   * A Porto Serviços recusou a credencial da integração — repetir não resolve, e
+   * quem corrige é quem configura o ambiente, não a analista.
+   */
+  PROVIDER_ACCESS_DENIED = 'CPN-004',
+}
+
 /** Todo `code` que o corpo de erro da API pode carregar. */
-export type ApiErrorCode = AuthErrorCodeEnum | RegistrationErrorCodeEnum;
+export type ApiErrorCode = AuthErrorCodeEnum | RegistrationErrorCodeEnum | CouponErrorCodeEnum;

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { AffiliateStatusEnum, StatementEntryKindEnum } from '../enums';
 import { PixKeyTypeEnum, SocialNetworkEnum } from '../enums';
+import type { CouponSummary } from './coupon.dto';
 
 /** Item da fila de aprovação. CPF já vem mascarado da API. */
 export interface AffiliateListItem {
@@ -22,6 +23,8 @@ export interface AffiliateDetail extends AffiliateListItem {
   approvedAt: string | null;
   approvedByName: string | null;
   rejectionReason: string | null;
+  /** Emitido na aprovação. Nulo em cadastro ainda não aprovado ou reprovado. */
+  coupon: CouponSummary | null;
 }
 
 export interface AffiliateStatusHistoryItem {
@@ -82,6 +85,41 @@ export const rejectAffiliateSchema = z.object({
 });
 
 export type RejectAffiliateRequest = z.infer<typeof rejectAffiliateSchema>;
+
+/*
+  Aprovar é criar o cupom, registrado na Porto no mesmo passo, e por isso os
+  dois campos são obrigatórios. Os limites são os que o INT-01 impõe ao
+  percentual (maior que 0, até 25) e os que o produto impõe ao código — mais
+  estreitos que os 200 caracteres que a Porto aceita, porque quem digita o
+  cupom é um cliente final no checkout.
+*/
+const COUPON_CODE_PATTERN = /^[A-Z0-9]+$/;
+
+export const approveAffiliateSchema = z.object({
+  couponCode: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .min(4, 'O código deve ter ao menos 4 caracteres')
+    .max(20, 'O código deve ter no máximo 20 caracteres')
+    .regex(COUPON_CODE_PATTERN, 'Use apenas letras e números, sem espaço nem acento'),
+  // `coerce` porque o `input[type=number]` entrega string, e o formulário é a
+  // única origem deste schema no navegador.
+  couponDiscountPercent: z.coerce
+    .number({ message: 'Informe o percentual de desconto' })
+    .int('O percentual deve ser um número inteiro')
+    .min(1, 'O desconto começa em 1%')
+    .max(25, 'O desconto vai até 25%'),
+});
+
+export type ApproveAffiliateRequest = z.infer<typeof approveAffiliateSchema>;
+
+/**
+ * O que o formulário guarda enquanto a analista preenche, que não é o que ele
+ * envia: o `input[type=number]` entrega o percentual como string, e o `coerce`
+ * do schema é quem o transforma em número. `ApproveAffiliateRequest` é o depois.
+ */
+export type ApproveAffiliateFormValues = z.input<typeof approveAffiliateSchema>;
 
 /**
  * Cadastro público do afiliado, espelhando `CreateAffiliateRequestDto` da API.
