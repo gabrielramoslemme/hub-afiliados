@@ -8,6 +8,8 @@ import { ListAffiliatesUseCase } from '@Application/affiliates/list-affiliates.u
 import { RejectAffiliateUseCase } from '@Application/affiliates/reject-affiliate.use-case';
 import { AdminLoginUseCase } from '@Application/auth/admin-login.use-case';
 import { AffiliateLoginUseCase } from '@Application/auth/affiliate-login.use-case';
+import { RequestPasswordResetUseCase } from '@Application/auth/request-password-reset.use-case';
+import { ResetPasswordUseCase } from '@Application/auth/reset-password.use-case';
 import { SetPasswordUseCase } from '@Application/auth/set-password.use-case';
 import { ChangeAffiliateCouponUseCase } from '@Application/coupons/change-affiliate-coupon.use-case';
 import { CheckCouponAvailabilityUseCase } from '@Application/coupons/check-coupon-availability.use-case';
@@ -83,6 +85,21 @@ const USE_CASES = [
     CLOCK,
   ]),
   provideUseCase(SetPasswordUseCase, [
+    USER_REPOSITORY,
+    PASSWORD_RESET_TOKEN_REPOSITORY,
+    PASSWORD_HASHER,
+    TOKEN_GENERATOR,
+    CLOCK,
+  ]),
+  provideUseCase(RequestPasswordResetUseCase, [
+    USER_REPOSITORY,
+    PASSWORD_RESET_TOKEN_REPOSITORY,
+    TOKEN_GENERATOR,
+    LINK_BUILDER,
+    MAILER,
+    CLOCK,
+  ]),
+  provideUseCase(ResetPasswordUseCase, [
     USER_REPOSITORY,
     PASSWORD_RESET_TOKEN_REPOSITORY,
     PASSWORD_HASHER,

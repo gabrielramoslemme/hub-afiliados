@@ -5,5 +5,6 @@ export const passwordResetTokenRepositoryMock = (): jest.Mocked<PasswordResetTok
   findUsable: jest.fn().mockResolvedValue(null),
   markUsed: jest.fn().mockResolvedValue(undefined),
   invalidateAllFor: jest.fn().mockResolvedValue(undefined),
+  listCreatedSince: jest.fn().mockResolvedValue([]),
   deleteExpired: jest.fn().mockResolvedValue(undefined),
 });

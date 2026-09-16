@@ -25,7 +25,9 @@ Identidade unificada em `users`, perfil 1:1 em `affiliates`. **Esquecer de checa
 
 **Trocar de canal é 403, nos dois sentidos**, e há e2e para isso: token de afiliado em `/v1/admin/affiliates` e token de operador em `/v1/affiliate/me`.
 
-Hoje `@Public()` marca exatamente cinco rotas: `GET /v1/health`, `POST /v1/affiliates`, `POST /v1/admin/auth/login`, `POST /v1/affiliate/auth/login` e `POST /v1/affiliate/auth/set-password`. A última é pública porque é o que a pessoa tem **antes** de ter senha: quem autentica a chamada é o token de uso único no corpo. Acrescentar uma sexta é decisão de segurança, não de conveniência.
+Hoje `@Public()` marca exatamente nove rotas: `GET /v1/health`, `POST /v1/affiliates`, os dois `POST .../auth/login`, `POST /v1/affiliate/auth/set-password` e os dois pares `POST .../auth/forgot-password` e `POST .../auth/reset-password`, um em cada canal. As de senha são públicas porque são o que a pessoa tem **antes** de ter senha — ou depois de perdê-la: quem autentica a chamada é o token de uso único no corpo, e quem pede recuperação não tem sessão nenhuma para apresentar. Acrescentar a décima é decisão de segurança, não de conveniência; a lista literal em `test/route-protection.e2e-spec.ts` é o que obriga a decisão a passar por um diff.
+
+**As duas rotas de recuperação existem em cada canal, e o canal é quem diz a audiência.** O `RequestPasswordResetUseCase` e o `ResetPasswordUseCase` recebem `AuthAudienceEnum` na entrada, nunca no corpo: é isso que faz o link do painel não redefinir senha pela tela do afiliado. Os dois ficam em silêncio — 204 — para conta que não existe, não pode entrar ou pediu demais, porque responder diferente entregaria quem participa do programa.
 
 **O claim `sub` é o `public_id`.** O token viaja para fora da API, e o id serial não sai daqui; quando o use case precisa do id interno — `approved_by_user_id` é FK —, ele resolve pelo `UserRepository.findByPublicId`.
 

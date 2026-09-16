@@ -56,13 +56,16 @@ export class RegistrationRejectedError extends DomainError {
   }
 }
 
-/** Link de definir senha usado, vencido ou adulterado — os três dão o mesmo. */
+/**
+ * Link de definir ou de redefinir senha usado, vencido ou adulterado — os três
+ * dão o mesmo, e o do outro canal também.
+ */
 export class InvalidResetTokenError extends DomainError {
   readonly kind = DomainErrorKindEnum.INVALID_INPUT;
   readonly code = AuthErrorCodeEnum.INVALID_TOKEN;
 
   constructor() {
-    super('Este link não vale mais. Peça um novo para quem administra o programa.');
+    super('Este link não vale mais. Peça um novo em "Esqueci minha senha".');
   }
 }
 

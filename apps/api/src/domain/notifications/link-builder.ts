@@ -1,3 +1,4 @@
+import { AuthAudienceEnum } from '@porto/contracts';
 import { createToken } from '@Domain/shared/token';
 
 export const LINK_BUILDER = createToken<LinkBuilder>('LINK_BUILDER');
@@ -8,4 +9,9 @@ export const LINK_BUILDER = createToken<LinkBuilder>('LINK_BUILDER');
  */
 export interface LinkBuilder {
   setPasswordLink(token: string): string;
+  /**
+   * A recuperação serve aos dois públicos, e cada um redefine a senha na sua
+   * tela: a audiência que pediu é o que decide para onde o link aponta.
+   */
+  resetPasswordLink(token: string, audience: AuthAudienceEnum): string;
 }

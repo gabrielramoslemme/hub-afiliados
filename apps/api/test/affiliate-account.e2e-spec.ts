@@ -42,6 +42,25 @@ describe('Affiliate account (e2e)', () => {
     return approval?.[0].variables.link ?? '';
   }
 
+  /** Os e-mails de recuperação enviados até agora, do mais antigo ao mais novo. */
+  function recoveryEmails(): SendMailInput[] {
+    return (mailer.send.mock.calls as [SendMailInput][])
+      .map(([input]) => input)
+      .filter((input) => input.template === MailTemplateEnum.PASSWORD_RECOVERY);
+  }
+
+  /** Pede a recuperação e devolve o token em claro que foi para o e-mail. */
+  async function recoveryToken(): Promise<string> {
+    await request(app.getHttpServer())
+      .post('/v1/affiliate/auth/forgot-password')
+      .send({ email: signUp.email })
+      .expect(204);
+
+    const link = recoveryEmails().at(-1)?.variables.link ?? '';
+
+    return new URL(link).searchParams.get('token') ?? '';
+  }
+
   async function operatorToken(): Promise<string> {
     const hash = await bcrypt.hash('MudarAgora!2026', 10);
     await dataSource.query(
@@ -176,6 +195,112 @@ describe('Affiliate account (e2e)', () => {
         .post('/v1/affiliate/auth/set-password')
         .send({ token, password: 'curta' })
         .expect(400);
+    });
+  });
+
+  describe('POST /v1/affiliate/auth/forgot-password', () => {
+    it('mails the affiliate a link to the portal screen', async () => {
+      await approvedAffiliate();
+
+      const token = await recoveryToken();
+
+      expect(token).not.toBe('');
+      expect(recoveryEmails().at(-1)?.variables.link).toContain(
+        'https://afiliados.porto.example/redefinir-senha?token=',
+      );
+    });
+
+    /*
+      O caminho que este fluxo abriu para quem deixou vencer o link de 48 horas
+      da aprovação: antes, só escrevendo para o suporte.
+    */
+    it('serves an approved affiliate who never set a password', async () => {
+      await approvedAffiliate();
+
+      await request(app.getHttpServer())
+        .post('/v1/affiliate/auth/forgot-password')
+        .send({ email: signUp.email })
+        .expect(204);
+
+      expect(recoveryEmails()).toHaveLength(1);
+    });
+
+    it('sends nothing while the registration is under review', async () => {
+      await request(app.getHttpServer()).post('/v1/affiliates').send(signUp).expect(201);
+
+      await request(app.getHttpServer())
+        .post('/v1/affiliate/auth/forgot-password')
+        .send({ email: signUp.email })
+        .expect(204);
+
+      expect(recoveryEmails()).toHaveLength(0);
+    });
+
+    it('answers the same for an email nobody registered', async () => {
+      await request(app.getHttpServer())
+        .post('/v1/affiliate/auth/forgot-password')
+        .send({ email: 'ninguem@email.com' })
+        .expect(204);
+
+      expect(recoveryEmails()).toHaveLength(0);
+    });
+  });
+
+  describe('POST /v1/affiliate/auth/reset-password', () => {
+    const NEW_PASSWORD = 'OutraSenha!2026';
+
+    it('replaces the password the affiliate had', async () => {
+      const { token } = await approvedAffiliate();
+      await request(app.getHttpServer())
+        .post('/v1/affiliate/auth/set-password')
+        .send({ token, password: PASSWORD })
+        .expect(204);
+
+      await request(app.getHttpServer())
+        .post('/v1/affiliate/auth/reset-password')
+        .send({ token: await recoveryToken(), password: NEW_PASSWORD })
+        .expect(204);
+
+      await request(app.getHttpServer())
+        .post('/v1/affiliate/auth/login')
+        .send({ email: signUp.email, password: NEW_PASSWORD })
+        .expect(200);
+      await request(app.getHttpServer())
+        .post('/v1/affiliate/auth/login')
+        .send({ email: signUp.email, password: PASSWORD })
+        .expect(401);
+    });
+
+    /*
+      O link da aprovação escreve senha sem pedir a atual. Vivo depois de uma
+      recuperação, ele devolveria a quem alcançasse aquele e-mail antigo o poder
+      de sobrescrever a senha que acabou de nascer.
+    */
+    it('kills the approval link that was still outstanding', async () => {
+      const { token: approvalToken } = await approvedAffiliate();
+
+      await request(app.getHttpServer())
+        .post('/v1/affiliate/auth/reset-password')
+        .send({ token: await recoveryToken(), password: NEW_PASSWORD })
+        .expect(204);
+
+      const response = await request(app.getHttpServer())
+        .post('/v1/affiliate/auth/set-password')
+        .send({ token: approvalToken, password: 'MaisOutra!2026' })
+        .expect(400);
+
+      expect(response.body.code).toBe(AuthErrorCodeEnum.INVALID_TOKEN);
+    });
+
+    it('refuses an affiliate link on the panel channel', async () => {
+      await approvedAffiliate();
+
+      const response = await request(app.getHttpServer())
+        .post('/v1/admin/auth/reset-password')
+        .send({ token: await recoveryToken(), password: NEW_PASSWORD })
+        .expect(400);
+
+      expect(response.body.code).toBe(AuthErrorCodeEnum.INVALID_TOKEN);
     });
   });
 

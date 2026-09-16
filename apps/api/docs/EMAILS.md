@@ -10,8 +10,13 @@ Provider selecionado por `MAIL_PROVIDER`: `logger` em desenvolvimento e teste,
 | `REGISTRATION_REJECTED` | Operador reprova o cadastro | `name`, `reason` |
 | `PASSWORD_RECOVERY` | Pedido de recuperação | `name`, `link` (2h) |
 
-`PASSWORD_RECOVERY` ainda não tem use case que o dispare — o template existe
-para o fluxo de recuperação, que é trabalho à parte.
+`PASSWORD_RECOVERY` sai do `RequestPasswordResetUseCase`, que atende os dois
+canais. O `link` aponta para `/redefinir-senha` quando o pedido veio do portal e
+para `/admin/redefinir-senha` quando veio do painel — a audiência é da rota,
+nunca do corpo. Ele só é enviado a quem consegue entrar (afiliado aprovado,
+operador com perfil, conta ativa) e no máximo um por minuto e cinco por hora por
+conta. Nos demais casos a API responde o mesmo 204 e não envia nada: responder
+diferente diria a quem tentou se aquele e-mail tem conta.
 
 `REGISTRATION_APPROVED` só sai depois de o cupom estar emitido na Porto e
 gravado aqui, e mostra o código e o percentual acima do botão de criar a senha

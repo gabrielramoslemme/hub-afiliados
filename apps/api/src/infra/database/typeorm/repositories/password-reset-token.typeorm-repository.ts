@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, LessThanOrEqual, MoreThan, Repository } from 'typeorm';
+import { IsNull, LessThanOrEqual, MoreThan, MoreThanOrEqual, Repository } from 'typeorm';
 import { TokenPurposeEnum } from '@porto/contracts';
 import {
   PasswordResetTokenEntity,
@@ -39,6 +39,17 @@ export class PasswordResetTokenTypeormRepository implements PasswordResetTokenRe
 
   async invalidateAllFor(userId: number, purpose: TokenPurposeEnum): Promise<void> {
     await this.repository.update({ userId, purpose, usedAt: IsNull() }, { usedAt: new Date() });
+  }
+
+  async listCreatedSince(userId: number, purpose: TokenPurposeEnum, since: Date): Promise<Date[]> {
+    // Sem filtrar por `used_at`: quem conta o ritmo dos pedidos conta e-mail
+    // que saiu, e o pedido seguinte invalida o token do anterior.
+    const issued = await this.repository.find({
+      where: { userId, purpose, createdAt: MoreThanOrEqual(since) },
+      select: { createdAt: true },
+    });
+
+    return issued.map((token) => token.createdAt);
   }
 
   async deleteExpired(): Promise<void> {

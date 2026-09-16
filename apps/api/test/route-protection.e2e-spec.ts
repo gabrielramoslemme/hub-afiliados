@@ -19,16 +19,24 @@ import { AffiliateGuard } from '../src/http/shared/guards/affiliate.guard';
 const CHANNEL_GUARDS = [AdminGuard, AffiliateGuard];
 
 /**
- * As únicas rotas sem sessão. A lista é literal de propósito: abrir a sexta
+ * As únicas rotas sem sessão. A lista é literal de propósito: abrir mais uma
  * passa a exigir editar este arquivo, o que transforma uma decisão de segurança
  * num diff que alguém revisa.
+ *
+ * As quatro de recuperação de senha são públicas pela mesma razão das outras
+ * duas de senha: quem pede não tem sessão — é justamente o que ela perdeu —, e
+ * quem autentica a redefinição é o token de uso único que chegou no e-mail.
  */
 const PUBLIC_ROUTES = [
   'GET /health',
   'POST /affiliates',
   'POST /admin/auth/login',
+  'POST /admin/auth/forgot-password',
+  'POST /admin/auth/reset-password',
   'POST /affiliate/auth/login',
   'POST /affiliate/auth/set-password',
+  'POST /affiliate/auth/forgot-password',
+  'POST /affiliate/auth/reset-password',
 ];
 
 const METHOD_NAMES = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'ALL', 'OPTIONS', 'HEAD', 'SEARCH'];
@@ -88,7 +96,7 @@ describe('Route protection (e2e)', () => {
   });
 
   it('finds every route the container registered', () => {
-    expect(routes.length).toBeGreaterThanOrEqual(9);
+    expect(routes.length).toBeGreaterThanOrEqual(13);
   });
 
   it('guards every route by channel unless it is explicitly public', () => {
