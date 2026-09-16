@@ -32,9 +32,10 @@ describe('signInMessageFor', () => {
     );
   });
 
-  it('offers a way out when the set-password link no longer works', () => {
+  /* Serve aos dois links, o da aprovação e o da recuperação, e a saída é a mesma para os dois. */
+  it('offers a way out when a password link no longer works', () => {
     expect(signInMessageFor(AuthErrorCodeEnum.INVALID_TOKEN, 'ignorada')).toBe(
-      'Este link não vale mais. Ele expira em 48 horas e só pode ser usado uma vez — escreva para afiliados@portoservico.com.br para receber outro.',
+      'Este link não vale mais. Ele só pode ser usado uma vez, e expira — peça um novo em "Esqueci minha senha".',
     );
   });
 

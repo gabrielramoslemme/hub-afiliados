@@ -21,6 +21,24 @@ export const CAMPAIGNS_PATH = '/admin/campanhas';
  */
 export const SESSION_EXPIRED_PATH = '/admin/sessao-expirada';
 
+/** As duas telas da recuperação de senha do painel. Ver `isPanelPasswordPath`. */
+export const FORGOT_PASSWORD_PATH = '/admin/esqueci-senha';
+export const RESET_PASSWORD_PATH = '/admin/redefinir-senha';
+
+/**
+ * As telas de senha abrem **com ou sem** sessão, e é por isso que elas não
+ * seguem a regra do login, que expulsa quem já entrou: o operador que clicou no
+ * link do e-mail com a sessão aberta precisa chegar na tela: mandá-lo para o
+ * dashboard engoliria o link, e ele não tem outro — o pedido seguinte invalida
+ * o anterior.
+ *
+ * Duas telas nomeadas, nada de prefixo: isto é um furo na negação por omissão
+ * da área logada, e o que ele NÃO abre importa tanto quanto o que abre.
+ */
+export function isPanelPasswordPath(pathname: string): boolean {
+  return pathname === FORGOT_PASSWORD_PATH || pathname === RESET_PASSWORD_PATH;
+}
+
 /** Query string que carrega o destino original através do login. */
 export const REDIRECT_PARAM = 'next';
 

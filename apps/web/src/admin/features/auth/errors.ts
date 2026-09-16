@@ -15,6 +15,8 @@ const MESSAGES: Partial<Record<AuthErrorCodeEnum, string>> = {
     'Esta conta está inativa. Procure quem administra o painel.',
   [AuthErrorCodeEnum.PASSWORD_NOT_SET]:
     'Você ainda não criou uma senha. Use o link enviado por e-mail.',
+  [AuthErrorCodeEnum.INVALID_TOKEN]:
+    'Este link não vale mais. Ele vale por 2 horas e só pode ser usado uma vez — peça um novo em "Esqueci minha senha".',
 };
 
 export function signInMessageFor(code: ApiErrorCode | null, fallback: string): string {

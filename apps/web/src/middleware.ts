@@ -1,5 +1,11 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { DASHBOARD_PATH, isPanelIconPath, LOGIN_PATH, REDIRECT_PARAM } from '@/admin/shared/routes';
+import {
+  DASHBOARD_PATH,
+  isPanelIconPath,
+  isPanelPasswordPath,
+  LOGIN_PATH,
+  REDIRECT_PARAM,
+} from '@/admin/shared/routes';
 import { AFFILIATE_AREA_PATH, AFFILIATE_LOGIN_PATH } from '@/affiliate/shared/routes';
 import { AFFILIATE_SESSION_COOKIE, SESSION_COOKIE } from '@/shared/lib/session-cookie';
 
@@ -34,9 +40,14 @@ function allow(): NextResponse {
 export function middleware(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
 
-  // A única exceção, e ela é de um arquivo: o ícone da aba do painel mora
-  // dentro do segmento que este middleware guarda. Ver `isPanelIconPath`.
+  // A exceção de um arquivo: o ícone da aba do painel mora dentro do segmento
+  // que este middleware guarda. Ver `isPanelIconPath`.
   if (isPanelIconPath(pathname)) return allow();
+
+  // E a de duas telas: recuperar senha acontece antes de haver sessão — e
+  // também depois, quando quem clica no link do e-mail ainda está logado. As
+  // duas passam sem redirecionamento nenhum. Ver `isPanelPasswordPath`.
+  if (isPanelPasswordPath(pathname)) return allow();
 
   if (pathname === AFFILIATE_LOGIN_PATH || pathname.startsWith(`${AFFILIATE_AREA_PATH}`)) {
     const hasSession = Boolean(request.cookies.get(AFFILIATE_SESSION_COOKIE)?.value);

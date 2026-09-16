@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { SetPasswordForm } from '@/affiliate/features/auth';
 import { Container } from '@/affiliate/shared/components/section';
-import { AFFILIATE_LOGIN_PATH } from '@/affiliate/shared/routes';
+import { AFFILIATE_FORGOT_PASSWORD_PATH, AFFILIATE_LOGIN_PATH } from '@/affiliate/shared/routes';
 
 export const metadata: Metadata = {
   title: 'Criar sua senha',
@@ -44,12 +44,15 @@ export default async function SetPasswordPage({
                 cadastro. O link vale por 48 horas.
               </p>
 
-              <Link
-                href={AFFILIATE_LOGIN_PATH}
-                className="mt-6 inline-block text-sm font-semibold text-blue-600 hover:underline"
-              >
-                Já tenho senha, quero entrar
-              </Link>
+              <div className="mt-6 flex flex-col gap-2 text-sm font-semibold text-blue-600">
+                {/* Link vencido deixou de ser assunto para o suporte. */}
+                <Link href={AFFILIATE_FORGOT_PASSWORD_PATH} className="hover:underline">
+                  O link venceu, quero outro
+                </Link>
+                <Link href={AFFILIATE_LOGIN_PATH} className="hover:underline">
+                  Já tenho senha, quero entrar
+                </Link>
+              </div>
             </>
           )}
         </div>

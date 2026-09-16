@@ -20,6 +20,12 @@ describe('signInMessageFor', () => {
     );
   });
 
+  it('offers a way out when the recovery link no longer works', () => {
+    expect(signInMessageFor(AuthErrorCodeEnum.INVALID_TOKEN, 'ignorada')).toBe(
+      'Este link não vale mais. Ele vale por 2 horas e só pode ser usado uma vez — peça um novo em "Esqueci minha senha".',
+    );
+  });
+
   it('falls back to the message the api sent for a code it does not know', () => {
     expect(signInMessageFor(RegistrationErrorCodeEnum.INVALID_CPF, 'Mensagem da API.')).toBe(
       'Mensagem da API.',

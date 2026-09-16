@@ -152,11 +152,11 @@ Cookie `httpOnly`, `sameSite=lax`, `secure` fora de dev, oito horas. Nomes em `s
 
 **São duas sessões, com cookies de nomes diferentes:** `porto_session` para o operador e `porto_affiliate_session` para o afiliado. Não é zelo: o middleware só enxerga que o cookie *existe*, então um nome compartilhado faria "entrei como afiliado" valer como "entrei no painel de análise".
 
-`middleware.ts` protege `/admin/:path*` e `/minha-conta/:path*` com negação por omissão, cada um conferindo o seu cookie; as exceções são `/admin/login` e `/entrar`, explícitas, e as duas expulsam quem já tem sessão. O layout de `(shell)` e o de `(account)` conferem de novo, porque o middleware só vê que o cookie existe — quem lê o conteúdo é o layout, e cookie corrompido tem que virar login, não tela quebrada.
+`middleware.ts` protege `/admin/:path*` e `/minha-conta/:path*` com negação por omissão, cada um conferindo o seu cookie; as exceções são `/admin/login` e `/entrar`, explícitas, e as duas expulsam quem já tem sessão. **As duas telas de senha do painel — `/admin/esqueci-senha` e `/admin/redefinir-senha` — são exceção de outro tipo** (`isPanelPasswordPath`): passam com ou sem sessão, e é de propósito. Expulsar quem já entrou, como o login faz, engoliria o link do e-mail de quem clicou nele com a sessão aberta — e ele não tem outro, porque pedir um novo invalida o anterior. As telas equivalentes do portal não aparecem aqui: `/esqueci-senha` e `/redefinir-senha` estão fora do `matcher`, como o resto da fatia pública. O layout de `(shell)` e o de `(account)` conferem de novo, porque o middleware só vê que o cookie existe — quem lê o conteúdo é o layout, e cookie corrompido tem que virar login, não tela quebrada.
 
 ## Só a carteira roda contra dublê
 
-**Painel, login do afiliado e a conta dele falam com a API.** Entrar em qualquer um dos dois logins exige a API no ar (`npm run dev`), as migrations aplicadas e `npm run seed --workspace apps/api`, que cria os três operadores com a senha `MudarAgora!2026`. O afiliado nasce sem senha: ele recebe o link de `/definir-senha` no e-mail de aprovação, que vale 48 horas e só funciona uma vez.
+**Painel, login do afiliado e a conta dele falam com a API.** Entrar em qualquer um dos dois logins exige a API no ar (`npm run dev`), as migrations aplicadas e `npm run seed --workspace apps/api`, que cria os três operadores com a senha `MudarAgora!2026`. O afiliado nasce sem senha: ele recebe o link de `/definir-senha` no e-mail de aprovação, que vale 48 horas e só funciona uma vez. Quem deixa esse link vencer, ou esquece a senha depois, pede outro em `/esqueci-senha` — o link de recuperação vale 2 horas —, e o painel tem o par equivalente em `/admin/esqueci-senha`. Com `MAIL_PROVIDER=logger`, que é o padrão em desenvolvimento, o link sai no log da API em vez de por e-mail.
 
 O que sobrou por nascer é `GET /v1/affiliate/me/wallet` — saldo e extrato dependem de tabelas que a Onda 1 não tem. Com `API_MOCKING=enabled`, o `api-client` troca o **transporte** por `src/shared/http/mocks/mock-api.ts`, que devolve `Response` a partir das fixtures.
 
@@ -212,11 +212,11 @@ rastreamento.
 
 O ambiente provisionado tem CloudFront (e a Imperva da Porto na frente dele). O
 Next compara o header `Origin` com `X-Forwarded-Host` e **aborta a ação** quando
-divergem — `Invalid Server Actions request`, HTTP 500. Como são nove actions e
-elas são todo o caminho de escrita — cadastro, os dois logins, definir senha,
-aprovar/reprovar, a consulta de disponibilidade e a alteração do cupom, e os
-dois logouts —, errar isso derruba a aplicação inteira com a tela carregando
-normalmente.
+divergem — `Invalid Server Actions request`, HTTP 500. Como são treze actions e
+elas são todo o caminho de escrita — cadastro, os dois logins, definir senha, os
+dois pedidos de recuperação e as duas redefinições, aprovar/reprovar, a consulta
+de disponibilidade e a alteração do cupom, e os dois logouts —, errar isso
+derruba a aplicação inteira com a tela carregando normalmente.
 
 `next.config.mjs` resolve com `experimental.serverActions.allowedOrigins`,
 alimentado por `PUBLIC_DOMAIN_NAME`, que o `install-release.sh` grava no

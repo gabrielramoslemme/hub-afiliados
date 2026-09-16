@@ -1,7 +1,8 @@
 import { Info } from 'lucide-react';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { SignInForm } from '@/admin/features/auth';
-import { REDIRECT_PARAM } from '@/admin/shared/routes';
+import { FORGOT_PASSWORD_PATH, REDIRECT_PARAM } from '@/admin/shared/routes';
 import { PortoLogo } from '@/shared/components/porto-logo';
 
 export const metadata: Metadata = {
@@ -45,8 +46,10 @@ export default async function AdminLoginPage({
           </div>
         </div>
 
-        <p className="mt-6 text-center text-[0.8125rem] text-ink-500">
-          Esqueceu a senha? Procure quem administra o painel.
+        <p className="mt-6 text-center text-[0.8125rem]">
+          <Link href={FORGOT_PASSWORD_PATH} className="font-semibold text-blue-700 hover:underline">
+            Esqueci minha senha
+          </Link>
         </p>
       </div>
     </main>

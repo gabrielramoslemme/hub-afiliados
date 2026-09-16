@@ -1,4 +1,4 @@
-import { isPanelIconPath } from './routes';
+import { isPanelIconPath, isPanelPasswordPath } from './routes';
 
 describe('isPanelIconPath', () => {
   it.each([
@@ -21,5 +21,27 @@ describe('isPanelIconPath', () => {
     ['/admin/icon-1iolj1.json', 'outra extensão'],
   ])('barra %s — %s', (pathname) => {
     expect(isPanelIconPath(pathname)).toBe(false);
+  });
+});
+
+describe('isPanelPasswordPath', () => {
+  it.each([
+    ['/admin/esqueci-senha', 'o pedido de recuperação'],
+    ['/admin/redefinir-senha', 'a tela que o link do e-mail abre'],
+  ])('deixa passar %s — %s', (pathname) => {
+    expect(isPanelPasswordPath(pathname)).toBe(true);
+  });
+
+  /*
+    Mesma razão da exceção do ícone: isto abre caminho dentro da área logada, e
+    o que ele não casa importa tanto quanto o que casa.
+  */
+  it.each([
+    ['/admin', 'a home do painel'],
+    ['/admin/afiliados', 'a fila'],
+    ['/admin/esqueci-senha/afiliados', 'caminho pendurado no nome da tela'],
+    ['/admin/redefinir-senhas', 'nome que só começa igual'],
+  ])('barra %s — %s', (pathname) => {
+    expect(isPanelPasswordPath(pathname)).toBe(false);
   });
 });

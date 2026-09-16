@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { SignInForm } from '@/affiliate/features/auth';
 import { Container } from '@/affiliate/shared/components/section';
 import { site } from '@/affiliate/shared/content';
+import { AFFILIATE_FORGOT_PASSWORD_PATH } from '@/affiliate/shared/routes';
 
 export const metadata: Metadata = {
   title: 'Entrar na sua área',
@@ -24,6 +25,15 @@ export default function AffiliateSignInPage() {
           <div className="mt-7">
             <SignInForm />
           </div>
+
+          <p className="mt-5 text-center text-sm">
+            <Link
+              href={AFFILIATE_FORGOT_PASSWORD_PATH}
+              className="font-semibold text-blue-600 hover:underline"
+            >
+              Esqueci minha senha
+            </Link>
+          </p>
         </div>
 
         {/*

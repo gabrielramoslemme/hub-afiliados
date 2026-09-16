@@ -25,7 +25,7 @@ const MESSAGES: Partial<Record<AuthErrorCodeEnum, string>> = {
   [AuthErrorCodeEnum.ACCOUNT_INACTIVE]:
     'Sua conta está inativa. Escreva para afiliados@portoservico.com.br.',
   [AuthErrorCodeEnum.INVALID_TOKEN]:
-    'Este link não vale mais. Ele expira em 48 horas e só pode ser usado uma vez — escreva para afiliados@portoservico.com.br para receber outro.',
+    'Este link não vale mais. Ele só pode ser usado uma vez, e expira — peça um novo em "Esqueci minha senha".',
 };
 
 export function signInMessageFor(code: ApiErrorCode | null, fallback: string): string {
