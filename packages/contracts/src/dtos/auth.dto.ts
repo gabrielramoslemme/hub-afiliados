@@ -21,8 +21,9 @@ export interface AdminLoginResponse {
 
 /*
   Mesma forma do login do operador, e ainda assim um schema próprio: as duas
-  telas vão divergir — o afiliado ganha "esqueci a senha" e o operador não — e
-  compartilhar o schema faria a divergência quebrar a tela errada.
+  telas divergem — a do afiliado oferece o cadastro a quem ainda não tem conta,
+  a do painel não — e compartilhar o schema faria a divergência quebrar a tela
+  errada.
 */
 export const affiliateLoginSchema = z.object({
   /*
@@ -52,8 +53,17 @@ export interface AffiliateLoginResponse {
   };
 }
 
+/**
+ * Serve às duas telas de "esqueci minha senha", a do afiliado e a do painel. O
+ * e-mail é normalizado como nos logins: quem pede recuperação está com pressa,
+ * e um espaço colado pelo gerenciador de senhas reprovaria o pedido inteiro.
+ */
 export const forgotPasswordSchema = z.object({
-  email: z.string().email('Informe um e-mail válido'),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .refine((value) => z.email().safeParse(value).success, 'Informe um e-mail válido.'),
 });
 
 export type ForgotPasswordRequest = z.infer<typeof forgotPasswordSchema>;
