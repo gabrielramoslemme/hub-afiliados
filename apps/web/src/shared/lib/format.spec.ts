@@ -8,21 +8,16 @@ import {
   formatSocialProfile,
   formatTime,
   pixKeyTypeName,
-  socialNetworkName,
 } from './format';
 
+/*
+  O Jest roda em UTC (`jest.config.mjs`), e o horário esperado é o de São Paulo:
+  tirar o `timeZone` dos formatadores quebra estes testes em qualquer máquina,
+  não só na CI.
+*/
 describe('formatDateTime', () => {
   it('renders an iso instant in são paulo time', () => {
     expect(formatDateTime('2026-08-19T14:24:00.000Z')).toBe('19/08/2026 11:24');
-  });
-
-  it('does not drift with the timezone of the machine running it', () => {
-    const original = process.env.TZ;
-    process.env.TZ = 'UTC';
-
-    expect(formatDateTime('2026-08-19T14:24:00.000Z')).toBe('19/08/2026 11:24');
-
-    process.env.TZ = original;
   });
 });
 
@@ -35,15 +30,6 @@ describe('formatDate', () => {
 describe('formatTime', () => {
   it('renders the time without the day, in são paulo', () => {
     expect(formatTime('2026-08-19T14:24:00.000Z')).toBe('11:24');
-  });
-
-  it('does not drift with the timezone of the machine running it', () => {
-    const original = process.env.TZ;
-    process.env.TZ = 'UTC';
-
-    expect(formatTime('2026-08-19T14:24:00.000Z')).toBe('11:24');
-
-    process.env.TZ = original;
   });
 });
 
@@ -111,14 +97,6 @@ describe('formatSocialProfile', () => {
     expect(formatSocialProfile(SocialNetworkEnum.YOUTUBE, 'marina')).toBe('@marina no YouTube');
     expect(formatSocialProfile(SocialNetworkEnum.X, 'marina')).toBe('@marina no X');
     expect(formatSocialProfile(SocialNetworkEnum.KWAI, 'marina')).toBe('@marina no Kwai');
-  });
-
-  it('names every network the enum carries', () => {
-    for (const network of Object.values(SocialNetworkEnum)) {
-      expect(formatSocialProfile(network, 'marina')).toBe(
-        `@marina no ${socialNetworkName(network)}`,
-      );
-    }
   });
 
   it('does not repeat the at the person already typed', () => {

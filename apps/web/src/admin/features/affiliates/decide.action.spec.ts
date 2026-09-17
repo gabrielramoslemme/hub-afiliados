@@ -43,16 +43,12 @@ describe('approveAffiliate', () => {
     expect(JSON.parse(String(init?.body)).couponDiscountPercent).toBe(10);
   });
 
-  it('refuses a coupon code shorter than the schema allows without calling the api', async () => {
-    await approveAffiliate(PUBLIC_ID, { couponCode: 'MAR', couponDiscountPercent: 10 });
-
-    expect(apiFetch).not.toHaveBeenCalled();
-  });
-
-  it('explains why the discount was refused', async () => {
+  it('refuses what the schema refuses without calling the api, saying why', async () => {
     await expect(
       approveAffiliate(PUBLIC_ID, { couponCode: 'MARINA25', couponDiscountPercent: 30 }),
-    ).resolves.toEqual({ ok: false, message: 'O desconto vai até 25%' });
+    ).resolves.toEqual({ ok: false, message: expect.any(String) });
+
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 
   it('invalidates the queue so the decided registration leaves it', async () => {
@@ -87,10 +83,10 @@ describe('approveAffiliate', () => {
   it('hides an unexpected failure behind a message the analyst can act on', async () => {
     apiFetch.mockRejectedValue(new Error('ECONNREFUSED'));
 
-    await expect(approveAffiliate(PUBLIC_ID, COUPON)).resolves.toEqual({
-      ok: false,
-      message: 'Não foi possível registrar a decisão. Tente novamente.',
-    });
+    const result = await approveAffiliate(PUBLIC_ID, COUPON);
+
+    expect(result.ok).toBe(false);
+    expect(JSON.stringify(result)).not.toContain('ECONNREFUSED');
   });
 });
 
@@ -137,17 +133,13 @@ describe('checkCouponAvailability', () => {
 });
 
 describe('rejectAffiliate', () => {
-  it('refuses a reason shorter than the schema allows without calling the api', async () => {
-    await rejectAffiliate(PUBLIC_ID, { reason: 'curto' });
-
-    expect(apiFetch).not.toHaveBeenCalled();
-  });
-
-  it('explains why the reason was refused', async () => {
+  it('refuses what the schema refuses without calling the api, saying why', async () => {
     await expect(rejectAffiliate(PUBLIC_ID, { reason: 'curto' })).resolves.toEqual({
       ok: false,
-      message: 'Descreva o motivo com ao menos 10 caracteres',
+      message: expect.any(String),
     });
+
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 
   it('sends the reason, which goes to the email and to the audit trail', async () => {

@@ -6,26 +6,12 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { nav, site } from '@/affiliate/shared/content';
 import { AFFILIATE_LOGIN_PATH } from '@/affiliate/shared/routes';
+import { destinationsFor } from '@/affiliate/shared/site-destinations';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/lib/cn';
 import { SiteLogo, TOP_ANCHOR_ID } from './site-logo';
 
 const SECTION_IDS = nav.map((item) => item.href.replace('#', ''));
-
-/**
- * As seções moram só na landing. Fora dela o `#` sozinho procura a âncora na
- * página atual, onde ela não existe, e o clique não leva a lugar nenhum. O
- * cadastro é a exceção: tem página própria, que abre com o foco no formulário
- * em vez de largar a pessoa no pé da landing.
- */
-function destinationsFor(pathname: string) {
-  const onLanding = pathname === '/';
-
-  return {
-    section: (href: string) => (onLanding ? href : `/${href}`),
-    registration: onLanding ? '#cadastro' : '/cadastro',
-  };
-}
 
 /**
  * Qual seção está sendo lida. A margem recorta a viewport numa faixa estreita no

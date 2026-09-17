@@ -12,6 +12,10 @@ jest.mock('@/shared/http/api-client', () => ({ publicApiFetch: jest.fn() }));
 
 const apiFetch = publicApiFetch as jest.MockedFunction<typeof publicApiFetch>;
 
+/**
+ * As regras de cada campo são do schema e têm teste em `registration-schema.spec.ts`.
+ * Aqui fica só a fronteira: o que chega à API, e como a recusa dela volta para a tela.
+ */
 const validInput = {
   fullName: 'Marina Ferraz',
   email: 'marina@email.com',
@@ -41,92 +45,30 @@ describe('registerAffiliate', () => {
     await expect(registerAffiliate(validInput)).resolves.toEqual({ status: 'success' });
   });
 
-  it('posts to the affiliates resource', async () => {
-    await registerAffiliate(validInput);
-
-    expect(apiFetch).toHaveBeenCalledWith('/affiliates', expect.anything());
-  });
-
-  it('sends the email already normalized', async () => {
-    await registerAffiliate({ ...validInput, email: '  Marina@Email.com  ' });
-
-    const [, init] = apiFetch.mock.calls[0];
-    expect(JSON.parse(String(init?.body)).email).toBe('marina@email.com');
-  });
-
-  it('refuses an invalid payload without calling the api', async () => {
-    await registerAffiliate({ ...validInput, fullName: 'Marina' });
-
-    expect(apiFetch).not.toHaveBeenCalled();
-  });
-
-  it('reports a schema violation on the offending field', async () => {
-    const result = await registerAffiliate({ ...validInput, fullName: 'Marina' });
-
-    expect(result).toEqual({
-      status: 'invalid',
-      fieldErrors: { fullName: 'Informe o nome e o sobrenome.' },
-    });
-  });
-
-  it('turns a duplicated email into an error on the email field', async () => {
-    apiFetch.mockRejectedValue(
-      new ApiError(409, RegistrationErrorCodeEnum.EMAIL_ALREADY_REGISTERED, 'Já cadastrado.'),
-    );
-
-    const result = await registerAffiliate(validInput);
-
-    expect(result).toEqual({ status: 'invalid', fieldErrors: { email: 'Já cadastrado.' } });
-  });
-
-  it('turns a mismatched pix key into an error on the pix key field', async () => {
-    apiFetch.mockRejectedValue(
-      new ApiError(400, RegistrationErrorCodeEnum.PIX_KEY_MISMATCH, 'A chave precisa bater.'),
-    );
-
-    const result = await registerAffiliate(validInput);
-
-    expect(result).toEqual({
-      status: 'invalid',
-      fieldErrors: { pixKey: 'A chave precisa bater.' },
-    });
-  });
-
-  it('turns an api error without a known code into a form error', async () => {
-    apiFetch.mockRejectedValue(new ApiError(400, null, 'Requisição inválida.'));
-
-    const result = await registerAffiliate(validInput);
-
-    expect(result).toEqual({ status: 'failed', message: 'Requisição inválida.' });
-  });
-
-  it('does not leak an unexpected failure to the page', async () => {
-    apiFetch.mockRejectedValue(new Error('ECONNREFUSED 127.0.0.1:3000'));
-
-    const result = await registerAffiliate(validInput);
-
-    expect(result).toEqual({
-      status: 'failed',
-      message: 'Não foi possível enviar seu cadastro agora. Tente novamente em instantes.',
-    });
-  });
-
-  it('sends the rg already normalized', async () => {
-    await registerAffiliate({ ...validInput, rg: '12.345.678-x' });
-
-    expect(sentBody()).toMatchObject({ rg: '12345678X' });
-  });
-
-  it('sends the social profile the person filled in', async () => {
+  /* O corpo é o que o schema devolveu, e não o que a tela mandou: normalizado. */
+  it('posts what the schema normalized, not what the form sent', async () => {
     await registerAffiliate({
       ...validInput,
+      email: '  Marina@Email.com  ',
+      rg: '12.345.678-x',
       socialNetwork: SocialNetworkEnum.INSTAGRAM,
       socialHandle: '@marina.ferraz',
     });
 
-    expect(sentBody()).toMatchObject({
+    expect(apiFetch).toHaveBeenCalledWith(
+      '/affiliates',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(sentBody()).toEqual({
+      fullName: 'Marina Ferraz',
+      email: 'marina@email.com',
+      cpf: '529.982.247-25',
+      rg: '12345678X',
+      pixKeyType: PixKeyTypeEnum.EMAIL,
+      pixKey: 'marina@email.com',
       socialNetwork: SocialNetworkEnum.INSTAGRAM,
       socialHandle: 'marina.ferraz',
+      termsAccepted: true,
     });
   });
 
@@ -135,24 +77,45 @@ describe('registerAffiliate', () => {
     em branco ao lado de um `@` nulo — metade de um par que o banco recusa.
   */
   it('sends no social profile when the person chose no network', async () => {
-    await registerAffiliate(validInput);
+    await registerAffiliate({ ...validInput, socialNetwork: '', socialHandle: '' });
 
     expect(sentBody()).not.toHaveProperty('socialNetwork');
     expect(sentBody()).not.toHaveProperty('socialHandle');
   });
 
-  it('turns a duplicated rg into an error on the rg field', async () => {
+  it('refuses an invalid payload on the offending field without calling the api', async () => {
+    const result = await registerAffiliate({ ...validInput, fullName: 'Marina' });
+
+    expect(result).toEqual({ status: 'invalid', fieldErrors: { fullName: expect.any(String) } });
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('turns a refusal the api tied to a field into an error on that field', async () => {
     apiFetch.mockRejectedValue(
-      new ApiError(
-        409,
-        RegistrationErrorCodeEnum.RG_ALREADY_REGISTERED,
-        'Este RG já está cadastrado.',
-      ),
+      new ApiError(409, RegistrationErrorCodeEnum.CPF_ALREADY_REGISTERED, 'Já cadastrado.'),
     );
 
     await expect(registerAffiliate(validInput)).resolves.toEqual({
       status: 'invalid',
-      fieldErrors: { rg: 'Este RG já está cadastrado.' },
+      fieldErrors: { cpf: 'Já cadastrado.' },
     });
+  });
+
+  it('turns an api error without a known code into a form error', async () => {
+    apiFetch.mockRejectedValue(new ApiError(400, null, 'Requisição inválida.'));
+
+    await expect(registerAffiliate(validInput)).resolves.toEqual({
+      status: 'failed',
+      message: 'Requisição inválida.',
+    });
+  });
+
+  it('does not leak an unexpected failure to the page', async () => {
+    apiFetch.mockRejectedValue(new Error('ECONNREFUSED 127.0.0.1:3000'));
+
+    const result = await registerAffiliate(validInput);
+
+    expect(result.status).toBe('failed');
+    expect(JSON.stringify(result)).not.toContain('ECONNREFUSED');
   });
 });

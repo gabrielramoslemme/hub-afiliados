@@ -2,32 +2,17 @@ import { AuthErrorCodeEnum, RegistrationErrorCodeEnum } from '@porto/contracts';
 import { fieldForErrorCode } from './errors';
 
 describe('fieldForErrorCode', () => {
-  it('points an invalid cpf at the cpf field', () => {
-    expect(fieldForErrorCode(RegistrationErrorCodeEnum.INVALID_CPF)).toBe('cpf');
-  });
-
-  it('points a duplicated cpf at the cpf field', () => {
-    expect(fieldForErrorCode(RegistrationErrorCodeEnum.CPF_ALREADY_REGISTERED)).toBe('cpf');
-  });
-
-  it('points a duplicated email at the email field', () => {
-    expect(fieldForErrorCode(RegistrationErrorCodeEnum.EMAIL_ALREADY_REGISTERED)).toBe('email');
-  });
-
-  it('points an invalid rg at the rg field', () => {
-    expect(fieldForErrorCode(RegistrationErrorCodeEnum.INVALID_RG)).toBe('rg');
-  });
-
-  it('points a duplicated rg at the rg field', () => {
-    expect(fieldForErrorCode(RegistrationErrorCodeEnum.RG_ALREADY_REGISTERED)).toBe('rg');
-  });
-
-  it('points an invalid pix key at the pix key field', () => {
-    expect(fieldForErrorCode(RegistrationErrorCodeEnum.PIX_KEY_INVALID)).toBe('pixKey');
-  });
-
-  it('points a mismatched pix key at the pix key field', () => {
-    expect(fieldForErrorCode(RegistrationErrorCodeEnum.PIX_KEY_MISMATCH)).toBe('pixKey');
+  it.each([
+    [RegistrationErrorCodeEnum.INVALID_CPF, 'cpf'],
+    [RegistrationErrorCodeEnum.CPF_ALREADY_REGISTERED, 'cpf'],
+    [RegistrationErrorCodeEnum.INVALID_RG, 'rg'],
+    [RegistrationErrorCodeEnum.RG_ALREADY_REGISTERED, 'rg'],
+    [RegistrationErrorCodeEnum.EMAIL_ALREADY_REGISTERED, 'email'],
+    [RegistrationErrorCodeEnum.PIX_KEY_INVALID, 'pixKey'],
+    [RegistrationErrorCodeEnum.PIX_KEY_MISMATCH, 'pixKey'],
+    [RegistrationErrorCodeEnum.TERMS_NOT_ACCEPTED, 'termsAccepted'],
+  ])('points %s at the %s field', (code, field) => {
+    expect(fieldForErrorCode(code)).toBe(field);
   });
 
   it('has no field for a code from another domain', () => {

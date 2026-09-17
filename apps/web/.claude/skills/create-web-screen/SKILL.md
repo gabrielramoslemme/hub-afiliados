@@ -8,12 +8,12 @@ description: Use ao criar ou alterar tela em apps/web do porto-hub-afiliados —
 ## Antes de escrever
 
 1. **De quem é a tela?** Do afiliado mora em `src/app/(affiliate)/`, com a feature em `src/affiliate/features/<nome>/`; da Porto, em `src/app/(admin)/admin/(shell)/`, com a feature em `src/admin/features/<nome>/`. O route group decide layout e bundle, e o Biome não deixa uma fatia importar da outra — ver `CLAUDE.md` do pacote.
-2. **A rota já existe na API?** `/v1/admin`, `/v1/affiliate/auth`, `GET /v1/affiliate/me` e `PATCH /v1/affiliate/me/pix-key` existem. Só a carteira (`/v1/affiliate/me/wallet`) ainda é dublada, em `src/shared/http/mocks/mock-api.ts`, com teste em `mock-api.spec.ts`.
+2. **A rota já existe na API?** `/v1/admin`, `/v1/affiliate/auth`, `GET /v1/affiliate/me` e `PATCH /v1/affiliate/me/pix-key` existem. Só a carteira (`/v1/affiliate/me/wallet`) ainda é dublada, em `src/shared/http/mocks/mock-api.ts`.
 3. **A resposta ou o schema já estão em `@porto/contracts`?** Se a API e a web dividem o tipo, ele sai de lá — skill `create-contract`. **Não redeclare.**
 
 ## Ordem
 
-1. **Teste primeiro**, para o que é lógica: parser de query string, máscara, tradução de `code` em mensagem, Server Action. Componente de apresentação puro não precisa de teste; formulário precisa — que ele mostre o erro e trave durante o envio.
+1. **Teste primeiro**, para o que é lógica: parser de query string, máscara, tradução de `code` em mensagem, schema, Server Action. **Componente não tem teste** — nem de apresentação, nem formulário. Regra que mora dentro de um componente (qual campo vai no PATCH, para onde um link aponta) sai para uma função pura ao lado e ganha o teste ali, como `coupon-changes.ts` e `site-destinations.ts`.
 
 2. **A rota é casca.** `page.tsx` importa e monta a tela da feature (`src/<fatia>/features/<nome>/`), e nada mais. `metadata` e leitura de `params`/`searchParams` ficam na rota; o resto, na feature.
 

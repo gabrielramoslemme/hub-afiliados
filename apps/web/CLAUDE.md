@@ -154,6 +154,8 @@ Cookie `httpOnly`, `sameSite=lax`, `secure` fora de dev, oito horas. Nomes em `s
 
 `middleware.ts` protege `/admin/:path*` e `/minha-conta/:path*` com negação por omissão, cada um conferindo o seu cookie; as exceções são `/admin/login` e `/entrar`, explícitas, e as duas expulsam quem já tem sessão. **As duas telas de senha do painel — `/admin/esqueci-senha` e `/admin/redefinir-senha` — são exceção de outro tipo** (`isPanelPasswordPath`): passam com ou sem sessão, e é de propósito. Expulsar quem já entrou, como o login faz, engoliria o link do e-mail de quem clicou nele com a sessão aberta — e ele não tem outro, porque pedir um novo invalida o anterior. As telas equivalentes do portal não aparecem aqui: `/esqueci-senha` e `/redefinir-senha` estão fora do `matcher`, como o resto da fatia pública. O layout de `(shell)` e o de `(account)` conferem de novo, porque o middleware só vê que o cookie existe — quem lê o conteúdo é o layout, e cookie corrompido tem que virar login, não tela quebrada.
 
+**E vira login pela sessão expirada, nunca direto.** Com o cookie do token ainda no navegador, mandar para o login faz o `middleware` devolver a pessoa para a área logada, e o layout de volta para o login, em laço até o navegador desistir com `ERR_TOO_MANY_REDIRECTS`. `/admin/sessao-expirada` e `/minha-conta/sessao-expirada` apagam os cookies antes de redirecionar — é o mesmo caminho que o `data.ts` usa quando a API responde 401.
+
 ## Só a carteira roda contra dublê
 
 **Painel, login do afiliado e a conta dele falam com a API.** Entrar em qualquer um dos dois logins exige a API no ar (`npm run dev`), as migrations aplicadas e `npm run seed --workspace apps/api`, que cria os três operadores com a senha `MudarAgora!2026`. O afiliado nasce sem senha: ele recebe o link de `/definir-senha` no e-mail de aprovação, que vale 48 horas e só funciona uma vez. Quem deixa esse link vencer, ou esquece a senha depois, pede outro em `/esqueci-senha` — o link de recuperação vale 2 horas —, e o painel tem o par equivalente em `/admin/esqueci-senha`. Com `MAIL_PROVIDER=logger`, que é o padrão em desenvolvimento, o link sai no log da API em vez de por e-mail.
@@ -162,7 +164,7 @@ O que sobrou por nascer é `GET /v1/affiliate/me/wallet` — saldo e extrato dep
 
 **O dublê responde por prefixo, não por canal inteiro.** Hoje `DUBBED` é só `/affiliate/me/wallet`. Caminho fora dele devolve `null` e o `api-client` cai no `fetch` de verdade — é isso que mantém tudo o mais indo para o Postgres com a flag ligada. Caminho *dentro* de um prefixo dublado e fora da tabela devolve 404, não `null`: escapar para a API trocaria um erro claro por um `ECONNREFUSED`.
 
-Saldo e total pago são **somados a partir do extrato**, com teste que trava a invariante em `mock-api.spec.ts`.
+Saldo e total pago são **somados a partir do extrato** em `fixtures.ts`, nunca escritos à mão: é a conta que impede o topo da carteira de divergir das linhas de baixo.
 
 A resposta volta pelo mesmo `request()`, então cabeçalho montado, 204 sem corpo e tradução do corpo de erro em `ApiError` continuam exercitados. Quando as rotas nascerem, tire a flag e nenhuma tela muda.
 
@@ -182,7 +184,15 @@ O `tailwind-merge` classifica `text-<algo>` como cor de texto quando não conhec
 
 Criou `--text-*`, `--shadow-*` ou `--radius-*` novo? Acrescente em `extendTailwindMerge`, em `src/shared/lib/cn.ts`, e no teste de regressão em `cn.spec.ts`.
 
-## Atenção: `server-only` no teste
+## Testes
+
+**Só lógica, em Jest (`*.spec.ts`, ao lado do arquivo):** Server Action, schema, parser de query string, máscara e formatação, tradução de `code`, destino de redirecionamento, função pura extraída de componente. O ambiente é o do Node — não há jsdom nem Testing Library no pacote.
+
+**Componente não tem teste.** Renderizar para conferir texto, foco, classe ou tique de animação quebra a cada mudança de copy e não protege regra nenhuma. **Regra que mora dentro de um componente sai para uma função pura ao lado e ganha o teste ali:** `admin/features/affiliates/coupon-changes.ts` (o PATCH do cupom leva só o campo que a analista tocou, porque o INT-01 trata campo presente como pedido de mudança) e `affiliate/shared/site-destinations.ts` (fora da landing, o menu aponta para `/#secao`).
+
+**O Jest roda em UTC** (`jest.config.mjs`). Os testes de data esperam o horário de São Paulo, então esquecer o `timeZone` num formatador quebra o teste em qualquer máquina — numa em -03 ele passaria mesmo errado.
+
+### Atenção: `server-only` no teste
 
 `src/shared/http/api-client.ts` importa `server-only`, que lança fora do servidor. Teste de Server Action dubla o módulo inteiro:
 
@@ -231,7 +241,7 @@ variável quebra tudo que é POST**.
 npm run dev --workspace apps/web          # porta 3005
 npm run build --workspace apps/web        # o erro de prerender só aparece aqui
 npm run type-check --workspace apps/web
-npm run test --workspace apps/web         # Jest via next/jest, jsdom
+npm run test --workspace apps/web         # Jest via next/jest: lógica, sem componente
 ```
 
 `API_BASE_URL` e `API_MOCKING` vivem em `.env.local` (modelo em `.env.example`).

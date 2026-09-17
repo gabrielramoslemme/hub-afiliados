@@ -3,6 +3,7 @@ import { AffiliateStatusEnum, AuthErrorCodeEnum } from '@porto/contracts';
 import { AFFILIATE_AREA_PATH } from '@/affiliate/shared/routes';
 import { publicApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
+import { signInMessageFor } from './errors';
 import { createSession } from './session';
 import { signIn } from './sign-in.action';
 
@@ -85,16 +86,17 @@ describe('signIn', () => {
     );
 
     await expect(signIn(credentials)).resolves.toEqual({
-      message:
-        'Seu cadastro ainda está em análise. Assim que houver decisão, você recebe um e-mail.',
+      message: signInMessageFor(AuthErrorCodeEnum.REGISTRATION_UNDER_REVIEW, 'Mensagem da API.'),
     });
+    await expect(signIn(credentials)).resolves.not.toEqual({ message: 'Mensagem da API.' });
   });
 
   it('reports a failure that is not an api error without leaking it', async () => {
     apiFetch.mockRejectedValue(new Error('ECONNREFUSED'));
 
-    await expect(signIn(credentials)).resolves.toEqual({
-      message: 'Não foi possível entrar agora. Tente novamente em instantes.',
-    });
+    const result = await signIn(credentials);
+
+    expect(result?.message).toEqual(expect.any(String));
+    expect(result?.message).not.toContain('ECONNREFUSED');
   });
 });

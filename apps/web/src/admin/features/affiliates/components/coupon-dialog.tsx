@@ -25,6 +25,7 @@ import {
 import { Field, fieldAria } from '@/shared/components/ui/field';
 import { Input } from '@/shared/components/ui/input';
 import { changeCoupon } from '../change-coupon.action';
+import { couponChanges } from '../coupon-changes';
 
 interface ChangeCouponDialogProps {
   publicId: string;
@@ -68,11 +69,7 @@ export function ChangeCouponDialog({
   const deactivating = watch('status') === CouponStatusEnum.INACTIVE;
 
   function onSave(values: ChangeCouponRequest) {
-    // Só o que a analista tocou: reafirmar o percentual numa desativação não é
-    // neutro para a Porto, que trata campo presente como pedido de mudança.
-    const changes: ChangeCouponRequest = {};
-    if (dirtyFields.status) changes.status = values.status;
-    if (dirtyFields.discountPercent) changes.discountPercent = values.discountPercent;
+    const changes = couponChanges(values, dirtyFields);
 
     startTransition(async () => {
       const result = await changeCoupon(publicId, changes);
