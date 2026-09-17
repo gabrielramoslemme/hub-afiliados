@@ -23,8 +23,19 @@ export class MailService implements Mailer {
     } catch (error) {
       this.logger.error(
         `Falha ao enviar e-mail do template ${input.template}`,
-        (error as Error)?.stack,
+        withoutRecipient((error as Error)?.stack, input.to),
       );
     }
   }
+}
+
+/**
+ * O fornecedor costuma citar o endereço na mensagem do erro, e ela chega ao log
+ * pelo stack. Tira-se o destinatário, e não o stack: sem ele não há como saber
+ * por que o envio falhou.
+ */
+function withoutRecipient(text: string | undefined, recipient: string): string | undefined {
+  const escaped = recipient.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  return text?.replace(new RegExp(escaped, 'gi'), '[destinatário]');
 }

@@ -36,6 +36,16 @@ describe('MailService', () => {
     });
   });
 
+  let logError: jest.SpyInstance;
+
+  beforeEach(() => {
+    logError = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    logError.mockRestore();
+  });
+
   it('does not propagate the error when the provider fails', async () => {
     const mailProvider: MailProvider = {
       send: jest.fn().mockRejectedValue(new Error('Resend is down')),
@@ -55,15 +65,18 @@ describe('MailService', () => {
     expect(mailProvider.send).not.toHaveBeenCalled();
   });
 
-  it('logs the error without exposing the recipient', async () => {
-    const mailProvider: MailProvider = { send: jest.fn().mockRejectedValue(new Error('boom')) };
-    const spy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+  // O fornecedor costuma citar o endereço na mensagem de erro, e ela chega ao log pelo stack.
+  it('logs the failure without exposing the recipient', async () => {
+    const mailProvider: MailProvider = {
+      send: jest
+        .fn()
+        .mockRejectedValue(new Error('validation_error: cannot send to Marina@Example.com')),
+    };
 
     await new MailService(rendererReturning(rendered), mailProvider).send(input);
 
-    const logged = spy.mock.calls[0]?.[0] as string;
+    const logged = logError.mock.calls.flat().join('\n');
     expect(logged).toContain(MailTemplateEnum.REGISTRATION_APPROVED);
-    expect(logged).not.toContain('marina@example.com');
-    spy.mockRestore();
+    expect(logged.toLowerCase()).not.toContain('marina@example.com');
   });
 });
