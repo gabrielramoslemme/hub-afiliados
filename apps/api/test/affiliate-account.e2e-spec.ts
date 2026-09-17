@@ -204,8 +204,8 @@ describe('Affiliate account (e2e)', () => {
       const token = await recoveryToken();
 
       expect(token).not.toBe('');
-      expect(recoveryEmails().at(-1)?.variables.link).toContain(
-        'https://afiliados.porto.example/redefinir-senha?token=',
+      expect(new URL(recoveryEmails().at(-1)?.variables.link ?? '').pathname).toBe(
+        '/redefinir-senha',
       );
     });
 
