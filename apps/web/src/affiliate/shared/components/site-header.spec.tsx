@@ -1,9 +1,12 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { usePathname } from 'next/navigation';
 import { SiteHeader } from './site-header';
 
-// A barra monta o logotipo, e ele lê a rota atual — fora do App Router não há
-// nenhuma para ler. O destino do logotipo tem teste próprio em `site-logo.spec`.
-jest.mock('next/navigation', () => ({ usePathname: () => '/' }));
+// A barra e o logotipo leem a rota atual — fora do App Router não há nenhuma
+// para ler. O destino do logotipo tem teste próprio em `site-logo.spec`.
+jest.mock('next/navigation', () => ({ usePathname: jest.fn() }));
+
+const pathname = usePathname as jest.MockedFunction<typeof usePathname>;
 
 /**
  * O observer é dublado para o teste controlar a intersecção de cada seção
@@ -57,6 +60,7 @@ function activeLabel(): string | null {
 }
 
 beforeEach(() => {
+  pathname.mockReturnValue('/');
   FakeIntersectionObserver.last = null;
   globalThis.IntersectionObserver =
     FakeIntersectionObserver as unknown as typeof IntersectionObserver;
@@ -117,5 +121,52 @@ describe('SiteHeader active section', () => {
     act(() => FakeIntersectionObserver.last?.fire({ 'como-funciona': false }));
 
     expect(activeLabel()).toBeNull();
+  });
+});
+
+/** O `href` de cada link, lido do DOM e na ordem em que a barra os monta. */
+function hrefOf(name: string): (string | null)[] {
+  return screen.getAllByRole('link', { name }).map((link) => link.getAttribute('href'));
+}
+
+describe('SiteHeader destinations', () => {
+  it('scrolls within the landing when the sections are on the page', () => {
+    render(<SiteHeader />);
+
+    expect(hrefOf('Quem somos')).toEqual(['#quem-somos']);
+    expect(hrefOf('Dúvidas')).toEqual(['#duvidas']);
+    expect(hrefOf('Quero me cadastrar')).toEqual(['#cadastro']);
+  });
+
+  /*
+    Na tela de senha o `#como-funciona` sozinho procurava a seção na própria
+    página, onde ela não existe: o clique não levava a lugar nenhum.
+  */
+  it('takes the menu back to the landing sections from another public page', () => {
+    pathname.mockReturnValue('/esqueci-senha');
+    render(<SiteHeader />);
+
+    expect(hrefOf('Quem somos')).toEqual(['/#quem-somos']);
+    expect(hrefOf('Como funciona')).toEqual(['/#como-funciona']);
+    expect(hrefOf('O que você recebe')).toEqual(['/#beneficios']);
+    expect(hrefOf('Requisitos')).toEqual(['/#requisitos']);
+    expect(hrefOf('Dúvidas')).toEqual(['/#duvidas']);
+  });
+
+  it('sends the registration call to its own page from another public page', () => {
+    pathname.mockReturnValue('/entrar');
+    render(<SiteHeader />);
+
+    expect(hrefOf('Quero me cadastrar')).toEqual(['/cadastro']);
+  });
+
+  it('applies the same destinations to the mobile menu', () => {
+    pathname.mockReturnValue('/esqueci-senha');
+    render(<SiteHeader />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir menu' }));
+
+    expect(hrefOf('Como funciona')).toEqual(['/#como-funciona', '/#como-funciona']);
+    expect(hrefOf('Quero me cadastrar')).toEqual(['/cadastro', '/cadastro']);
   });
 });

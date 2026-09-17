@@ -2,6 +2,7 @@
 
 import { ArrowRight, Menu, X } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { nav, site } from '@/affiliate/shared/content';
 import { AFFILIATE_LOGIN_PATH } from '@/affiliate/shared/routes';
@@ -10,6 +11,21 @@ import { cn } from '@/shared/lib/cn';
 import { SiteLogo, TOP_ANCHOR_ID } from './site-logo';
 
 const SECTION_IDS = nav.map((item) => item.href.replace('#', ''));
+
+/**
+ * As seções moram só na landing. Fora dela o `#` sozinho procura a âncora na
+ * página atual, onde ela não existe, e o clique não leva a lugar nenhum. O
+ * cadastro é a exceção: tem página própria, que abre com o foco no formulário
+ * em vez de largar a pessoa no pé da landing.
+ */
+function destinationsFor(pathname: string) {
+  const onLanding = pathname === '/';
+
+  return {
+    section: (href: string) => (onLanding ? href : `/${href}`),
+    registration: onLanding ? '#cadastro' : '/cadastro',
+  };
+}
 
 /**
  * Qual seção está sendo lida. A margem recorta a viewport numa faixa estreita no
@@ -66,6 +82,7 @@ export function SiteHeader() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const active = useActiveSection();
+  const destinations = destinationsFor(usePathname());
 
   useEffect(() => {
     function onScroll(): void {
@@ -116,7 +133,7 @@ export function SiteHeader() {
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={destinations.section(item.href)}
                 aria-current={isActive ? 'true' : undefined}
                 className={cn(
                   'relative whitespace-nowrap rounded-md px-2.5 py-2 text-sm font-medium transition-colors',
@@ -152,7 +169,7 @@ export function SiteHeader() {
           </Button>
 
           <Button asChild size="sm" className="group hidden sm:inline-flex">
-            <Link href="#cadastro">
+            <Link href={destinations.registration}>
               Quero me cadastrar
               <ArrowRight className="transition-transform duration-200 group-hover:translate-x-0.5" />
             </Link>
@@ -180,9 +197,9 @@ export function SiteHeader() {
         >
           <ul className="container-site py-2">
             {[
-              ...nav,
+              ...nav.map((item) => ({ ...item, href: destinations.section(item.href) })),
               { label: site.accountCta, href: AFFILIATE_LOGIN_PATH },
-              { label: 'Quero me cadastrar', href: '#cadastro' },
+              { label: 'Quero me cadastrar', href: destinations.registration },
             ].map((item) => (
               <li key={item.href} className="border-b border-ink-100 last:border-0">
                 <Link
