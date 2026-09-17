@@ -24,20 +24,14 @@ MIGRATION_APPLIED=false
 # shellcheck source=/dev/null
 source "${APP_DIR}/bootstrap.env"
 
-aws ssm get-parameter --name "${CONFIG_PARAM}" --region "${AWS_REGION}" \
-  --query Parameter.Value --output text > "${APP_DIR}/stack.env"
+# `umask 077`: o parâmetro traz as credenciais da Porto em claro, e o arquivo
+# fica no disco da instância entre um deploy e outro.
+( umask 077
+  aws ssm get-parameter --name "${CONFIG_PARAM}" --region "${AWS_REGION}" \
+    --query Parameter.Value --output text > "${APP_DIR}/stack.env"
+)
 # shellcheck source=/dev/null
 source "${APP_DIR}/stack.env"
-
-# Chegam com a versão da stack que trouxe o INT-01. Faltando, o deploy para aqui,
-# antes de tocar nos containers: a API recusaria subir sem saber qual emissor de
-# cupom usar, e o rollback que viria depois não diria por quê.
-for required in COUPON_PROVIDER PORTO_OAUTH_URL PORTO_API_BASE_URL PORTO_SECRET_ARN; do
-  if [ -z "${!required:-}" ]; then
-    echo "FALHA: ${required} não veio do Parameter Store. Atualize a stack antes deste deploy." >&2
-    exit 1
-  fi
-done
 
 compose() {
   docker compose -f "${COMPOSE_FILE}" --project-directory "${APP_DIR}" "$@"
@@ -92,7 +86,6 @@ write_secret_files() {
   set +x
 
   local db_secret app_secret database_url jwt_secret resend_key
-  local porto_secret porto_client_id porto_client_secret
 
   db_secret="$(aws secretsmanager get-secret-value --secret-id "${DB_SECRET_ARN}" \
     --region "${AWS_REGION}" --query SecretString --output text)"
@@ -109,19 +102,6 @@ print("postgres://%s:%s@%s:5432/%s" % (
 
   jwt_secret="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["jwt_secret"])' "${app_secret}")"
   resend_key="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["resend_api_key"])' "${app_secret}")"
-
-  porto_secret="$(aws secretsmanager get-secret-value --secret-id "${PORTO_SECRET_ARN}" \
-    --region "${AWS_REGION}" --query SecretString --output text)"
-  porto_client_id="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["client_id"])' "${porto_secret}")"
-  porto_client_secret="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["client_secret"])' "${porto_secret}")"
-
-  # `porto` com o segredo ainda no placeholder subiria, e toda aprovação voltaria
-  # 503 do OAuth com a analista na frente do diálogo. Falhar o deploy aqui, antes
-  # de trocar a release, deixa no ar a que estava e diz o motivo.
-  if [ "${COUPON_PROVIDER}" = porto ] && [ "${porto_client_id}" = REPLACE_ME ]; then
-    echo "FALHA: CouponProvider=porto com as credenciais do Sensedia em REPLACE_ME (output SetPortoCredentialsCommand)." >&2
-    exit 1
-  fi
 
   # `umask 077` antes de escrever: criar e depois `chmod` deixa uma janela em
   # que o arquivo com a senha do banco é legível por qualquer usuário do host.
@@ -142,13 +122,10 @@ MAIL_PROVIDER=${MAIL_PROVIDER}
 RESEND_API_KEY=${resend_key}
 MAIL_FROM_EMAIL=${MAIL_FROM_EMAIL}
 MAIL_FROM_NAME=Hub de Afiliados
-# Explícito sempre, inclusive quando é \`fake\`: fora de desenvolvimento a API não
-# tem padrão para o emissor de cupom e recusa subir sem ele.
-COUPON_PROVIDER=${COUPON_PROVIDER}
-PORTO_OAUTH_URL=${PORTO_OAUTH_URL}
-PORTO_API_BASE_URL=${PORTO_API_BASE_URL}
-PORTO_CLIENT_ID=${porto_client_id}
-PORTO_CLIENT_SECRET=${porto_client_secret}
+# Os endereços do gateway não vêm do parâmetro: valem os padrões da API, que são
+# os de homologação.
+PORTO_CLIENT_ID=${PORTO_CLIENT_ID}
+PORTO_CLIENT_SECRET=${PORTO_CLIENT_SECRET}
 ENV
 
     # Nada de segredo aqui, e é essa a fronteira: a web não tem o que vazar.
@@ -221,6 +198,15 @@ CADDY
   )
 }
 
+# A senha do hub_rw segue o mesmo caminho da do seed: lida na hora e passada só
+# para o container dos grants, que a aplica no papel.
+read_rw_password() {
+  set +x
+  aws secretsmanager get-secret-value --secret-id "${DB_RW_SECRET_ARN}" \
+    --region "${AWS_REGION}" --query SecretString --output text \
+    | python3 -c 'import json,sys;print(json.load(sys.stdin)["password"])'
+}
+
 # A senha inicial dos operadores nao entra em arquivo nenhum: e lida na hora e
 # passada so para o container do seed, que a grava ja com bcrypt.
 read_seed_password() {
@@ -286,6 +272,12 @@ compose pull --quiet || rollback
 # aparecer a segunda, este passo sai daqui e vira job à parte, antes do fan-out.
 compose run --rm api npm run typeorm:run:prod || rollback
 MIGRATION_APPLIED=true
+
+# Depois da migration, e nao antes: GRANT ON ALL TABLES so alcanca o que ja
+# existe, e a release de hoje pode ter criado tabela. A senha vai por -e, como
+# a do seed - o api.env continua com a do master, que e quem pode criar papel.
+DB_RW_PASSWORD="$(read_rw_password)" \
+  compose run --rm -e DB_RW_PASSWORD api npm run db:grants:prod || rollback
 
 # Idempotente por `ON CONFLICT DO NOTHING`: rodar a cada deploy não devolve a
 # senha do operador para a do seed, e garante que um ambiente recém-criado já

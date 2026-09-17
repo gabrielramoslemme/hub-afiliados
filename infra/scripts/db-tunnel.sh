@@ -25,9 +25,12 @@ output_value() {
     "$1" <<< "${stack_outputs}"
 }
 
+# hub_rw, e nao o master: e esta a senha que circula entre pessoas e vai para o
+# cliente. O master tem DDL e nao tem por que sair daqui - quem realmente
+# precisar dele usa o comando do output ReadDbPasswordCommand.
 if [ "${1:-}" = "--password" ]; then
   aws secretsmanager get-secret-value \
-    --secret-id "$(output_value DbSecretArn)" \
+    --secret-id "$(output_value DbRwSecretArn)" \
     --region "${AWS_REGION}" \
     --query SecretString \
     --output text \
@@ -47,7 +50,7 @@ db_host="$(output_value RdsEndpoint)"
 cat >&2 <<INFO
 Túnel para ${db_host}
 
-  psql -h localhost -p ${LOCAL_PORT} -U porto hub_afiliados
+  psql -h localhost -p ${LOCAL_PORT} -U hub_rw hub_afiliados
   senha: npm run db:password
 
 Ctrl-C encerra.

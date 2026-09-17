@@ -199,7 +199,14 @@ dig +short api-dev.hubafiliados.com.br @1.1.1.1  # idem
 Com a Imperva na frente o CNAME é dela, e o CloudFront aparece só como origin
 na RDM — nesse caso o que se confirma é que a resposta **não** é o Elastic IP.
 
-**3. Injetar a chave do Resend.** Nasce `REPLACE_ME`.
+**3. Escrever as credenciais da Porto e injetar a chave do Resend.** As
+credenciais **antes do primeiro deploy**: a API sempre fala com o gateway
+Sensedia, e o deploy falha sem `PORTO_CLIENT_ID` e `PORTO_CLIENT_SECRET` no
+parâmetro `/porto-hub/dev/config`. O passo a passo está em *Credenciais da
+Porto*, mais abaixo.
+
+A chave do Resend nasce `REPLACE_ME`, e só precisa de valor para usar
+`MailProvider=resend`:
 
 ```bash
 echo -n 're_sua_chave' > resend_key.txt
@@ -310,25 +317,30 @@ nenhuma — não aponta para lá sozinho.
 
 ### Credenciais da Porto (cupons, INT-01)
 
-`CouponProvider` nasce `fake`: a aprovação registra o cupom só em memória e o afiliado
-recebe por e-mail um código que **não vale no checkout**. Serve para exercitar o
-fluxo enquanto as credenciais do gateway Sensedia não chegam; não serve para
-afiliado de verdade.
+A API sempre fala com o gateway Sensedia — não há emissor falso fora dos
+testes. As credenciais não passam pelo template: são **duas linhas escritas à
+mão** no fim do parâmetro `/porto-hub/dev/config`, **antes do primeiro deploy**.
+Pelo console, em **Systems Manager → Parameter Store →
+`/porto-hub/dev/config` → Edit**:
 
-Com as credenciais em mãos, preencha o segredo *"Credenciais do gateway Sensedia
-da Porto para o Hub de Afiliados"* — pelo console, em *Retrieve secret value* →
-*Edit*, ou pelo output `SetPortoCredentialsCommand`, que lê de arquivo:
-
-```bash
-echo -n 'o_client_id'     > porto_client_id.txt
-echo -n 'o_client_secret' > porto_client_secret.txt
-# depois, o comando do output SetPortoCredentialsCommand
+```
+PORTO_CLIENT_ID=<client_id>
+PORTO_CLIENT_SECRET=<client_secret>
 ```
 
-Aí passe `CouponProvider=porto` e rode um deploy. O `install-release.sh` recusa
-`porto` enquanto o segredo estiver em `REPLACE_ME` — a release no ar continua
-de pé, e a mensagem diz o motivo. `PortoOauthUrl` e `PortoApiBaseUrl` já vêm com
-os endereços de homologação; produção troca os dois.
+Sem as duas o deploy falha: linha ausente para o `install-release.sh` com
+`unbound variable` antes de tocar nos containers; linha vazia chega à API, que
+recusa subir, e o deploy volta para a release anterior. Os endereços do gateway
+não entram no parâmetro: valem os padrões da API, que são os de homologação.
+
+⚠️ **Update de stack pode apagar as duas linhas.** O CloudFormation só regrava o
+parâmetro quando o valor dele no template muda — trocar `MailProvider`,
+`MailFromEmail`, `ApiMocking`, `DomainName`, `ApiDomainName`, ou um endpoint novo
+do RDS. Depois de um update desses, confira o parâmetro e escreva as linhas de
+novo antes do deploy.
+
+⚠️ **O parâmetro é `String`**: quem tem `ssm:GetParameter` nesse nome lê o
+`client_secret` em claro.
 
 Se a aprovação responder *"A Porto Serviços recusou o acesso da integração"*
 (`CPN-004`), o gateway recusou a credencial do segredo — errada, revogada, sem
@@ -337,10 +349,6 @@ homologação apontada para produção). Repetir não resolve: confira o segredo
 log da API, que guarda o status e o corpo da recusa. *"A Porto Serviços não
 respondeu"* (`CPN-002`) é o outro caso — timeout, rede ou 5xx —, e esse passa
 com uma nova tentativa.
-
-⚠️ Mesmo cuidado do segredo do Resend: **não mexa no `SecretString` do
-`PortoSecret` no template** depois do primeiro create, ou o update sobrescreve
-as credenciais com o placeholder.
 
 ### Quando o certificado chegar
 
@@ -407,9 +415,8 @@ literal no YAML.
 
 ## Mudar configuração
 
-`DomainName`, `ApiDomainName`, `MailProvider`, `MailFromEmail`, `ApiMocking`,
-`CouponProvider`, `PortoOauthUrl` e `PortoApiBaseUrl` são
-parâmetros da stack, mas **não vivem no UserData** — vivem no parâmetro
+`DomainName`, `ApiDomainName`, `MailProvider`, `MailFromEmail` e `ApiMocking`
+são parâmetros da stack, mas **não vivem no UserData** — vivem no parâmetro
 `/porto-hub/dev/config` do Parameter Store, que o `install-release.sh` lê a cada
 deploy. Trocar um valor é:
 
@@ -421,6 +428,10 @@ aws ssm send-command --document-name porto-hub-dev-deploy \
 
 O passo 2 é o que aplica: o update de stack reescreve o parâmetro, o deploy
 reescreve os arquivos de env e reinicia os containers.
+
+⚠️ Reescrever o parâmetro apaga as credenciais da Porto, que foram escritas à mão
+nele. Entre o passo 1 e o 2, escreva as duas linhas de novo — ver *Credenciais
+da Porto*.
 
 Foi para isso que a configuração saiu do UserData. Lá, mudar um valor ou
 **substituiria a instância**, ou não teria efeito nenhum — o `cloud-init` roda
@@ -440,15 +451,16 @@ id da instância, o endpoint do RDS e o ARN do segredo.
 O túnel exige o `session-manager-plugin` (`brew install --cask session-manager-plugin`),
 que não vem junto com o AWS CLI. Com ele instalado, qualquer cliente — psql,
 TablePlus, DBeaver, DataGrip — conecta em `localhost:5433` como se o banco fosse
-local. O RDS continua sem rota para a internet: o controle de acesso é a
+local, com o usuário `hub_rw`. O RDS continua sem rota para a internet: o controle de acesso é a
 permissão `ssm:StartSession`, revogável por pessoa e auditável no CloudTrail.
 
 | O quê | Como |
 |---|---|
 | Shell na máquina | `aws ssm start-session --target <id>` |
 | Swagger | túnel do output `SwaggerTunnelCommand`, depois `http://localhost:3000/v1/docs` |
-| psql no RDS | `npm run db:tunnel` na raiz, depois `psql -h localhost -p 5433 -U porto hub_afiliados` |
-| Senha do RDS | `npm run db:password` na raiz |
+| psql no RDS | `npm run db:tunnel` na raiz, depois `psql -h localhost -p 5433 -U hub_rw hub_afiliados` |
+| Senha do `hub_rw` | `npm run db:password` na raiz |
+| Senha do master | output `ReadDbPasswordCommand` — só para o que exige DDL |
 | Senha inicial do painel | output `ReadSeedPasswordCommand` |
 | Logs | CloudWatch, grupo `/porto-hub/dev`, streams `api`, `web` e `caddy` |
 | Rollback | *Actions → CD → Run workflow*, com o `imageTag` anterior (o ECR guarda as 10 últimas) |
@@ -457,6 +469,12 @@ permissão `ssm:StartSession`, revogável por pessoa e auditável no CloudTrail.
 O seed roda a cada deploy e é idempotente (`ON CONFLICT DO NOTHING`): não
 devolve a senha do operador para a do seed, e garante que um ambiente
 recém-criado já tenha com quem entrar no painel.
+
+Os grants do `hub_rw` também, logo depois das migrations: `SELECT`, `INSERT`,
+`UPDATE` e `DELETE` no schema `public` e nada de DDL — o que vazar dele não cria
+papel, não dropa tabela e não vira superusuário. Rodar depois da migration é o
+que faz tabela nova já nascer acessível. O master continua existindo para
+migration e seed.
 
 ### O log do deploy tem 24 KB, e o SSM corta o fim
 
