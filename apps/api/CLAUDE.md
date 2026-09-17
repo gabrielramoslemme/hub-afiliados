@@ -43,7 +43,7 @@ O tempo de vida vem de `JWT_EXPIRES_IN_SECONDS` (oito horas), casado com o cooki
 | `src/application/<agregado>/` | use cases: classes TypeScript puras que implementam `UseCase`, orquestram contratos e decidem a regra de negócio | domain |
 | `src/infra/` | adapters que **implementam** contratos: `database/typeorm/`, `services/email/`, mais `config/`, `shared/filters/` e `di/`, o wiring | domain — e application, só em `di/` |
 | `src/http/<canal>/` | controllers, DTOs, guards e o `*.module.ts` do canal | application, domain |
-| `src/testing/` | factories e mocks — fora do build (`tsconfig.build.json`) | domain, application |
+| `src/testing/` | factories, mocks e fakes — fora do build (`tsconfig.build.json`) | domain, application |
 
 ### Como uma requisição atravessa
 
@@ -203,7 +203,7 @@ constructor(@Inject(MAIL_PROVIDER) private readonly mailProvider: MailProvider) 
 |---|---|
 | `CreateAffiliateUseCase` | `createAffiliateUseCase` |
 | `MailProvider` | `mailProvider` |
-| `EnvironmentVariableService` | `environmentVariableService` |
+| `ConfigService` | `configService` |
 | `Mailer` | `mailer` — o port não tem sufixo de categoria, e o nome dele já basta |
 | `Repository<UserTypeormEntity>` | `repository` — dentro do adapter, é o único que existe |
 
@@ -251,7 +251,7 @@ Contrato no domínio, implementação em infra. **Use case nunca recebe `Reposit
 
 **Ele exporta a instância uma vez só, como `default`.** O `migration:run -d <arquivo>` recusa o módulo que exporte duas — e a mesma instância exportada como nomeada *e* como default já conta como duas, com a mensagem `Given data source file must contain only one export of DataSource instance`. Há teste para isso em `data-source.spec.ts`.
 
-O `DatabaseModule` continua sendo um DataSource à parte, o da aplicação, que lê o `EnvironmentVariableService`. Os globs dos dois são iguais de propósito; divergir volta a produzir migration que roda no CLI e some em runtime.
+O `DatabaseModule` continua sendo um DataSource à parte, o da aplicação, que lê o `ConfigService`. Os globs dos dois são iguais de propósito; divergir volta a produzir migration que roda no CLI e some em runtime.
 
 **E o TLS dos dois sai da mesma função, `postgres-ssl.ts`.** O parameter group padrão do RDS PostgreSQL 16 traz `rds.force_ssl = 1`: sem TLS o servidor recusa a conexão antes de olhar a senha. Configurar só um dos dois DataSources é a mesma armadilha dos globs, de cabeça para baixo — a aplicação sobe e a migration não, ou o contrário.
 
@@ -261,14 +261,28 @@ A CA da Amazon não está no trust store do Node, então a imagem carrega o bund
 
 ## Configuração
 
+**Quem lê o ambiente é o `ConfigService` do `@nestjs/config`**, e mais ninguém. O `AppConfigModule` (`src/infra/config/config.module.ts`) registra o `ConfigModule.forRoot` com `isGlobal` e o schema Joi, então qualquer provider injeta o `ConfigService` sem importar módulo nenhum.
+
+```ts
+constructor(private readonly configService: ConfigService<EnvironmentVariables, true>) {}
+
+const baseUrl = this.configService.get('APP_BASE_URL', { infer: true }); // string
+```
+
+- **Sempre os dois genéricos e sempre `{ infer: true }`.** `EnvironmentVariables` (`src/infra/config/environment-variables.ts`) diz quais chaves existem e o tipo de cada uma; o `true` diz que o Joi já validou, e por isso `get` devolve `string`, e não `string | undefined`. Sem `{ infer: true }` a chave ainda é conferida, mas o retorno é `any` — e o Biome não reprova esse `any`, porque ninguém o escreveu.
+- **O valor chega convertido.** O `get` devolve o que saiu do Joi: número como número, booleano como booleano, padrão já aplicado. Nada de `Number(...)`, `=== 'true'` ou `?? padrão` na leitura — o padrão mora no schema. É isso que impede a duração de chegar ao JWT como a string `"28800"`, que o `expiresIn` leria como 28,8 segundos.
+- **Em factory de módulo, pelo `inject`:** `inject: [ConfigService]`, com o parâmetro tipado como acima. O token é a própria classe, então vale a seção sobre `import type` no fim deste guia: `import { ConfigService }`, nunca `import type`.
+- **Só em infra e no wiring.** `ConfigService` é Nest: domain e application não o conhecem, e o lint já barra `@nestjs/*` ali. Regra de negócio que precisa de um valor de configuração declara um port, e infra o implementa lendo o `ConfigService` — como o `AppLinkBuilder` faz com `APP_BASE_URL` para o `LinkBuilder`.
+- **Em teste unitário**, `configServiceMock({ CHAVE: valor })` (`src/testing/mocks/services/`) devolve um `ConfigService` de verdade, carregado só com o que o teste passa.
+
 Variável nova entra em **quatro** lugares, sempre os quatro:
 
 1. `src/infra/config/env.validation.ts` — schema Joi. Ausente ou inválida derruba a aplicação na subida, de propósito.
-2. `src/infra/config/environment-variable.service.ts` — getter tipado.
+2. `src/infra/config/environment-variables.ts` — a chave na interface, com o tipo que sai **do Joi**: `number` para `Joi.number()`, `boolean` para `Joi.boolean()`, união literal para `.valid(...)`, e `?` só quando o schema não tem padrão nem `required()`.
 3. `.env.example` — com comentário quando o valor não for óbvio.
-4. `.github/workflows/ci.yml`, bloco `env:` — quando for obrigatória.
+4. `.github/workflows/ci.yml`, bloco `env:` — quando for obrigatória com `NODE_ENV=test`.
 
-**Nunca leia `process.env` fora do `EnvironmentVariableService`** — exceto em `ormconfig.ts`, `scripts/`, `src/infra/database/typeorm/data-source.ts` e `src/infra/database/typeorm/seeds/`, que rodam fora do container de DI do Nest. Os dois últimos estão em `src/` justamente por precisarem existir compilados na imagem de produção; continuam sendo código de CLI, não de aplicação.
+**Nunca leia `process.env` na aplicação** — exceto em `ormconfig.ts`, `scripts/`, `src/infra/database/typeorm/data-source.ts`, `src/infra/database/typeorm/seeds/` e `src/infra/database/typeorm/grants/`, que rodam fora do container de DI do Nest e não têm o `ConfigService`. Os três últimos estão em `src/` justamente por precisarem existir compilados na imagem de produção; continuam sendo código de CLI, não de aplicação.
 
 ## Erros
 
@@ -316,9 +330,9 @@ Dentro de infra o trabalho se parte em dois contratos: `MailRenderer` monta o co
 
 **O cupom é nosso: nasce e é gerenciado aqui, e a Porto Serviços só o registra**, pelo INT-01, para ele valer no checkout. `affiliate_coupons` é a fonte da verdade — código, percentual e situação são o que a analista escolheu, nunca o eco que a Porto devolve. O use case recebe o port `CouponGateway` (`src/domain/coupons/coupon-gateway.ts`) e não conhece fornecedor nenhum: `codigoCupom`, `percentualDesconto` e `flagCupomCumulativo` vivem inteiros em `services/coupons/`, e é isso que permite trocar quem registra sem tocar um arquivo de regra.
 
-`COUPON_PROVIDER` escolhe o concreto — `fake` registra em memória, sem credencial e sem rede, e é o que sustenta dev e e2e; `porto` fala com o gateway. Dentro de infra o trabalho se parte em dois, como no e-mail: `AccessTokenProvider` autentica, `CouponGateway` sabe o que é um cupom.
+**A API sempre fala com a Porto** — nenhuma variável escolhe o emissor. Dentro de infra o trabalho se parte em dois, como no e-mail: `AccessTokenProvider` autentica, `CouponGateway` sabe o que é um cupom. O `FakeCouponGateway`, que registra em memória, mora em `src/testing/fakes/` e só entra no e2e.
 
-**Fora de `development` e `test`, `COUPON_PROVIDER` não tem padrão** e a API não sobe sem ele. O falso num ambiente real manda ao afiliado, por e-mail, um cupom que a Porto não registrou — herdar isso de um default é o que a regra fecha. O `install-release.sh` grava a variável a partir do parâmetro `CouponProvider` da stack e recusa o deploy com `porto` enquanto as credenciais estiverem em `REPLACE_ME` ([`infra/cloudformation/README.md`](../../infra/cloudformation/README.md)).
+**Fora de `test`, a API não sobe sem `PORTO_CLIENT_ID` e `PORTO_CLIENT_SECRET`** — em desenvolvimento também, e lá os endereços padrão são os de homologação: cada aprovação local registra cupom de verdade. Em `test` as duas não têm uso, porque o e2e troca o gateway pelo falso, e a CI não as carrega. No ambiente provisionado as duas são escritas à mão no parâmetro `/porto-hub/dev/config`, fora do template, e sem elas o deploy falha ([`infra/cloudformation/README.md`](../../infra/cloudformation/README.md)).
 
 **O registro na Porto vem antes de qualquer escrita nossa.** Ser dono não é gravar primeiro: um cupom gravado aqui e não registrado lá chegaria ao afiliado sem valer no checkout. Se a Porto recusar ou não responder, o erro sobe e o cadastro fica exatamente como estava — em análise, sem e-mail enviado e sem trilha registrando decisão que não houve. As falhas são separadas pelo que a analista faz em seguida:
 
@@ -353,6 +367,7 @@ O que sobra é o registro **e** a consulta ficarem sem resposta seguidas: o cupo
 
 - **Unitário** — `*.spec.ts` ao lado do arquivo, sem banco. Factories em `src/testing/factories/` (`buildUser`, `buildAdminUser`, `buildAffiliate`, `buildCoupon`) e mocks em `src/testing/mocks/`. Obrigatório por caso de uso.
 - **Integração** — `test/*.e2e-spec.ts`, Postgres real, `--runInBand`, compilando o `AppModule` inteiro. Isolamento por `TRUNCATE <tabelas> RESTART IDENTITY CASCADE` no `beforeEach`, `dataSource.destroy()` no `afterAll`.
+- **O módulo do e2e sai de `createE2eTestingModule()`** (`test/create-e2e-testing-module.ts`), nunca de `Test.createTestingModule` direto. É ele que troca o `COUPON_GATEWAY` pelo `FakeCouponGateway`: o `AppModule` cru registraria cupom de verdade na Porto com as credenciais do `.env`, e há um e2e em `admin-affiliates` que falha se a troca sumir.
 - Descrição em inglês, pelo comportamento: `it('responds 200 with status ok')`.
 - Objeto de teste reutilizável vira factory em `src/testing/`, não literal repetido.
 
@@ -388,11 +403,12 @@ npm run seed --workspace apps/api                            # operadores
 npm run openapi:generate --workspace apps/api                # gera apps/api/openapi.json
 ```
 
-Os dois `:prod` rodam contra `dist/`, sem `ts-node`, e existem para a imagem de
+Os três `:prod` rodam contra `dist/`, sem `ts-node`, e existem para a imagem de
 produção — é o `install-release.sh` que os chama, nessa ordem, a cada deploy:
 
 ```bash
 npm run typeorm:run:prod --workspace apps/api                # migrations em dist/
+npm run db:grants:prod --workspace apps/api                  # papel hub_rw, com DB_RW_PASSWORD
 npm run seed:prod --workspace apps/api                       # operadores em dist/
 ```
 
