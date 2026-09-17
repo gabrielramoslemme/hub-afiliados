@@ -1,9 +1,10 @@
 import { Global, Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { ACCESS_TOKEN_ISSUER, ACCESS_TOKEN_VERIFIER } from '@Domain/auth/access-token';
 import { PASSWORD_HASHER } from '@Domain/auth/password-hasher';
 import { TOKEN_GENERATOR } from '@Domain/auth/token-generator';
-import { EnvironmentVariableService } from '@Infra/config/environment-variable.service';
+import { EnvironmentVariables } from '@Infra/config/environment-variables';
 import { BcryptPasswordHasher } from './bcrypt-password-hasher';
 import { CryptoTokenGenerator } from './crypto-token-generator';
 import { JwtAccessTokenService } from './jwt-access-token.service';
@@ -18,10 +19,10 @@ import { JwtAccessTokenService } from './jwt-access-token.service';
 @Module({
   imports: [
     JwtModule.registerAsync({
-      inject: [EnvironmentVariableService],
-      useFactory: (environmentVariableService: EnvironmentVariableService) => ({
-        secret: environmentVariableService.jwtSecret,
-        signOptions: { expiresIn: environmentVariableService.jwtExpiresInSeconds },
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService<EnvironmentVariables, true>) => ({
+        secret: configService.get('JWT_SECRET', { infer: true }),
+        signOptions: { expiresIn: configService.get('JWT_EXPIRES_IN_SECONDS', { infer: true }) },
       }),
     }),
   ],

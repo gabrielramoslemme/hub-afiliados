@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
-import { EnvironmentVariableService } from '@Infra/config/environment-variable.service';
+import { EnvironmentVariables } from '@Infra/config/environment-variables';
 import { MailProvider, SendRenderedMailInput } from './mail-provider.interface';
 
 /** O nome vai entre aspas no cabeçalho (RFC 5322), e aspas dentro dele o quebrariam. */
@@ -12,15 +13,15 @@ function formatSender(name: string, email: string): string {
 export class ResendProvider implements MailProvider {
   private readonly client: Resend;
 
-  constructor(private readonly environmentVariableService: EnvironmentVariableService) {
-    this.client = new Resend(this.environmentVariableService.resendApiKey);
+  constructor(private readonly configService: ConfigService<EnvironmentVariables, true>) {
+    this.client = new Resend(this.configService.get('RESEND_API_KEY', { infer: true }));
   }
 
   async send(input: SendRenderedMailInput): Promise<void> {
     const { error } = await this.client.emails.send({
       from: formatSender(
-        this.environmentVariableService.mailFromName,
-        this.environmentVariableService.mailFromEmail,
+        this.configService.get('MAIL_FROM_NAME', { infer: true }),
+        this.configService.get('MAIL_FROM_EMAIL', { infer: true }),
       ),
       // O destinatário vai como endereço puro, sem nome de exibição: é o formato
       // que a API documenta para `to`, e a restrição de conta sem domínio

@@ -1,17 +1,21 @@
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
-import { EnvironmentVariableService } from '@Infra/config/environment-variable.service';
+import { EnvironmentVariables } from '@Infra/config/environment-variables';
 import { HttpExceptionFilter } from '@Infra/shared/filters/http-exception.filter';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
-  const env = app.get(EnvironmentVariableService);
+  const configService = app.get<ConfigService<EnvironmentVariables, true>>(ConfigService);
 
   app.use(helmet());
-  app.enableCors({ origin: [env.panelBaseUrl], credentials: true });
+  app.enableCors({
+    origin: [configService.get('PANEL_BASE_URL', { infer: true })],
+    credentials: true,
+  });
   app.setGlobalPrefix('v1');
   app.useGlobalPipes(
     new ValidationPipe({
@@ -33,7 +37,7 @@ async function bootstrap(): Promise<void> {
     .build();
   SwaggerModule.setup('v1/docs', app, SwaggerModule.createDocument(app, config));
 
-  await app.listen(env.port);
+  await app.listen(configService.get('PORT', { infer: true }));
 }
 
 void bootstrap();

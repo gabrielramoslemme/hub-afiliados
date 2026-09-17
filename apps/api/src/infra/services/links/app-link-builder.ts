@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AuthAudienceEnum } from '@porto/contracts';
 import { LinkBuilder } from '@Domain/notifications/link-builder';
-import { EnvironmentVariableService } from '@Infra/config/environment-variable.service';
+import { EnvironmentVariables } from '@Infra/config/environment-variables';
 
 const SET_PASSWORD_PATH = '/definir-senha';
 
@@ -16,7 +17,7 @@ const RESET_PASSWORD_PATH: Record<AuthAudienceEnum, string> = {
 
 @Injectable()
 export class AppLinkBuilder implements LinkBuilder {
-  constructor(private readonly environmentVariableService: EnvironmentVariableService) {}
+  constructor(private readonly configService: ConfigService<EnvironmentVariables, true>) {}
 
   setPasswordLink(token: string): string {
     return this.linkTo(SET_PASSWORD_PATH, token);
@@ -27,7 +28,7 @@ export class AppLinkBuilder implements LinkBuilder {
   }
 
   private linkTo(path: string, token: string): string {
-    const base = this.environmentVariableService.appBaseUrl.replace(/\/$/, '');
+    const base = this.configService.get('APP_BASE_URL', { infer: true }).replace(/\/$/, '');
 
     return `${base}${path}?token=${encodeURIComponent(token)}`;
   }

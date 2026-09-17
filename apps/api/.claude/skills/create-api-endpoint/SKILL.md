@@ -99,7 +99,7 @@ O `ValidationPipe` global usa `whitelist` e `forbidNonWhitelisted`: campo fora d
 | Response DTO como `interface` | Classe com `@ApiProperty`, senão some do OpenAPI |
 | `id` serial na rota ou na resposta | Sempre `public_id` |
 | CPF ou chave PIX em log ou em listagem | Listagem usa `maskCpf`; log nunca |
-| Dependência injetada com apelido (`createAffiliate`, `users`, `env`) | camelCase do tipo, com o sufixo: `createAffiliateUseCase`, `userRepository`, `environmentVariableService` |
+| Dependência injetada com apelido (`createAffiliate`, `users`, `env`) | camelCase do tipo, com o sufixo: `createAffiliateUseCase`, `userRepository`, `configService` |
 | Regra de negócio no controller | Controller é fino; a regra é do use case |
 | `@Injectable()` ou `@Inject()` no use case | O lint reprova: a camada não depende de Nest. O wiring é o `provideUseCase` no `UseCasesModule` |
 | Use case com `handle()`, `run()` ou `perform()` | `implements UseCase<...>` reprova no type-check: o método é `execute`, sempre |

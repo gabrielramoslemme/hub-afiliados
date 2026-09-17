@@ -1,7 +1,8 @@
 import { Global, Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { LINK_BUILDER } from '@Domain/notifications/link-builder';
 import { MAILER } from '@Domain/notifications/mailer';
-import { EnvironmentVariableService } from '@Infra/config/environment-variable.service';
+import { EnvironmentVariables } from '@Infra/config/environment-variables';
 import { AppLinkBuilder } from '@Infra/services/links/app-link-builder';
 import { LoggerMailProvider } from './logger-mail.provider';
 import { MailService } from './mail.service';
@@ -18,9 +19,11 @@ import { ResendProvider } from './resend.provider';
     { provide: MAIL_RENDERER, useClass: ReactEmailRenderer },
     {
       provide: MAIL_PROVIDER,
-      inject: [EnvironmentVariableService],
-      useFactory: (env: EnvironmentVariableService) =>
-        env.mailProvider === 'resend' ? new ResendProvider(env) : new LoggerMailProvider(),
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService<EnvironmentVariables, true>) =>
+        configService.get('MAIL_PROVIDER', { infer: true }) === 'resend'
+          ? new ResendProvider(configService)
+          : new LoggerMailProvider(),
     },
     { provide: MAILER, useClass: MailService },
     // O link mora aqui porque é o que a gente manda para as pessoas: quem

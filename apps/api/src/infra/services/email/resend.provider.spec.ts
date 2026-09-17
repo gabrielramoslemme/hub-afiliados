@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { EnvironmentVariableService } from '@Infra/config/environment-variable.service';
+import { configServiceMock } from '@Testing/mocks/services/config-service.mock';
 import { ResendProvider } from './resend.provider';
 
 jest.mock('resend');
@@ -15,12 +15,12 @@ describe('ResendProvider', () => {
     text: 'Boas-vindas, Marina!',
   };
 
-  function environmentWith(fromName: string): EnvironmentVariableService {
-    return {
-      resendApiKey: 'test-key',
-      mailFromEmail: 'nao-responda@afiliados.porto.example',
-      mailFromName: fromName,
-    } as unknown as EnvironmentVariableService;
+  function configWith(fromName: string) {
+    return configServiceMock({
+      RESEND_API_KEY: 'test-key',
+      MAIL_FROM_EMAIL: 'nao-responda@afiliados.porto.example',
+      MAIL_FROM_NAME: fromName,
+    });
   }
 
   beforeEach(() => {
@@ -29,7 +29,7 @@ describe('ResendProvider', () => {
   });
 
   it('sends the rendered content to the recipient', async () => {
-    await new ResendProvider(environmentWith('Hub de Afiliados')).send(input);
+    await new ResendProvider(configWith('Hub de Afiliados')).send(input);
 
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -42,13 +42,13 @@ describe('ResendProvider', () => {
   });
 
   it('addresses the recipient by the bare email, without the display name', async () => {
-    await new ResendProvider(environmentWith('Hub de Afiliados')).send(input);
+    await new ResendProvider(configWith('Hub de Afiliados')).send(input);
 
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ to: 'marina@example.com' }));
   });
 
   it('drops the quotes of a sender name that would break the header', async () => {
-    await new ResendProvider(environmentWith('Hub "de" Afiliados')).send(input);
+    await new ResendProvider(configWith('Hub "de" Afiliados')).send(input);
 
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -63,8 +63,8 @@ describe('ResendProvider', () => {
       error: { name: 'validation_error', message: 'Invalid `to` field' },
     });
 
-    await expect(
-      new ResendProvider(environmentWith('Hub de Afiliados')).send(input),
-    ).rejects.toThrow('Invalid `to` field');
+    await expect(new ResendProvider(configWith('Hub de Afiliados')).send(input)).rejects.toThrow(
+      'Invalid `to` field',
+    );
   });
 });
