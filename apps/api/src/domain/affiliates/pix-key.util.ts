@@ -31,7 +31,9 @@ export function maskPixKey(type: PixKeyTypeEnum, key: string): string {
   if (type === PixKeyTypeEnum.CPF) return maskCpf(normalized);
 
   if (type === PixKeyTypeEnum.PHONE) {
-    return `(${normalized.slice(0, 2)}) *****-${normalized.slice(-4)}`;
+    // Com o código do país (12 ou 13 dígitos), o DDD vem depois do 55.
+    const national = normalized.length > 11 ? normalized.slice(2) : normalized;
+    return `(${national.slice(0, 2)}) *****-${national.slice(-4)}`;
   }
 
   const [local, domain] = normalized.split('@');

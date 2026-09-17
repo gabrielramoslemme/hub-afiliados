@@ -69,6 +69,10 @@ describe('pix-key.util', () => {
       expect(maskPixKey(PixKeyTypeEnum.PHONE, '11999998888')).toBe('(11) *****-8888');
     });
 
+    it('shows the area code, not the country code, of a phone saved with +55', () => {
+      expect(maskPixKey(PixKeyTypeEnum.PHONE, '+55 (11) 99999-8888')).toBe('(11) *****-8888');
+    });
+
     it('masks a cpf key the same way the listing masks the cpf', () => {
       expect(maskPixKey(PixKeyTypeEnum.CPF, '52998224725')).toBe('***.***.247-25');
     });
