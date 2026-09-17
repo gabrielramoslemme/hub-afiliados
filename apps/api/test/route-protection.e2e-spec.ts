@@ -1,10 +1,9 @@
 import { GUARDS_METADATA, METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { DiscoveryModule, DiscoveryService, MetadataScanner } from '@nestjs/core';
-import { Test } from '@nestjs/testing';
-import { AppModule } from '../src/app.module';
 import { IS_PUBLIC } from '../src/http/shared/decorators/public.decorator';
 import { AdminGuard } from '../src/http/shared/guards/admin.guard';
 import { AffiliateGuard } from '../src/http/shared/guards/affiliate.guard';
+import { createE2eTestingModule } from './create-e2e-testing-module';
 
 /**
  * A separação entre os canais mora numa linha por controller: o guard global
@@ -55,9 +54,7 @@ describe('Route protection (e2e)', () => {
   let routes: DiscoveredRoute[];
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule, DiscoveryModule],
-    }).compile();
+    const moduleRef = await createE2eTestingModule([DiscoveryModule]).compile();
     const app = moduleRef.createNestApplication();
     await app.init();
 

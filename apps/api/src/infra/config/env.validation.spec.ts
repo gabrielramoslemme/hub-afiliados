@@ -7,50 +7,66 @@ const required = {
   PANEL_BASE_URL: 'https://painel.porto.example',
 };
 
+const credentials = {
+  PORTO_CLIENT_ID: 'the-client-id',
+  PORTO_CLIENT_SECRET: 'the-client-secret',
+};
+
 function validate(env: Record<string, string>) {
   return envValidationSchema.validate({ ...required, ...env });
 }
 
 describe('envValidationSchema', () => {
-  describe('COUPON_PROVIDER', () => {
-    it('falls back to the fake provider in development', () => {
-      expect(validate({ NODE_ENV: 'development' }).value.COUPON_PROVIDER).toBe('fake');
+  // Os ambientes são desenvolvimento e produção; `test` é o da suíte.
+  it('refuses an environment that does not exist', () => {
+    expect(validate({ NODE_ENV: 'staging', ...credentials }).error?.message).toContain('NODE_ENV');
+  });
+
+  describe('Porto credentials', () => {
+    /*
+      Fora de `test` a API sempre fala com a Porto: sem credencial, cada aprovação
+      voltaria 503 com a analista na frente do diálogo. Recusar a subida mostra o
+      problema no deploy, e não no primeiro cadastro.
+    */
+    it.each(['development', 'production'])(
+      'refuses to start in %s without the client id',
+      (nodeEnv) => {
+        expect(
+          validate({ NODE_ENV: nodeEnv, PORTO_CLIENT_SECRET: 'the-client-secret' }).error?.message,
+        ).toContain('PORTO_CLIENT_ID');
+      },
+    );
+
+    it.each(['development', 'production'])(
+      'refuses to start in %s without the client secret',
+      (nodeEnv) => {
+        expect(
+          validate({ NODE_ENV: nodeEnv, PORTO_CLIENT_ID: 'the-client-id' }).error?.message,
+        ).toContain('PORTO_CLIENT_SECRET');
+      },
+    );
+
+    it('refuses blank credentials', () => {
+      expect(
+        validate({ NODE_ENV: 'production', PORTO_CLIENT_ID: '', PORTO_CLIENT_SECRET: '' }).error
+          ?.message,
+      ).toContain('PORTO_CLIENT_ID');
     });
 
-    it('falls back to the fake provider in test', () => {
-      expect(validate({ NODE_ENV: 'test' }).value.COUPON_PROVIDER).toBe('fake');
+    it('treats a missing NODE_ENV as development and requires the credentials', () => {
+      expect(validate({}).error?.message).toContain('PORTO_CLIENT_ID');
+    });
+
+    it('accepts both credentials outside test', () => {
+      expect(validate({ NODE_ENV: 'production', ...credentials }).error).toBeUndefined();
     });
 
     /*
-      O emissor falso num ambiente real manda ao afiliado, por e-mail, um cupom
-      que não existe na Porto. Fora de desenvolvimento a escolha tem que ser
-      explícita — é o que impede um deploy de herdar o padrão sem ninguém ver.
+      No e2e o gateway é sempre trocado pelo falso antes de a API subir, então a
+      credencial não teria uso — e a CI não precisa carregá-la.
     */
-    it('refuses to start in production without choosing the provider', () => {
-      expect(validate({ NODE_ENV: 'production' }).error?.message).toContain('COUPON_PROVIDER');
-    });
-
-    it('refuses to start in staging without choosing the provider', () => {
-      expect(validate({ NODE_ENV: 'staging' }).error?.message).toContain('COUPON_PROVIDER');
-    });
-
-    it('accepts the fake provider in production when it is chosen on purpose', () => {
-      expect(validate({ NODE_ENV: 'production', COUPON_PROVIDER: 'fake' }).error).toBeUndefined();
-    });
-
-    it('refuses the porto provider without credentials', () => {
-      expect(validate({ COUPON_PROVIDER: 'porto' }).error?.message).toContain('PORTO_CLIENT_ID');
-    });
-
-    it('accepts the porto provider with both credentials', () => {
-      expect(
-        validate({
-          NODE_ENV: 'production',
-          COUPON_PROVIDER: 'porto',
-          PORTO_CLIENT_ID: 'the-client-id',
-          PORTO_CLIENT_SECRET: 'the-client-secret',
-        }).error,
-      ).toBeUndefined();
+    it('starts without credentials in test', () => {
+      expect(validate({ NODE_ENV: 'test' }).error).toBeUndefined();
     });
   });
 });

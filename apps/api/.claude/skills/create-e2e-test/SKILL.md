@@ -44,7 +44,7 @@ describe('Admin — affiliate queue (e2e)', () => {
   let dataSource: DataSource;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleRef = await createE2eTestingModule().compile();
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('v1');
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
@@ -64,6 +64,10 @@ describe('Admin — affiliate queue (e2e)', () => {
   });
 });
 ```
+
+## O módulo sai do helper
+
+**`createE2eTestingModule()`, nunca `Test.createTestingModule` direto.** A API sempre fala com a Porto, e o helper troca o `COUPON_GATEWAY` pelo `FakeCouponGateway` antes de subir: sem ele, a aprovação do teste registra cupom de verdade com as credenciais do `.env`. O helper devolve o builder, então o spec continua encadeando as próprias trocas (`.overrideProvider(MAILER)`); módulo a mais entra pelo argumento, `createE2eTestingModule([DiscoveryModule])`.
 
 ## Isolamento
 
@@ -93,6 +97,7 @@ Regra de negócio isolada não vem para cá — é unitário, mais rápido e mai
 | Asserção de `code` no corpo do erro falha | Faltou `app.useGlobalFilters(new HttpExceptionFilter())` |
 | Teste passa sozinho e falha na suíte | Faltou `TRUNCATE` no `beforeEach`, ou o `it` depende do anterior |
 | `ECONNREFUSED` | `npm run db:up && npm run typeorm:run --workspace apps/api` |
+| Aprovação do teste volta 503 ou cria cupom na Porto | O spec montou o módulo com `Test.createTestingModule`. Use `createE2eTestingModule()` |
 | Rodar sem `--runInBand` | Os testes brigam pelo mesmo banco. Use sempre o script `test:e2e` |
 | `.spec.ts` em vez de `.e2e-spec.ts` | O `testRegex` do e2e é `.e2e-spec.ts$`; o unitário roda `.spec.ts$` e vai tentar rodar seu e2e sem banco |
 | Faltou `dataSource.destroy()` | Jest não encerra e a CI trava até o timeout |

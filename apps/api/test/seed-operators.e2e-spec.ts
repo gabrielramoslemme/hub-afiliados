@@ -1,9 +1,8 @@
-import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 import { UserRoleEnum, UserTypeEnum } from '@porto/contracts';
-import { AppModule } from '../src/app.module';
 import { PASSWORD_HASHER, PasswordHasher } from '../src/domain/auth/password-hasher';
 import { seedOperators } from '../src/infra/database/typeorm/seeds/seed-operators';
+import { createE2eTestingModule } from './create-e2e-testing-module';
 
 /**
  * Sem operador não se entra no painel, e sem painel ninguém aprova cadastro —
@@ -15,7 +14,7 @@ describe('seedOperators (integration)', () => {
   let hasher: PasswordHasher;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleRef = await createE2eTestingModule().compile();
     const app = moduleRef.createNestApplication();
     await app.init();
     dataSource = app.get(DataSource);

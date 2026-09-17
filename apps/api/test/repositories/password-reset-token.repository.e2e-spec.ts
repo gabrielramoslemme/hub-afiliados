@@ -1,12 +1,11 @@
-import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 import { TokenPurposeEnum, UserTypeEnum } from '@porto/contracts';
-import { AppModule } from '../../src/app.module';
 import {
   PASSWORD_RESET_TOKEN_REPOSITORY,
   PasswordResetTokenRepository,
 } from '../../src/domain/auth/password-reset-token.repository';
 import { USER_REPOSITORY, UserRepository } from '../../src/domain/users/user.repository';
+import { createE2eTestingModule } from '../create-e2e-testing-module';
 
 describe('PasswordResetTokenRepository (integration)', () => {
   let dataSource: DataSource;
@@ -15,7 +14,7 @@ describe('PasswordResetTokenRepository (integration)', () => {
   let userId: number;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleRef = await createE2eTestingModule().compile();
     const app = moduleRef.createNestApplication();
     await app.init();
     dataSource = app.get(DataSource);

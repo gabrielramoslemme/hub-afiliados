@@ -1,13 +1,12 @@
 import { type INestApplication, ValidationPipe } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { AppModule } from '../src/app.module';
+import { createE2eTestingModule } from './create-e2e-testing-module';
 
 describe('Health (e2e)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleRef = await createE2eTestingModule().compile();
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('v1');
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));

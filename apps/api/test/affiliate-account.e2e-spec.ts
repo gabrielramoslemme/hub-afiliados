@@ -1,13 +1,12 @@
 import { type INestApplication, ValidationPipe } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { AffiliateStatusEnum, AuthErrorCodeEnum, MailTemplateEnum } from '@porto/contracts';
-import { AppModule } from '../src/app.module';
 import { MAILER, SendMailInput } from '../src/domain/notifications/mailer';
 import { HttpExceptionFilter } from '../src/infra/shared/filters/http-exception.filter';
 import { mailerMock } from '../src/testing/mocks/services/mailer.mock';
+import { createE2eTestingModule } from './create-e2e-testing-module';
 
 /**
  * O ciclo inteiro, ponta a ponta: a pessoa se cadastra, a analista aprova, o
@@ -114,7 +113,7 @@ describe('Affiliate account (e2e)', () => {
 
   beforeAll(async () => {
     mailer = mailerMock();
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+    const moduleRef = await createE2eTestingModule()
       .overrideProvider(MAILER)
       .useValue(mailer)
       .compile();

@@ -1,16 +1,15 @@
 import { type INestApplication, ValidationPipe } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { AuthAudienceEnum, PixKeyTypeEnum } from '@porto/contracts';
-import { AppModule } from '../src/app.module';
 import {
   AFFILIATE_REPOSITORY,
   AffiliateRepository,
 } from '../src/domain/affiliates/affiliate.repository';
 import { ACCESS_TOKEN_ISSUER, AccessTokenIssuer } from '../src/domain/auth/access-token';
 import { HttpExceptionFilter } from '../src/infra/shared/filters/http-exception.filter';
+import { createE2eTestingModule } from './create-e2e-testing-module';
 
 describe('Admin coupons (e2e)', () => {
   let app: INestApplication;
@@ -59,7 +58,7 @@ describe('Admin coupons (e2e)', () => {
   }
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleRef = await createE2eTestingModule().compile();
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('v1');
     app.useGlobalPipes(

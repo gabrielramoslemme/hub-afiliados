@@ -1,12 +1,11 @@
 import { type INestApplication, ValidationPipe } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { MailTemplateEnum, RegistrationErrorCodeEnum } from '@porto/contracts';
-import { AppModule } from '../src/app.module';
 import { MAILER } from '../src/domain/notifications/mailer';
 import { HttpExceptionFilter } from '../src/infra/shared/filters/http-exception.filter';
 import { mailerMock } from '../src/testing/mocks/services/mailer.mock';
+import { createE2eTestingModule } from './create-e2e-testing-module';
 
 describe('Affiliate registration (e2e)', () => {
   let app: INestApplication;
@@ -25,7 +24,7 @@ describe('Affiliate registration (e2e)', () => {
 
   beforeAll(async () => {
     mailer = mailerMock();
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+    const moduleRef = await createE2eTestingModule()
       .overrideProvider(MAILER)
       .useValue(mailer)
       .compile();

@@ -1,4 +1,3 @@
-import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 import {
   AffiliateStatusEnum,
@@ -8,7 +7,6 @@ import {
   UserRoleEnum,
   UserTypeEnum,
 } from '@porto/contracts';
-import { AppModule } from '../../src/app.module';
 import {
   AFFILIATE_REPOSITORY,
   AffiliateRepository,
@@ -27,6 +25,7 @@ import {
 } from '../../src/domain/coupons/coupon-history.repository';
 import { CouponCodeUnavailableError } from '../../src/domain/coupons/coupons.errors';
 import { USER_REPOSITORY, UserRepository } from '../../src/domain/users/user.repository';
+import { createE2eTestingModule } from '../create-e2e-testing-module';
 
 describe('AffiliateRepository (integration)', () => {
   let dataSource: DataSource;
@@ -38,7 +37,7 @@ describe('AffiliateRepository (integration)', () => {
   let analystId: number;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleRef = await createE2eTestingModule().compile();
     const app = moduleRef.createNestApplication();
     await app.init();
     dataSource = app.get(DataSource);

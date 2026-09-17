@@ -1,5 +1,4 @@
 import { type INestApplication, ValidationPipe } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
@@ -11,7 +10,6 @@ import {
   PixKeyTypeEnum,
   SocialNetworkEnum,
 } from '@porto/contracts';
-import { AppModule } from '../src/app.module';
 import {
   AFFILIATE_REPOSITORY,
   AffiliateRepository,
@@ -24,7 +22,9 @@ import {
 import { CouponProviderUnavailableError } from '../src/domain/coupons/coupons.errors';
 import { MAILER } from '../src/domain/notifications/mailer';
 import { HttpExceptionFilter } from '../src/infra/shared/filters/http-exception.filter';
+import { FakeCouponGateway } from '../src/testing/fakes/fake-coupon.gateway';
 import { mailerMock } from '../src/testing/mocks/services/mailer.mock';
+import { createE2eTestingModule } from './create-e2e-testing-module';
 
 describe('Admin affiliates (e2e)', () => {
   let app: INestApplication;
@@ -85,7 +85,7 @@ describe('Admin affiliates (e2e)', () => {
 
   beforeAll(async () => {
     mailer = mailerMock();
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+    const moduleRef = await createE2eTestingModule()
       .overrideProvider(MAILER)
       .useValue(mailer)
       .compile();
@@ -116,6 +116,14 @@ describe('Admin affiliates (e2e)', () => {
   afterAll(async () => {
     await dataSource.destroy();
     await app.close();
+  });
+
+  /*
+    Sem a troca, as aprovações abaixo registrariam cupom de verdade na Porto com
+    as credenciais do `.env` — e o registro nunca esquece um código.
+  */
+  it('issues coupons through the fake gateway, never through Porto', () => {
+    expect(app.get<CouponGateway>(COUPON_GATEWAY)).toBeInstanceOf(FakeCouponGateway);
   });
 
   describe('GET /v1/admin/affiliates', () => {

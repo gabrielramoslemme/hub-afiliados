@@ -65,10 +65,6 @@ export class EnvironmentVariableService {
     return this.required('MAIL_FROM_NAME');
   }
 
-  /** `fake` emite o cupom em memória; `porto` fala com o gateway Sensedia. */
-  get couponProvider(): 'porto' | 'fake' {
-    return (this.configService.get<string>('COUPON_PROVIDER') ?? 'fake') as 'porto' | 'fake';
-  }
   get portoOauthUrl(): string {
     return this.required('PORTO_OAUTH_URL');
   }

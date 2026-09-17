@@ -10,9 +10,9 @@ import { CouponCodeUnavailableError, CouponNotFoundError } from '@Domain/coupons
 const TAKEN = 'Este código já está em uso.';
 
 /**
- * O que atende `COUPON_PROVIDER=fake`: registra em memória, sem sair da máquina.
- * Mesmo papel do `LoggerMailProvider` — desenvolvimento e e2e exercitam o fluxo
- * inteiro da aprovação sem credencial da Porto e sem chamada de rede.
+ * O emissor do e2e: registra em memória, sem sair da máquina. Entra pelo
+ * `createE2eTestingModule` no lugar do `PortoCouponGateway`, para a suíte
+ * exercitar o fluxo inteiro da aprovação sem credencial e sem chamada de rede.
  *
  * Guarda só os códigos, porque é só o que um registro de verdade recusaria em
  * dobro: percentual e situação são da nossa tabela. O conjunto morre com o
