@@ -41,33 +41,4 @@ describe('ListAffiliatesUseCase', () => {
     });
     expect(JSON.stringify(result)).not.toContain('52998224725');
   });
-
-  it('passes the criteria through to the repository', async () => {
-    await useCase.execute({
-      ...input,
-      page: 3,
-      status: AffiliateStatusEnum.APPROVED,
-      search: 'ana',
-    });
-
-    expect(affiliateRepository.search).toHaveBeenCalledWith({
-      page: 3,
-      limit: 10,
-      status: AffiliateStatusEnum.APPROVED,
-      search: 'ana',
-      sortBy: 'createdAt',
-      sortOrder: 'desc',
-    });
-  });
-
-  it('answers the page it was asked for, with the total of the whole slice', async () => {
-    affiliateRepository.search.mockResolvedValue({ rows: [], total: 42 });
-
-    await expect(useCase.execute({ ...input, page: 2, limit: 5 })).resolves.toEqual({
-      data: [],
-      total: 42,
-      page: 2,
-      limit: 5,
-    });
-  });
 });

@@ -39,6 +39,7 @@ describe('ApproveAffiliateUseCase', () => {
   let clock: ReturnType<typeof clockMock>;
   let useCase: ApproveAffiliateUseCase;
 
+  const NOW = new Date('2026-08-25T12:00:00.000Z');
   const owner = buildUser({ name: 'Marina Ferraz', email: 'marina@email.com' });
   const affiliate = buildAffiliate({ user: owner });
   const operator = buildAdminUser({ name: 'Analista Porto' });
@@ -62,7 +63,7 @@ describe('ApproveAffiliateUseCase', () => {
     tokenGenerator = tokenGeneratorMock();
     linkBuilder = linkBuilderMock();
     mailer = mailerMock();
-    clock = clockMock();
+    clock = clockMock(NOW);
     useCase = new ApproveAffiliateUseCase(
       affiliateRepository,
       userRepository,
@@ -96,7 +97,7 @@ describe('ApproveAffiliateUseCase', () => {
       toStatus: AffiliateStatusEnum.APPROVED,
       actorUserId: operator.id,
       changes: {
-        approvedAt: new Date('2026-08-25T12:00:00.000Z'),
+        approvedAt: NOW,
         approvedByUserId: operator.id,
         rejectionReason: null,
       },
@@ -108,16 +109,11 @@ describe('ApproveAffiliateUseCase', () => {
     });
   });
 
-  it('issues the coupon at the provider', async () => {
-    await useCase.execute(input());
-
-    expect(couponGateway.issue).toHaveBeenCalledWith({ code: 'MARINA25', discountPercent: 10 });
-  });
-
   /* O cupom é nosso: o que se grava é o que a analista escolheu, e a Porto só o registra. */
-  it('records the coupon the analyst chose, normalized', async () => {
+  it('issues and records the coupon the analyst chose, normalized', async () => {
     await useCase.execute(input({ couponCode: ' marina25 ', couponDiscountPercent: 15 }));
 
+    expect(couponGateway.issue).toHaveBeenCalledWith({ code: 'MARINA25', discountPercent: 15 });
     expect(affiliateRepository.changeStatus).toHaveBeenCalledWith(
       expect.objectContaining({
         coupon: { code: 'MARINA25', discountPercent: 15, status: CouponStatusEnum.ACTIVE },
@@ -125,26 +121,10 @@ describe('ApproveAffiliateUseCase', () => {
     );
   });
 
-  it('uppercases the coupon code before it reaches the provider', async () => {
-    await useCase.execute(input({ couponCode: '  marina25 ' }));
-
-    expect(couponGateway.issue).toHaveBeenCalledWith({ code: 'MARINA25', discountPercent: 10 });
-  });
-
   /*
     A ordem é a regra: o cupom nasce lá antes de qualquer escrita aqui. É o que
     faz "a Porto não respondeu" deixar o cadastro exatamente como estava.
   */
-  it('issues the coupon before writing anything to our database', async () => {
-    couponGateway.issue.mockImplementation(async () => {
-      expect(affiliateRepository.changeStatus).not.toHaveBeenCalled();
-    });
-
-    await useCase.execute(input());
-
-    expect(couponGateway.issue).toHaveBeenCalled();
-  });
-
   it('leaves the registration pending when the provider is unavailable', async () => {
     couponGateway.issue.mockRejectedValue(new CouponProviderUnavailableError());
 

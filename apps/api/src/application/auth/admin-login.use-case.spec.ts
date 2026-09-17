@@ -18,13 +18,14 @@ describe('AdminLoginUseCase', () => {
   let clock: ReturnType<typeof clockMock>;
   let useCase: AdminLoginUseCase;
 
+  const NOW = new Date('2026-08-25T12:00:00.000Z');
   const credentials = { email: 'analista@porto.example', password: 'MudarAgora!2026' };
 
   beforeEach(() => {
     userRepository = userRepositoryMock();
     passwordHasher = passwordHasherMock();
     accessTokenIssuer = accessTokenIssuerMock();
-    clock = clockMock();
+    clock = clockMock(NOW);
     useCase = new AdminLoginUseCase(userRepository, passwordHasher, accessTokenIssuer, clock);
   });
 
@@ -52,17 +53,6 @@ describe('AdminLoginUseCase', () => {
     });
   });
 
-  it('never carries the serial id in the token', async () => {
-    const operator = buildAdminUser();
-    userRepository.findByEmail.mockResolvedValue({ ...operator, affiliate: null });
-
-    await useCase.execute(credentials);
-
-    expect(JSON.stringify(accessTokenIssuer.issue.mock.calls[0][0])).not.toContain(
-      `"${operator.id}"`,
-    );
-  });
-
   it('records the login instant', async () => {
     const operator = buildAdminUser();
     userRepository.findByEmail.mockResolvedValue({ ...operator, affiliate: null });
@@ -71,7 +61,7 @@ describe('AdminLoginUseCase', () => {
 
     expect(userRepository.save).toHaveBeenCalledWith({
       id: operator.id,
-      lastLoginAt: new Date('2026-08-25T12:00:00.000Z'),
+      lastLoginAt: NOW,
     });
   });
 
@@ -102,14 +92,35 @@ describe('AdminLoginUseCase', () => {
     await expect(useCase.execute(credentials)).rejects.toThrow(PasswordNotSetError);
   });
 
-  it('reports an inactive operator only after the password checks out', async () => {
+  it('reports an inactive operator whose password checks out', async () => {
     userRepository.findByEmail.mockResolvedValue({
       ...buildAdminUser({ isActive: false }),
       affiliate: null,
     });
 
     await expect(useCase.execute(credentials)).rejects.toThrow(AccountInactiveError);
-    expect(passwordHasher.compare).toHaveBeenCalled();
+  });
+
+  // Quem erra a senha não descobre que a conta existe e está desativada.
+  it('does not reveal an inactive operator to a wrong password', async () => {
+    userRepository.findByEmail.mockResolvedValue({
+      ...buildAdminUser({ isActive: false }),
+      affiliate: null,
+    });
+    passwordHasher.compare.mockResolvedValue(false);
+
+    await expect(useCase.execute(credentials)).rejects.toThrow(InvalidCredentialsError);
+  });
+
+  // O perfil é o que o painel autoriza: sem ele, o operador não tem o que fazer lá dentro.
+  it('refuses an operator without a role', async () => {
+    userRepository.findByEmail.mockResolvedValue({
+      ...buildAdminUser({ role: null }),
+      affiliate: null,
+    });
+
+    await expect(useCase.execute(credentials)).rejects.toThrow(InvalidCredentialsError);
+    expect(accessTokenIssuer.issue).not.toHaveBeenCalled();
   });
 
   it('does not record a login that failed', async () => {

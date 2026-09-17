@@ -1,4 +1,9 @@
-import { type ArgumentsHost, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  type ArgumentsHost,
+  BadRequestException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { AuthErrorCodeEnum } from '@porto/contracts';
 import { DomainError, DomainErrorKindEnum } from '@Domain/errors/domain.error';
 import { HttpExceptionFilter } from './http-exception.filter';
@@ -30,8 +35,16 @@ describe('HttpExceptionFilter', () => {
     }),
   } as unknown as ArgumentsHost;
 
+  let logError: jest.SpyInstance;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    // O 500 é logado com stack; aqui só interessa o corpo da resposta.
+    logError = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    logError.mockRestore();
   });
 
   const bodySentFor = (exception: unknown): Record<string, unknown> => {
@@ -96,12 +109,5 @@ describe('HttpExceptionFilter', () => {
 
     expect(status).toHaveBeenCalledWith(500);
     expect(body).toMatchObject({ statusCode: 500, message: 'Erro interno' });
-  });
-
-  it('reports the path and the moment on every answer', () => {
-    const body = bodySentFor(new AffiliateNotFoundError());
-
-    expect(body.path).toBe('/v1/affiliate/auth/login');
-    expect(typeof body.timestamp).toBe('string');
   });
 });

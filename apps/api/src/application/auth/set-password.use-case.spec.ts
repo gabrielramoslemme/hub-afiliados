@@ -16,6 +16,7 @@ describe('SetPasswordUseCase', () => {
   let clock: ReturnType<typeof clockMock>;
   let useCase: SetPasswordUseCase;
 
+  const NOW = new Date('2026-08-25T12:00:00.000Z');
   const user = buildUser({ password: null });
   const input = { token: 'plain-token', password: 'SenhaNova!2026' };
 
@@ -24,7 +25,7 @@ describe('SetPasswordUseCase', () => {
     passwordResetTokenRepository = passwordResetTokenRepositoryMock();
     passwordHasher = passwordHasherMock();
     tokenGenerator = tokenGeneratorMock();
-    clock = clockMock();
+    clock = clockMock(NOW);
     useCase = new SetPasswordUseCase(
       userRepository,
       passwordResetTokenRepository,
@@ -62,7 +63,7 @@ describe('SetPasswordUseCase', () => {
     expect(userRepository.save).toHaveBeenCalledWith({
       id: user.id,
       password: '$2b$10$hashed',
-      passwordSetAt: new Date('2026-08-25T12:00:00.000Z'),
+      passwordSetAt: NOW,
       shouldChangePassword: false,
     });
   });

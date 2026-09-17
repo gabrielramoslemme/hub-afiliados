@@ -16,6 +16,7 @@ describe('ResetPasswordUseCase', () => {
   let tokenGenerator: ReturnType<typeof tokenGeneratorMock>;
   let useCase: ResetPasswordUseCase;
 
+  const NOW = new Date('2026-08-25T12:00:00.000Z');
   const affiliate = buildUser({ password: '$2b$10$antiga' });
   const input = {
     token: 'plain-token',
@@ -46,7 +47,7 @@ describe('ResetPasswordUseCase', () => {
       passwordResetTokenRepository,
       passwordHasher,
       tokenGenerator,
-      clockMock(),
+      clockMock(NOW),
     );
 
     passwordResetTokenRepository.findUsable.mockResolvedValue(usableToken(affiliate));
@@ -69,7 +70,7 @@ describe('ResetPasswordUseCase', () => {
     expect(userRepository.save).toHaveBeenCalledWith({
       id: affiliate.id,
       password: '$2b$10$hashed',
-      passwordSetAt: new Date('2026-08-25T12:00:00.000Z'),
+      passwordSetAt: NOW,
       shouldChangePassword: false,
     });
   });

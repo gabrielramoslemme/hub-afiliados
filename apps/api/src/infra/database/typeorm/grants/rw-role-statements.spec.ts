@@ -1,33 +1,20 @@
 import { rwGrantStatements } from './rw-role-statements';
 
 describe('rwGrantStatements', () => {
-  it('grants connect, schema usage and DML over the application schema', () => {
-    const statements = rwGrantStatements('hub_rw', 'hub_afiliados').join('\n');
-
-    expect(statements).toContain('GRANT CONNECT ON DATABASE "hub_afiliados" TO "hub_rw"');
-    expect(statements).toContain('GRANT USAGE ON SCHEMA "public" TO "hub_rw"');
-    expect(statements).toContain(
+  /*
+    A lista inteira, e não `toContain`: o que protege aqui é o que o papel NÃO
+    ganha. Uma instrução a mais — um `GRANT ALL ON SCHEMA`, que inclui CREATE —
+    passaria despercebida numa asserção que só procura as esperadas.
+  */
+  it('grants row read and write and nothing else', () => {
+    expect(rwGrantStatements('hub_rw', 'hub_afiliados')).toEqual([
+      'GRANT CONNECT ON DATABASE "hub_afiliados" TO "hub_rw"',
+      'GRANT USAGE ON SCHEMA "public" TO "hub_rw"',
       'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "public" TO "hub_rw"',
-    );
-    expect(statements).toContain(
       'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA "public" TO "hub_rw"',
-    );
-  });
-
-  it('covers tables created by later migrations through default privileges', () => {
-    const statements = rwGrantStatements('hub_rw', 'hub_afiliados').join('\n');
-
-    expect(statements).toContain(
       'ALTER DEFAULT PRIVILEGES IN SCHEMA "public" GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "hub_rw"',
-    );
-  });
-
-  it('never grants DDL', () => {
-    const statements = rwGrantStatements('hub_rw', 'hub_afiliados').join('\n');
-
-    expect(statements).not.toMatch(/\bCREATE\b/);
-    expect(statements).not.toMatch(/\bALTER TABLE\b/);
-    expect(statements).not.toMatch(/\bDROP\b/);
+      'ALTER DEFAULT PRIVILEGES IN SCHEMA "public" GRANT USAGE, SELECT ON SEQUENCES TO "hub_rw"',
+    ]);
   });
 
   // Os identificadores são constantes do repositório, não entrada de usuário -

@@ -22,6 +22,7 @@ describe('AffiliateLoginUseCase', () => {
   let clock: ReturnType<typeof clockMock>;
   let useCase: AffiliateLoginUseCase;
 
+  const NOW = new Date('2026-08-25T12:00:00.000Z');
   const credentials = { email: 'marina@email.com', password: 'SenhaNova!2026' };
 
   function signedUp(status: AffiliateStatusEnum) {
@@ -46,7 +47,7 @@ describe('AffiliateLoginUseCase', () => {
     userRepository = userRepositoryMock();
     passwordHasher = passwordHasherMock();
     accessTokenIssuer = accessTokenIssuerMock();
-    clock = clockMock();
+    clock = clockMock(NOW);
     useCase = new AffiliateLoginUseCase(userRepository, passwordHasher, accessTokenIssuer, clock);
   });
 
@@ -93,8 +94,13 @@ describe('AffiliateLoginUseCase', () => {
     await expect(useCase.execute(credentials)).rejects.toThrow(AccountInactiveError);
   });
 
-  it('reveals the status only after the password checks out', async () => {
-    userRepository.findByEmail.mockResolvedValue(signedUp(AffiliateStatusEnum.REJECTED));
+  // Situação do cadastro e conta desativada só aparecem para quem acertou a
+  // senha: antes disso, a resposta contaria que aquele e-mail tem conta.
+  it.each([
+    ['a rejected registration', signedUp(AffiliateStatusEnum.REJECTED)],
+    ['a deactivated account', { ...signedUp(AffiliateStatusEnum.APPROVED), isActive: false }],
+  ])('does not reveal %s to a wrong password', async (_label, account) => {
+    userRepository.findByEmail.mockResolvedValue(account);
     passwordHasher.compare.mockResolvedValue(false);
 
     await expect(useCase.execute(credentials)).rejects.toThrow(InvalidCredentialsError);
@@ -123,9 +129,13 @@ describe('AffiliateLoginUseCase', () => {
 
     await useCase.execute(credentials);
 
-    expect(userRepository.save).toHaveBeenCalledWith({
-      id: account.id,
-      lastLoginAt: new Date('2026-08-25T12:00:00.000Z'),
-    });
+    expect(userRepository.save).toHaveBeenCalledWith({ id: account.id, lastLoginAt: NOW });
+  });
+
+  it('does not record the login of a registration it holds back', async () => {
+    userRepository.findByEmail.mockResolvedValue(signedUp(AffiliateStatusEnum.PENDING_APPROVAL));
+
+    await expect(useCase.execute(credentials)).rejects.toThrow(RegistrationUnderReviewError);
+    expect(userRepository.save).not.toHaveBeenCalled();
   });
 });

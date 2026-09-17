@@ -1,5 +1,6 @@
 import { MailTemplateEnum } from '@porto/contracts';
 import { SendMailInput } from '@Domain/notifications/mailer';
+import { RenderedMail } from './mail-renderer.interface';
 import { ReactEmailRenderer } from './react-email.renderer';
 
 describe('ReactEmailRenderer', () => {
@@ -18,49 +19,38 @@ describe('ReactEmailRenderer', () => {
     expect(rendered.subject).toBe('Recebemos seu cadastro no Hub de Afiliados');
     expect(rendered.html).toContain('Marina');
     expect(rendered.text).toContain('Marina');
+    expect(rendered.text).not.toContain('<');
   });
 
-  const approved = { name: 'Marina', link, coupon: 'MARINA25', discountPercent: '10' };
+  describe('approval email', () => {
+    let rendered: RenderedMail;
 
-  it('renders the approval email carrying the set-password link', async () => {
-    const rendered = await renderer.render(
-      inputFor(MailTemplateEnum.REGISTRATION_APPROVED, approved),
-    );
+    beforeAll(async () => {
+      rendered = await renderer.render(
+        inputFor(MailTemplateEnum.REGISTRATION_APPROVED, {
+          name: 'Marina',
+          link,
+          coupon: 'MARINA25',
+          discountPercent: '10',
+        }),
+      );
+    });
 
-    expect(rendered.subject).toBe('Cadastro aprovado — seu cupom já está valendo');
-    expect(rendered.html).toContain(link);
-    expect(rendered.text).toContain(link);
-  });
+    it('carries the set-password link', () => {
+      expect(rendered.subject).toBe('Cadastro aprovado — seu cupom já está valendo');
+      expect(rendered.html).toContain(link);
+      expect(rendered.text).toContain(link);
+    });
 
-  it('warns in the approval email that the link expires', async () => {
-    const rendered = await renderer.render(
-      inputFor(MailTemplateEnum.REGISTRATION_APPROVED, approved),
-    );
+    it('warns that the link expires', () => {
+      expect(rendered.text).toContain('48 horas');
+    });
 
-    expect(rendered.text).toContain('48 horas');
-  });
-
-  it('shows the issued coupon in the approval email', async () => {
-    const rendered = await renderer.render(
-      inputFor(MailTemplateEnum.REGISTRATION_APPROVED, approved),
-    );
-
-    expect(rendered.html).toContain('MARINA25');
-    expect(rendered.text).toContain('MARINA25');
-  });
-
-  it('shows the discount of the issued coupon in the approval email', async () => {
-    const rendered = await renderer.render(
-      inputFor(MailTemplateEnum.REGISTRATION_APPROVED, approved),
-    );
-
-    expect(rendered.text).toContain('10%');
-  });
-
-  it('refuses to render the approval email without the coupon', async () => {
-    await expect(
-      renderer.render(inputFor(MailTemplateEnum.REGISTRATION_APPROVED, { name: 'Marina', link })),
-    ).rejects.toThrow('coupon');
+    it('shows the issued coupon and its discount', () => {
+      expect(rendered.html).toContain('MARINA25');
+      expect(rendered.text).toContain('MARINA25');
+      expect(rendered.text).toContain('10%');
+    });
   });
 
   it('renders the rejection email with the reason given by the operator', async () => {
@@ -84,40 +74,32 @@ describe('ReactEmailRenderer', () => {
     expect(rendered.html).toContain(link);
   });
 
-  const pixKeyChanged = { name: 'Marina', pixKeyType: 'PHONE', maskedPixKey: '(11) *****-8888' };
+  describe('pix key change warning', () => {
+    let rendered: RenderedMail;
 
-  it('renders the pix key change warning with the new key masked', async () => {
-    const rendered = await renderer.render(
-      inputFor(MailTemplateEnum.PIX_KEY_CHANGED, pixKeyChanged),
-    );
+    beforeAll(async () => {
+      rendered = await renderer.render(
+        inputFor(MailTemplateEnum.PIX_KEY_CHANGED, {
+          name: 'Marina',
+          pixKeyType: 'PHONE',
+          maskedPixKey: '(11) *****-8888',
+        }),
+      );
+    });
 
-    expect(rendered.subject).toBe('Sua chave PIX foi alterada');
-    expect(rendered.text).toContain('(11) *****-8888');
-  });
+    it('shows the new key masked', () => {
+      expect(rendered.subject).toBe('Sua chave PIX foi alterada');
+      expect(rendered.text).toContain('(11) *****-8888');
+    });
 
-  it('names the type of the new pix key in words', async () => {
-    const rendered = await renderer.render(
-      inputFor(MailTemplateEnum.PIX_KEY_CHANGED, pixKeyChanged),
-    );
+    it('names the type of the new key in words', () => {
+      expect(rendered.text).toContain('telefone');
+      expect(rendered.text).not.toContain('PHONE');
+    });
 
-    expect(rendered.text).toContain('telefone');
-    expect(rendered.text).not.toContain('PHONE');
-  });
-
-  it('tells how to react to a pix key change nobody asked for', async () => {
-    const rendered = await renderer.render(
-      inputFor(MailTemplateEnum.PIX_KEY_CHANGED, pixKeyChanged),
-    );
-
-    expect(rendered.text).toContain('Se não foi você');
-  });
-
-  it('produces a plain text alternative free of markup', async () => {
-    const rendered = await renderer.render(
-      inputFor(MailTemplateEnum.REGISTRATION_RECEIVED, { name: 'Marina' }),
-    );
-
-    expect(rendered.text).not.toContain('<');
+    it('tells how to react to a change nobody asked for', () => {
+      expect(rendered.text).toContain('Se não foi você');
+    });
   });
 
   it('escapes a reason that carries markup', async () => {

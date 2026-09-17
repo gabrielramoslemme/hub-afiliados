@@ -62,6 +62,19 @@ describe('RequestPasswordResetUseCase', () => {
     );
   });
 
+  // O link leva de volta à tela de quem pediu: o operador não redefine a senha no portal.
+  it.each([
+    [AuthAudienceEnum.AFFILIATE, approvedAffiliate],
+    [AuthAudienceEnum.ADMIN, operator],
+  ])('points the link at the %s channel that asked', async (audience, account) => {
+    const user = account();
+    userRepository.findByEmail.mockResolvedValue(user);
+
+    await useCase.execute({ email: user.email, audience });
+
+    expect(linkBuilder.resetPasswordLink).toHaveBeenCalledWith('plain-token', audience);
+  });
+
   describe('affiliate channel', () => {
     const input = { email: 'marina@email.com', audience: AuthAudienceEnum.AFFILIATE };
 
@@ -108,17 +121,6 @@ describe('RequestPasswordResetUseCase', () => {
       );
     });
 
-    it('points the link at the channel that asked', async () => {
-      userRepository.findByEmail.mockResolvedValue(approvedAffiliate());
-
-      await useCase.execute(input);
-
-      expect(linkBuilder.resetPasswordLink).toHaveBeenCalledWith(
-        'plain-token',
-        AuthAudienceEnum.AFFILIATE,
-      );
-    });
-
     it('serves an approved affiliate who never set a password', async () => {
       userRepository.findByEmail.mockResolvedValue(approvedAffiliate({ password: null }));
 
@@ -135,17 +137,22 @@ describe('RequestPasswordResetUseCase', () => {
       expect(mailer.send).not.toHaveBeenCalled();
     });
 
-    it('stays silent while the registration is under review', async () => {
-      const user = buildUser({ email: 'marina@email.com' });
-      userRepository.findByEmail.mockResolvedValue({
-        ...user,
-        affiliate: buildAffiliate({ status: AffiliateStatusEnum.PENDING_APPROVAL, user }),
-      });
+    // Em análise ou reprovado não entra nem com senha: o link não levaria a lugar nenhum.
+    it.each([AffiliateStatusEnum.PENDING_APPROVAL, AffiliateStatusEnum.REJECTED])(
+      'stays silent for a registration %s',
+      async (status) => {
+        const user = buildUser({ email: 'marina@email.com' });
+        userRepository.findByEmail.mockResolvedValue({
+          ...user,
+          affiliate: buildAffiliate({ status, user }),
+        });
 
-      await useCase.execute(input);
+        await useCase.execute(input);
 
-      expect(mailer.send).not.toHaveBeenCalled();
-    });
+        expect(passwordResetTokenRepository.create).not.toHaveBeenCalled();
+        expect(mailer.send).not.toHaveBeenCalled();
+      },
+    );
 
     it('stays silent for an inactive account', async () => {
       userRepository.findByEmail.mockResolvedValue(approvedAffiliate({ isActive: false }));
@@ -218,26 +225,6 @@ describe('RequestPasswordResetUseCase', () => {
 
   describe('admin channel', () => {
     const input = { email: 'ana@porto.example', audience: AuthAudienceEnum.ADMIN };
-
-    it('mails the recovery link to an operator', async () => {
-      userRepository.findByEmail.mockResolvedValue(operator());
-      linkBuilder.resetPasswordLink.mockReturnValue(
-        'https://afiliados.porto.example/admin/redefinir-senha?token=plain-token',
-      );
-
-      await useCase.execute(input);
-
-      expect(tokenGenerator.generate).toHaveBeenCalled();
-      expect(mailer.send).toHaveBeenCalledWith({
-        template: MailTemplateEnum.PASSWORD_RECOVERY,
-        to: 'ana@porto.example',
-        toName: 'Ana Souza',
-        variables: {
-          name: 'Ana',
-          link: 'https://afiliados.porto.example/admin/redefinir-senha?token=plain-token',
-        },
-      });
-    });
 
     it('stays silent when an affiliate asks on the panel channel', async () => {
       userRepository.findByEmail.mockResolvedValue(approvedAffiliate());

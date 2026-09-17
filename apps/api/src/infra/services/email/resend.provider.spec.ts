@@ -28,23 +28,17 @@ describe('ResendProvider', () => {
     jest.mocked(Resend).mockImplementation(() => ({ emails: { send } }) as unknown as Resend);
   });
 
-  it('sends the rendered content to the recipient', async () => {
+  // Destinatário como endereço puro: a conta sem domínio verificado recusa `"Nome" <e-mail>`.
+  it('sends the rendered content to the bare email of the recipient', async () => {
     await new ResendProvider(configWith('Hub de Afiliados')).send(input);
 
-    expect(send).toHaveBeenCalledWith(
-      expect.objectContaining({
-        from: '"Hub de Afiliados" <nao-responda@afiliados.porto.example>',
-        subject: input.subject,
-        html: input.html,
-        text: input.text,
-      }),
-    );
-  });
-
-  it('addresses the recipient by the bare email, without the display name', async () => {
-    await new ResendProvider(configWith('Hub de Afiliados')).send(input);
-
-    expect(send).toHaveBeenCalledWith(expect.objectContaining({ to: 'marina@example.com' }));
+    expect(send).toHaveBeenCalledWith({
+      from: '"Hub de Afiliados" <nao-responda@afiliados.porto.example>',
+      to: 'marina@example.com',
+      subject: input.subject,
+      html: input.html,
+      text: input.text,
+    });
   });
 
   it('drops the quotes of a sender name that would break the header', async () => {

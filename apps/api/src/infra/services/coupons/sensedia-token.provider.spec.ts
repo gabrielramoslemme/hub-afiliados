@@ -32,9 +32,9 @@ describe('SensediaTokenProvider', () => {
   }
 
   beforeEach(() => {
-    clock = clockMock();
+    clock = clockMock(new Date('2026-08-25T12:00:00.000Z'));
     fetchMock = jest.fn().mockResolvedValue(tokenResponse('first-token'));
-    global.fetch = fetchMock as unknown as typeof fetch;
+    jest.spyOn(globalThis, 'fetch').mockImplementation(fetchMock);
     // O provider loga a recusa de propósito; aqui a saída do teste é que fica limpa.
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
   });

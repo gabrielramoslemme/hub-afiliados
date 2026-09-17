@@ -38,16 +38,13 @@ describe('AuthenticatedGuard', () => {
     name: 'Analista Porto',
   };
 
-  it('rejects a request without an authorization header', async () => {
+  it.each([
+    ['without an authorization header', undefined],
+    ['with a token the verifier does not accept', 'Bearer nope'],
+  ])('rejects a request %s', async (_label, authorization) => {
     const guard = new AuthenticatedGuard(new Reflector(), accessTokenVerifierMock());
 
-    await expect(guard.canActivate(contextWith().context)).rejects.toThrow(UnauthorizedException);
-  });
-
-  it('rejects a token the verifier does not accept', async () => {
-    const guard = new AuthenticatedGuard(new Reflector(), accessTokenVerifierMock());
-
-    await expect(guard.canActivate(contextWith('Bearer nope').context)).rejects.toThrow(
+    await expect(guard.canActivate(contextWith(authorization).context)).rejects.toThrow(
       UnauthorizedException,
     );
   });

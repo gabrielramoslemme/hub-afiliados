@@ -11,6 +11,20 @@ Teste unitário roda **sem banco e sem `AppModule`**. Se o seu teste precisa de 
 
 O repositório é TDD: **o teste que falha vem antes da implementação, sempre.** Escreva o spec, rode, veja falhar pelo motivo certo (`Cannot find module`, `not a function`), só então implemente.
 
+## O que merece teste
+
+O objetivo é proteger regra, não somar cobertura. Antes de escrever, pergunte: **se eu apagar ou inverter a linha X, algum teste falha?** Se nenhum falharia, falta teste; se o teste não falharia por mudança nenhuma que importe, ele sobra.
+
+| Merece | Não merece |
+|---|---|
+| Cada ramo de regra do use case: guarda de status, erro lançado, ordem que é regra (Porto antes do banco), o que **não** acontece quando falha | Mapeamento campo a campo que o e2e já lê pela rota |
+| Util puro do domínio com borda de verdade (dígito de CPF, máscara, limite de tamanho) | Refazer a biblioteca no teste (`createHash` para conferir `createHash`) — use um vetor conhecido |
+| Adapter com semântica própria: 401 que renova token, SDK que resolve com erro, cache com margem | Afirmar o eco do próprio mock (`mockReturnValue(x)` e depois `expect(...).toBe(x)`) |
+| Lista de segurança (grants, rotas públicas): igualdade **exata**, não `toContain` | Testar o dublê de teste além do que o e2e confia dele |
+| Anti-enumeração: senha errada numa conta bloqueada responde o mesmo erro da conta que não existe | `toHaveBeenCalled()` onde o comportamento observável responde a pergunta |
+
+Teste novo sobre código que já existe passa de primeira — então prove que ele protege: quebre a linha da regra, veja o teste falhar, desfaça.
+
 ## Onde o arquivo mora
 
 Ao lado do arquivo testado, com sufixo `.spec.ts`:
@@ -83,6 +97,9 @@ Precisou de um objeto novo em dois specs? Vira factory. Em um só? Fica local.
 - `describe` aninhado por função quando o arquivo exporta várias (ver `cpf.util.spec.ts`).
 - Repositório é **sempre** dublê do contrato. Se aparecer `Repository<T>` do TypeORM ou uma classe `*TypeormRepository` no seu spec, o desenho está errado — o use case depende da interface do domínio, injetada pelo token.
 - Um `expect` por comportamento. Teste que afirma cinco coisas esconde qual quebrou.
+- **Relógio com instante explícito:** `const NOW = new Date('…')` no spec e `clockMock(NOW)`. A asserção compara com `NOW`, nunca com a data padrão escondida dentro do mock.
+- Caso que só muda o dado vira `it.each` — as duas audiências, os dois status bloqueados — em vez de dois `it` copiados.
+- Estado global sai do jeito que entrou: `jest.spyOn(globalThis, 'fetch')` e `jest.spyOn(Logger.prototype, 'error')` com `mockRestore()`, nunca `global.fetch = …`.
 - Sem `any`: o lint roda no `test/` e no `src/`.
 
 ## Rodar
@@ -98,6 +115,8 @@ npm run test --workspace apps/api -- --watch
 | Erro | Correção |
 |---|---|
 | Teste escrito depois da implementação | Apague e recomece. Teste que passa de primeira não prova nada |
+| Teste que não falha quando a regra é removida | Refaça a asserção pelo comportamento, e confirme quebrando a linha |
+| `TypeError: A dynamic import callback was invoked without --experimental-vm-modules` | Rodou `npx jest` direto. Use o script (`npm run test`), que liga a flag para o React Email |
 | `Test.createTestingModule` para testar uma classe | Instancie direto com dublês no construtor |
 | Banco, `AppModule` ou `supertest` no `.spec.ts` | É e2e. Mova para `test/*.e2e-spec.ts` |
 | Literal de entidade copiado entre specs | Use ou crie uma factory em `src/testing/factories/` |

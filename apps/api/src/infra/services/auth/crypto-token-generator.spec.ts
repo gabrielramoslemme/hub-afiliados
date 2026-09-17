@@ -1,18 +1,23 @@
-import { createHash } from 'node:crypto';
 import { CryptoTokenGenerator } from './crypto-token-generator';
 
 describe('CryptoTokenGenerator', () => {
   const generator = new CryptoTokenGenerator();
 
-  it('hashes the token with sha-256', () => {
-    const { token, hash } = generator.generate();
-
-    expect(hash).toBe(createHash('sha256').update(token).digest('hex'));
+  // 32 bytes em hex: menos que isso e o link do e-mail vira adivinhável.
+  it('issues a 32-byte token', () => {
+    expect(generator.generate().token).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('never repeats a token', () => {
-    const tokens = new Set(Array.from({ length: 50 }, () => generator.generate().token));
+  // O hash gravado na emissão tem que ser o mesmo que a busca calcula a partir do link.
+  it('stores the hash that the lookup computes from the token', () => {
+    const { token, hash } = generator.generate();
 
-    expect(tokens.size).toBe(50);
+    expect(generator.hash(token)).toBe(hash);
+  });
+
+  it('hashes with sha-256', () => {
+    expect(generator.hash('abc')).toBe(
+      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+    );
   });
 });

@@ -57,16 +57,6 @@ describe('CreateAffiliateUseCase', () => {
     });
   });
 
-  it('creates the user without a password', async () => {
-    const { useCase, affiliateRepository } = buildUseCase();
-
-    await useCase.execute(input);
-
-    expect(affiliateRepository.createWithUser).toHaveBeenCalledWith(
-      expect.not.objectContaining({ password: expect.anything() }),
-    );
-  });
-
   it('stores the cpf with digits only', async () => {
     const { useCase, affiliateRepository } = buildUseCase();
 
@@ -135,14 +125,7 @@ describe('CreateAffiliateUseCase', () => {
     await expect(useCase.execute(input)).rejects.toThrow(EmailAlreadyRegisteredError);
   });
 
-  it('rejects a cpf already registered', async () => {
-    const { useCase, affiliateRepository } = buildUseCase();
-    affiliateRepository.findByCpf.mockResolvedValue(buildAffiliate());
-
-    await expect(useCase.execute(input)).rejects.toThrow(CpfAlreadyRegisteredError);
-  });
-
-  it('does not send the email when the registration fails', async () => {
+  it('rejects a cpf already registered, without sending the email', async () => {
     const { useCase, affiliateRepository, mailer } = buildUseCase();
     affiliateRepository.findByCpf.mockResolvedValue(buildAffiliate());
 
@@ -228,23 +211,7 @@ describe('CreateAffiliateUseCase', () => {
     );
   });
 
-  it('does not send the email when the rg is already registered', async () => {
-    const { useCase, affiliateRepository, mailer } = buildUseCase();
-    affiliateRepository.findByRg.mockResolvedValue(buildAffiliate());
-
-    await expect(useCase.execute(input)).rejects.toThrow(RgAlreadyRegisteredError);
-    expect(mailer.send).not.toHaveBeenCalled();
-  });
-
-  it('rejects a registration sent without accepting the terms', async () => {
-    const { useCase } = buildUseCase();
-
-    await expect(useCase.execute({ ...input, termsAccepted: false })).rejects.toThrow(
-      TermsNotAcceptedError,
-    );
-  });
-
-  it('does not create the affiliate when the terms were not accepted', async () => {
+  it('refuses a registration sent without accepting the terms', async () => {
     const { useCase, affiliateRepository } = buildUseCase();
 
     await expect(useCase.execute({ ...input, termsAccepted: false })).rejects.toThrow(

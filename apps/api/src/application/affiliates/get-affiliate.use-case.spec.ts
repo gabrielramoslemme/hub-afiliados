@@ -1,14 +1,6 @@
-import {
-  AffiliateStatusEnum,
-  CouponStatusEnum,
-  PixKeyTypeEnum,
-  SocialNetworkEnum,
-} from '@porto/contracts';
-import { AffiliateDetail } from '@Domain/affiliates/affiliate.entity';
+import { PixKeyTypeEnum } from '@porto/contracts';
 import { AffiliateNotFoundError } from '@Domain/affiliates/affiliates.errors';
 import { buildAffiliate } from '@Testing/factories/affiliate.factory';
-import { buildCoupon } from '@Testing/factories/coupon.factory';
-import { buildAdminUser, buildUser } from '@Testing/factories/user.factory';
 import { affiliateRepositoryMock } from '@Testing/mocks/repositories/affiliate.repository.mock';
 import { GetAffiliateUseCase } from './get-affiliate.use-case';
 
@@ -21,67 +13,20 @@ describe('GetAffiliateUseCase', () => {
     useCase = new GetAffiliateUseCase(affiliateRepository);
   });
 
-  it('answers the whole cpf and the pix key of the open registration', async () => {
-    const user = buildUser({ name: 'Marina Ferraz', email: 'marina@email.com' });
-    const affiliate: AffiliateDetail = {
-      ...buildAffiliate({
-        user,
-        cpf: '52998224725',
-        rg: '12345678X',
-        pixKeyType: PixKeyTypeEnum.CPF,
-        pixKey: '52998224725',
-        socialNetwork: SocialNetworkEnum.INSTAGRAM,
-        socialHandle: 'marina.ferraz',
-      }),
-      approvedBy: null,
-    };
-    affiliateRepository.findByPublicId.mockResolvedValue(affiliate);
-
-    await expect(useCase.execute(affiliate.publicId)).resolves.toEqual({
-      publicId: affiliate.publicId,
-      name: 'Marina Ferraz',
-      email: 'marina@email.com',
-      maskedCpf: '***.***.247-25',
+  // A listagem só mostra o CPF mascarado; quem abre o cadastro para decidir precisa dele inteiro.
+  it('answers the whole cpf and pix key to whoever opens the registration', async () => {
+    const affiliate = buildAffiliate({
       cpf: '52998224725',
-      rg: '12345678X',
-      socialNetwork: SocialNetworkEnum.INSTAGRAM,
-      socialHandle: 'marina.ferraz',
       pixKeyType: PixKeyTypeEnum.CPF,
       pixKey: '52998224725',
-      status: AffiliateStatusEnum.PENDING_APPROVAL,
-      approvedAt: null,
-      approvedByName: null,
-      rejectionReason: null,
-      coupon: null,
-      createdAt: new Date('2026-08-17T12:00:00Z'),
     });
-  });
+    affiliateRepository.findByPublicId.mockResolvedValue({ ...affiliate, approvedBy: null });
 
-  it('answers the coupon issued on the approval', async () => {
-    affiliateRepository.findByPublicId.mockResolvedValue({
-      ...buildAffiliate({
-        status: AffiliateStatusEnum.APPROVED,
-        coupon: buildCoupon({ code: 'MARINA25', discountPercent: 15 }),
-      }),
-      approvedBy: null,
+    await expect(useCase.execute(affiliate.publicId)).resolves.toMatchObject({
+      cpf: '52998224725',
+      maskedCpf: '***.***.247-25',
+      pixKey: '52998224725',
     });
-
-    await expect(useCase.execute('any-public-id')).resolves.toMatchObject({
-      coupon: { code: 'MARINA25', discountPercent: 15, status: CouponStatusEnum.ACTIVE },
-    });
-  });
-
-  it('names who decided', async () => {
-    const approvedAt = new Date('2026-08-20T09:00:00Z');
-    const approvedBy = buildAdminUser({ name: 'Analista Porto' });
-    affiliateRepository.findByPublicId.mockResolvedValue({
-      ...buildAffiliate({ status: AffiliateStatusEnum.APPROVED, approvedAt }),
-      approvedBy,
-    });
-
-    const result = await useCase.execute('any-public-id');
-
-    expect(result).toMatchObject({ approvedAt, approvedByName: 'Analista Porto' });
   });
 
   it('reports an affiliate that does not exist', async () => {

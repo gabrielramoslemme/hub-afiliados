@@ -27,7 +27,8 @@ describe('CheckCouponAvailabilityUseCase', () => {
     await expect(useCase.execute('  marina25 ')).resolves.toMatchObject({ code: 'MARINA25' });
   });
 
-  it('reports a code another affiliate already holds here', async () => {
+  /* Uma volta de rede a menos: o que já é nosso não precisa ser perguntado a eles. */
+  it('reports a code another affiliate already holds here, without asking the provider', async () => {
     couponRepository.findByCode.mockResolvedValue(buildCoupon({ code: 'MARINA25' }));
 
     await expect(useCase.execute('MARINA25')).resolves.toEqual({
@@ -35,14 +36,6 @@ describe('CheckCouponAvailabilityUseCase', () => {
       available: false,
       reason: 'Este código já está em uso por outro afiliado.',
     });
-  });
-
-  /* Uma volta de rede a menos: o que já é nosso não precisa ser perguntado a eles. */
-  it('does not ask the provider about a code that is taken here', async () => {
-    couponRepository.findByCode.mockResolvedValue(buildCoupon({ code: 'MARINA25' }));
-
-    await useCase.execute('MARINA25');
-
     expect(couponGateway.checkAvailability).not.toHaveBeenCalled();
   });
 

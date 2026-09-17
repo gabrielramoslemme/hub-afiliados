@@ -63,7 +63,7 @@ describe('PortoCouponGateway', () => {
 
   beforeEach(() => {
     fetchMock = jest.fn();
-    global.fetch = fetchMock as unknown as typeof fetch;
+    jest.spyOn(globalThis, 'fetch').mockImplementation(fetchMock);
     accessTokenProvider = {
       getAccessToken: jest.fn().mockResolvedValue('the-access-token'),
       invalidate: jest.fn(),

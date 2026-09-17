@@ -58,27 +58,18 @@ describe('ChangeAffiliateCouponUseCase', () => {
     );
   });
 
-  it('deactivates the coupon at the provider', async () => {
-    await useCase.execute(input({ status: CouponStatusEnum.INACTIVE }));
+  it('deactivates the coupon at the provider and answers with it as it ended up', async () => {
+    const result = await useCase.execute(input({ status: CouponStatusEnum.INACTIVE }));
 
     expect(couponGateway.change).toHaveBeenCalledWith({
       code: 'MARINA25',
       status: CouponStatusEnum.INACTIVE,
       discountPercent: undefined,
     });
-  });
-
-  it('answers with the coupon as it ended up', async () => {
-    await expect(useCase.execute(input({ status: CouponStatusEnum.INACTIVE }))).resolves.toEqual({
+    expect(result).toEqual({
       code: 'MARINA25',
       discountPercent: 10,
       status: CouponStatusEnum.INACTIVE,
-    });
-  });
-
-  it('changes the discount percent', async () => {
-    await expect(useCase.execute(input({ discountPercent: 15 }))).resolves.toMatchObject({
-      discountPercent: 15,
     });
   });
 

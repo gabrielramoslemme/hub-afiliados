@@ -20,16 +20,7 @@ describe('ListAffiliateStatusHistoryUseCase', () => {
     );
   });
 
-  it('resolves the public id before reading the trail', async () => {
-    const affiliate = buildAffiliate();
-    affiliateRepository.findByPublicId.mockResolvedValue({ ...affiliate, approvedBy: null });
-
-    await useCase.execute(affiliate.publicId);
-
-    expect(affiliateStatusHistoryRepository.listByAffiliateId).toHaveBeenCalledWith(affiliate.id);
-  });
-
-  it('names the actor of each transition', async () => {
+  it('reads the trail of the resolved affiliate and names the actor of each transition', async () => {
     const affiliate = buildAffiliate();
     affiliateRepository.findByPublicId.mockResolvedValue({ ...affiliate, approvedBy: null });
     affiliateStatusHistoryRepository.listByAffiliateId.mockResolvedValue([
@@ -71,6 +62,7 @@ describe('ListAffiliateStatusHistoryUseCase', () => {
         createdAt: new Date('2026-08-17T12:00:00Z'),
       },
     ]);
+    expect(affiliateStatusHistoryRepository.listByAffiliateId).toHaveBeenCalledWith(affiliate.id);
   });
 
   it('reports an affiliate that does not exist', async () => {
