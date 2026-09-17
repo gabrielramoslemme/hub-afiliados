@@ -105,10 +105,19 @@ export function ChangePixKeyDialog({ pixKeyType, maskedPixKey }: ChangePixKeyDia
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {/*
+        Só o ícone, mas com fundo da marca: é a única ação da lista de dados, e
+        um lápis neutro se confundiria com o texto ao lado. O nome acessível e o
+        `title` dizem o que ele faz, já que não há rótulo visível.
+      */}
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" aria-label="Alterar chave PIX">
+        <Button
+          variant="secondary"
+          size="icon"
+          aria-label="Alterar chave PIX"
+          title="Alterar chave PIX"
+        >
           <Pencil aria-hidden />
-          Alterar
         </Button>
       </DialogTrigger>
 
