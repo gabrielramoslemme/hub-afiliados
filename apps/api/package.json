@@ -18,7 +18,8 @@
     "typeorm:revert:prod": "typeorm migration:revert -d dist/infra/database/typeorm/data-source.js",
     "openapi:generate": "ts-node -r tsconfig-paths/register scripts/generate-openapi.ts",
     "seed": "ts-node -r tsconfig-paths/register -r dotenv/config src/infra/database/typeorm/seeds/run-seed.ts",
-    "seed:prod": "node dist/infra/database/typeorm/seeds/run-seed.js"
+    "seed:prod": "node dist/infra/database/typeorm/seeds/run-seed.js",
+    "db:grants:prod": "node dist/infra/database/typeorm/grants/run-grants.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
