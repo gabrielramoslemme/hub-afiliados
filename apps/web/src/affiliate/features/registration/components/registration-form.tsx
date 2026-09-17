@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
+import { AlertCircle, ArrowRight, Loader2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -23,8 +23,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import { cn } from '@/shared/lib/cn';
 import { pixKeyTypeName, socialNetworkName } from '@/shared/lib/format';
-import { formatCpf, formatPixKey, formatRg, pixKeyPlaceholder } from '@/shared/lib/masks';
+import {
+  formatCpf,
+  formatPixKey,
+  formatRg,
+  formatSocialHandle,
+  pixKeyPlaceholder,
+} from '@/shared/lib/masks';
 import { registerAffiliate } from '../register-affiliate.action';
 
 const RG_HINT = 'Só o número, sem o órgão emissor.';
@@ -111,6 +118,7 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
   const cpfField = register('cpf');
   const rgField = register('rg');
   const pixKeyField = register('pixKey');
+  const socialHandleField = register('socialHandle');
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
@@ -254,21 +262,47 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
             control={control}
             name="socialNetwork"
             render={({ field }) => (
-              <Select value={field.value || undefined} onValueChange={field.onChange}>
-                <SelectTrigger
-                  {...fieldAria('socialNetwork', { error: errors.socialNetwork?.message })}
-                  aria-label="Rede social"
-                >
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.values(SocialNetworkEnum).map((network) => (
-                    <SelectItem key={network} value={network}>
-                      {socialNetworkName(network)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              /*
+                Escolher é fácil, desescolher não era: a lista não tem item
+                vazio — o Radix não aceita um — e quem abriu o menu por
+                curiosidade ficava com uma rede que não queria informar. O botão
+                de limpar é irmão do gatilho, e não filho, porque o gatilho já é
+                um `button`.
+              */
+              <div className="relative">
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger
+                    {...fieldAria('socialNetwork', { error: errors.socialNetwork?.message })}
+                    aria-label="Rede social"
+                    className={cn(field.value && '[&>span]:pr-7')}
+                  >
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.values(SocialNetworkEnum).map((network) => (
+                      <SelectItem key={network} value={network}>
+                        {socialNetworkName(network)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {field.value && (
+                  <button
+                    type="button"
+                    onClick={() => field.onChange('')}
+                    aria-label="Limpar rede social"
+                    className={cn(
+                      'absolute right-9 top-1/2 flex size-6 -translate-y-1/2 items-center',
+                      'justify-center rounded-sm text-ink-400 transition-colors',
+                      'hover:bg-ink-100 hover:text-ink-700 focus:outline-none',
+                      'focus-visible:ring-[3px] focus-visible:ring-blue-600/15',
+                    )}
+                  >
+                    <X className="size-4" aria-hidden />
+                  </button>
+                )}
+              </div>
             )}
           />
         </Field>
@@ -280,7 +314,7 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
           hint="Onde você divulga o cupom. Opcional."
         >
           {/* O arroba é moldura do campo, não conteúdo: quem preenche digita só
-              o perfil. Colado mesmo assim, o schema tira o arroba repetido. */}
+              o perfil, e a máscara tira o que for colado junto. */}
           <div className="relative">
             <span
               aria-hidden
@@ -289,7 +323,7 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
               @
             </span>
             <Input
-              {...register('socialHandle')}
+              {...socialHandleField}
               {...fieldAria('socialHandle', {
                 error: errors.socialHandle?.message,
                 hint: 'Onde você divulga o cupom. Opcional.',
@@ -297,6 +331,10 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
               autoComplete="off"
               placeholder="seuperfil"
               className="pl-7"
+              onChange={(event) => {
+                event.target.value = formatSocialHandle(event.target.value);
+                return socialHandleField.onChange(event);
+              }}
             />
           </div>
         </Field>

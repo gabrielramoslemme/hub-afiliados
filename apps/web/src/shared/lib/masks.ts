@@ -59,6 +59,18 @@ export function formatPhone(value: string): string {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
+/**
+ * O arroba é moldura do campo e nenhuma rede aceita espaço no perfil: tirar os
+ * dois enquanto se digita deixa no campo exatamente o que vai ser gravado.
+ *
+ * Ela para aí, pelo mesmo motivo da máscara de RG: engolir todo caractere que o
+ * schema recusa faria `marina/ferraz` virar outro perfil no lugar de recusar o
+ * que foi digitado.
+ */
+export function formatSocialHandle(value: string): string {
+  return value.replace(/\s/g, '').replace(/^@+/, '');
+}
+
 const PIX_KEY_PLACEHOLDERS: Record<PixKeyTypeEnum, string> = {
   [PixKeyTypeEnum.EMAIL]: 'voce@email.com',
   [PixKeyTypeEnum.PHONE]: '(11) 99999-9999',

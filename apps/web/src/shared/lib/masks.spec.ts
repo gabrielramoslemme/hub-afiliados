@@ -4,6 +4,7 @@ import {
   formatPhone,
   formatPixKey,
   formatRg,
+  formatSocialHandle,
   onlyDigits,
   pixKeyPlaceholder,
 } from './masks';
@@ -121,6 +122,32 @@ describe('masks', () => {
         expect(formatPixKey(type, placeholder)).toBe(placeholder);
       },
     );
+  });
+
+  describe('formatSocialHandle', () => {
+    it('drops the spaces no profile can have', () => {
+      expect(formatSocialHandle('marina ferraz')).toBe('marinaferraz');
+    });
+
+    it('drops the spaces around a pasted handle', () => {
+      expect(formatSocialHandle('  marina.ferraz\n')).toBe('marina.ferraz');
+    });
+
+    it('drops the at sign the field already frames', () => {
+      expect(formatSocialHandle('@marina.ferraz')).toBe('marina.ferraz');
+    });
+
+    it('leaves a handle the schema accepts untouched', () => {
+      expect(formatSocialHandle('marina_ferraz-01')).toBe('marina_ferraz-01');
+    });
+
+    /*
+      Engolir o que não é espaço mudaria o perfil sem a pessoa perceber — quem
+      digita uma barra fica com o erro do schema, e não com outro `@`.
+    */
+    it('keeps a character the schema rejects so the field can refuse it', () => {
+      expect(formatSocialHandle('marina/ferraz')).toBe('marina/ferraz');
+    });
   });
 
   describe('formatPixKey', () => {
