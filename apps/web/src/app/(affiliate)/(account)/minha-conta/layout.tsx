@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import type { PropsWithChildren } from 'react';
 import { AccountNav, AccountTopbar } from '@/affiliate/features/area';
 import { readSessionUser } from '@/affiliate/features/auth/session';
-import { AFFILIATE_LOGIN_PATH } from '@/affiliate/shared/routes';
+import { AFFILIATE_SESSION_EXPIRED_PATH } from '@/affiliate/shared/routes';
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -12,11 +12,14 @@ export const metadata: Metadata = {
 /**
  * O `middleware` só enxerga que o cookie existe. Quem lê o conteúdo é este
  * layout — e cookie corrompido precisa virar login, não tela quebrada.
+ *
+ * Pela sessão expirada, e não direto para o login: o cookie do token continua no
+ * navegador, e o middleware devolveria a pessoa do login para cá, em laço.
  */
 export default async function AccountLayout({ children }: PropsWithChildren) {
   const user = await readSessionUser();
 
-  if (!user) redirect(AFFILIATE_LOGIN_PATH);
+  if (!user) redirect(AFFILIATE_SESSION_EXPIRED_PATH);
 
   return (
     <div className="min-h-svh bg-ink-50">

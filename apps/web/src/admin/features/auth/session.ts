@@ -39,8 +39,8 @@ export async function readSessionUser(): Promise<SessionUser | null> {
   try {
     return JSON.parse(raw) as SessionUser;
   } catch {
-    // Cookie corrompido vale o mesmo que cookie ausente: o middleware manda
-    // para o login e a pessoa entra de novo.
+    // Cookie corrompido vale o mesmo que cookie ausente: o layout manda para a
+    // sessão expirada, que apaga os cookies, e a pessoa entra de novo.
     return null;
   }
 }
