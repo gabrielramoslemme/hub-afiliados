@@ -47,7 +47,7 @@ Checkbox, um comportamento por linha, na voz de quem usa. Entre 4 e 12 — mais 
 Quando o critério já foi cumprido, ele vira `- [x]` e ganha um parêntese com a prova. **O parêntese é o único lugar do card onde termo técnico é bem-vindo** — ele existe para quem for auditar a entrega, não para quem lê o requisito.
 
 ```markdown
-- [x] A API sobe localmente com um comando e responde a uma verificação de saúde. (`GET /v1/health`, testado por `health.e2e-spec.ts`)
+- [x] A API sobe localmente com um comando e responde a uma verificação de saúde. (`GET /v1/health`, pública na lista travada por `route-protection.e2e-spec.ts`)
 - [x] Toda atualização de estrutura pode ser desfeita por comando. (`down()` implementado nas duas migrations, `npm run typeorm:revert`)
 ```
 

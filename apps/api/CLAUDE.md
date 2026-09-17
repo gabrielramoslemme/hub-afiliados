@@ -23,7 +23,7 @@ Identidade unificada em `users`, perfil 1:1 em `affiliates`. **Esquecer de checa
 
 `AdminGuard` e `AffiliateGuard` ficam nos controllers dos canais e respondem a outra pergunta: este token é **deste** canal. Conferem `aud`, o do painel aplica o `@Roles(...)` quando a rota declara, e os dois publicam `request.actor` — que chega ao handler pelo decorator de parâmetro `@Actor()`, nunca por `@Req()`. Eles leem o que o primeiro deixou, então a assinatura não é verificada duas vezes.
 
-**Trocar de canal é 403, nos dois sentidos**, e há e2e para isso: token de afiliado em `/v1/admin/affiliates` e token de operador em `/v1/affiliate/me`.
+**Trocar de canal é 403, nos dois sentidos**, e há e2e para isso: token de afiliado em `/v1/admin/coupons/availability` e token de operador em `/v1/affiliate/me`. Além disso, o `route-protection.e2e-spec.ts` percorre as rotas registradas e confere que toda rota `admin/...` tem o `AdminGuard` e toda `affiliate/...` o `AffiliateGuard` — o guard do canal certo, e não só algum.
 
 Hoje `@Public()` marca exatamente nove rotas: `GET /v1/health`, `POST /v1/affiliates`, os dois `POST .../auth/login`, `POST /v1/affiliate/auth/set-password` e os dois pares `POST .../auth/forgot-password` e `POST .../auth/reset-password`, um em cada canal. As de senha são públicas porque são o que a pessoa tem **antes** de ter senha — ou depois de perdê-la: quem autentica a chamada é o token de uso único no corpo, e quem pede recuperação não tem sessão nenhuma para apresentar. Acrescentar a décima é decisão de segurança, não de conveniência; a lista literal em `test/route-protection.e2e-spec.ts` é o que obriga a decisão a passar por um diff.
 
@@ -182,6 +182,8 @@ Token trocado de posição no `provideUseCase` **era** a quarta, e a pior: dois 
 | Teste unitário | ao lado do arquivo, `.spec.ts` |
 | Teste de integração | `test/<assunto>.e2e-spec.ts` |
 | Seed | `src/infra/database/typeorm/seeds/` — `seed-operators.ts` (a lógica) e `run-seed.ts` (a entrada) |
+| Prefixo, `ValidationPipe`, filtro, helmet e CORS | `src/configure-app.ts` — o `main.ts` e o e2e chamam a mesma função |
+| Apoio do e2e | `test/e2e-app.ts` (app e reset), `test/e2e-fixtures.ts` (operador, cadastros, cupom, link do e-mail) |
 
 ## Nome da dependência injetada
 
@@ -309,7 +311,7 @@ O `HttpExceptionFilter` global normaliza toda resposta de erro:
 - `code` vem de um `*ErrorCodeEnum` de `@porto/contracts` (`AuthErrorCodeEnum`, `RegistrationErrorCodeEnum`, `CouponErrorCodeEnum`) quando o cliente precisa distinguir o caso para escolher a mensagem; nas demais respostas é `null`.
 - **Guard e controller continuam podendo lançar exceção do Nest** — eles já são a camada de HTTP.
 - 5xx é logado com stack e responde `Erro interno`: a mensagem original pode carregar nome de coluna ou detalhe de schema. 4xx não é logado. **Não logue a exceção você mesmo** — o filtro já faz.
-- O `ValidationPipe` global usa `whitelist`, `forbidNonWhitelisted` e `transform`: campo fora do DTO devolve 400 sozinho.
+- O `ValidationPipe` global usa `whitelist`, `forbidNonWhitelisted`, `transform` e `stopAtFirstError`: campo fora do DTO devolve 400 sozinho, com uma mensagem por campo. Ele é montado em `configureApp` (`src/configure-app.ts`), junto com o filtro — nunca direto no `main.ts`, senão o e2e volta a testar uma configuração que produção não usa.
 
 ## Swagger
 
@@ -323,6 +325,8 @@ O `openapi.json` é o contrato publicado da API — rota sem decorator vira cont
 O use case recebe o port `Mailer` (`src/domain/notifications/mailer.ts`) pelo construtor — o token `MAILER` fica no `UseCasesModule` — e não conhece fornecedor nenhum. Quem implementa é o `MailService`.
 
 `Mailer.send` **nunca lança** — falha vira log e o fluxo segue. Deliberado: e-mail não enviado é incidente operacional; aprovação revertida por causa dele seria incidente de negócio. Não embrulhe em `try/catch`.
+
+O log da falha leva o template e o stack, **sem o endereço de quem receberia**: o fornecedor costuma citá-lo na mensagem do erro, e o `MailService` o troca por `[destinatário]` antes de logar.
 
 Dentro de infra o trabalho se parte em dois contratos: `MailRenderer` monta o conteúdo e `MailProvider` despacha. `MAIL_PROVIDER` escolhe o fornecedor concreto (`logger` em dev e teste, `resend` fora) — três ports em camadas diferentes, de propósito: o domínio quer enviar, infra sabe o que escrever e por onde mandar. **O template mora em código**, como componente React Email em `services/email/templates/`, nunca no painel do fornecedor: o registry é um `Record<MailTemplateEnum, …>`, então template novo sem entrada ali é erro de type-check. Templates, gatilhos e variáveis em [`docs/EMAILS.md`](docs/EMAILS.md).
 
@@ -359,17 +363,31 @@ O que sobra é o registro **e** a consulta ficarem sem resposta seguidas: o cupo
 
 **Alterar é `PATCH /v1/admin/affiliates/:publicId/coupon`** — desativar, reativar ou mudar o percentual, nunca o código, que é a chave da atribuição das vendas. Mesma ordem da aprovação: a Porto registra a mudança, e só então se grava o que a analista pediu.
 
+**Divergência consciente da aprovação: a alteração não se desfaz na Porto se a gravação daqui falhar.** A aprovação desativa o cupom órfão porque perder a corrida é caminho normal; na alteração, falhar depois de a Porto aceitar exigiria o banco cair entre as duas chamadas ou o cupom sumir no meio — e não há fluxo que exclua cupom. Se acontecer, o painel mostra o valor anterior até alguém repetir a alteração — foi a escolha, no lugar de uma compensação que também pode falhar.
+
 **Toda mudança de cupom vai para `affiliate_coupon_history`**, na mesma transação da mudança: a criação dentro do `changeStatus`, cada alteração dentro do `CouponRepository.change`. Tabela própria, e não a trilha do cadastro, porque o antes e o depois são outros; o painel junta as duas numa linha do tempo só, lendo `GET .../coupon/history`.
 
 **O registro nunca esquece um código, nem o falso.** Teste e2e que aprova duas vezes precisa de dois códigos: o `TRUNCATE` entre os testes limpa a nossa tabela, não a memória de quem registrou.
 
 ## Testes
 
-- **Unitário** — `*.spec.ts` ao lado do arquivo, sem banco. Factories em `src/testing/factories/` (`buildUser`, `buildAdminUser`, `buildAffiliate`, `buildCoupon`) e mocks em `src/testing/mocks/`. Obrigatório por caso de uso.
-- **Integração** — `test/*.e2e-spec.ts`, Postgres real, `--runInBand`, compilando o `AppModule` inteiro. Isolamento por `TRUNCATE <tabelas> RESTART IDENTITY CASCADE` no `beforeEach`, `dataSource.destroy()` no `afterAll`.
-- **O módulo do e2e sai de `createE2eTestingModule()`** (`test/create-e2e-testing-module.ts`), nunca de `Test.createTestingModule` direto. É ele que troca o `COUPON_GATEWAY` pelo `FakeCouponGateway`: o `AppModule` cru registraria cupom de verdade na Porto com as credenciais do `.env`, e há um e2e em `admin-affiliates` que falha se a troca sumir.
-- Descrição em inglês, pelo comportamento: `it('responds 200 with status ok')`.
-- Objeto de teste reutilizável vira factory em `src/testing/`, não literal repetido.
+**O objetivo é proteger regra, não somar cobertura.** A pergunta que decide se um teste fica é sempre a mesma: *se eu apagar ou inverter a linha da regra, este teste falha?* Teste novo sobre código que já existe passa de primeira — prove que ele protege quebrando a linha e vendo falhar.
+
+| Camada | O que testa | O que não testa |
+|---|---|---|
+| **Unitário do use case** — `*.spec.ts` ao lado do arquivo, sem banco | Cada ramo da regra: guarda de status, erro lançado, ordem que é regra (Porto antes do banco), o que **não** acontece quando falha, anti-enumeração | Mapeamento campo a campo; eco do próprio mock; `toHaveBeenCalled()` onde o comportamento responde |
+| **Unitário de domínio e de adapter** | Util puro com borda de verdade (CPF, máscara, limite); adapter com semântica própria (401 que renova token, SDK que resolve com erro, cache com margem); lista de segurança com igualdade exata | Reimplementar a biblioteca no teste; o dublê de teste além do que o e2e confia dele |
+| **E2e** — `test/*.e2e-spec.ts`, Postgres real | DTO, SQL (filtro, busca, ordenação, paginação), transação e índice único, wiring de audiência e guard, o que a resposta não pode vazar, fluxo ponta a ponta | Regra que o unitário já decide; 401 sem token repetido por rota; o repositório isolado |
+
+**Não há suíte de repositório.** O adapter é exercitado pela rota, que é o contrato: token vencido e já usado, a busca por CPF digitado com pontuação, a paginação com join, a transação que volta inteira quando o índice único recusa. Dependência que só o banco decide se prova forçando a corrida — o gateway segura as duas requisições, ou um `jest.spyOn` faz a checagem do use case não ver o registro e deixa o índice responder.
+
+- **Unitário:** factories em `src/testing/factories/` (`buildUser`, `buildAdminUser`, `buildAffiliate`, `buildCoupon`), mocks em `src/testing/mocks/`. Obrigatório por caso de uso. **Relógio com instante explícito** no spec (`const NOW = …`, `clockMock(NOW)`), nunca a data padrão escondida no mock. Detalhes na skill `create-unit-test`.
+- **Rode pelo script, não por `npx jest`:** o React Email carrega por import dinâmico e precisa do `--experimental-vm-modules` que o `npm run test` liga.
+- **E2e roda num banco `_test`, sempre.** `test/e2e-env.ts` acrescenta o sufixo ao nome que vier da `DATABASE_URL`, e `test/e2e-global-setup.ts` cria o banco e aplica as migrations antes do primeiro spec. Antes disso a suíte, que começa com `TRUNCATE ... CASCADE`, rodava no banco do `npm run dev` e apagava os operadores do seed.
+- **O app do e2e sai de `createE2eApp()`** (`test/e2e-app.ts`), nunca de `Test.createTestingModule` direto. Ele troca o `COUPON_GATEWAY` pelo `FakeCouponGateway` (o `AppModule` cru registraria cupom de verdade na Porto — há um e2e em `admin-affiliates` que falha se a troca sumir) e o `MAIL_PROVIDER` pelo `FakeMailProvider`, que guarda o e-mail **já renderizado**: é o que pega variável que o use case e o template chamam por nomes diferentes. Também aplica o `configureApp` e escuta em `127.0.0.1` — em `::`, o `supertest` às vezes conecta num outro servidor local da mesma porta e recebe 404 de outra aplicação.
+- Isolamento por `resetDatabase(e2e)` no `beforeEach`; estado montado pela rota pública (`register`, `approve` de `test/e2e-fixtures.ts`), não por literal de repositório. Detalhes na skill `create-e2e-test`.
+- Descrição em inglês, pelo comportamento: `it('refuses a link past its expiry')`.
+- Objeto de teste reutilizável vira factory em `src/testing/` (unitário) ou fixture em `test/e2e-fixtures.ts` (e2e), não literal repetido.
 
 ## Atenção: `import type` quebra a injeção de dependência
 
@@ -393,7 +411,7 @@ grep -o '__metadata("design:paramtypes".\{0,80\}' apps/api/dist/<caminho>.js
 ```bash
 npm run dev --workspace apps/api                             # nest start --watch, porta 3000
 npm run test --workspace apps/api                            # unitários
-npm run test:e2e --workspace apps/api                        # integração, exige Postgres no ar
+npm run test:e2e --workspace apps/api                        # integração, exige Postgres no ar; cria e migra o banco _test
 npm run type-check --workspace apps/api
 npm run typeorm:create --workspace apps/api --name=X         # nova migration, timestamp da CLI
 npm run typeorm:run --workspace apps/api                     # aplica as migrations

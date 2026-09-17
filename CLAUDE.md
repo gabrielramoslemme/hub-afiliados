@@ -43,6 +43,18 @@ npm run db:down      # derruba o Postgres
 
 **Ambiguidade no pedido: perguntar antes de assumir.** As skills de cada pacote ficam em `.claude/skills/`.
 
+## Testes: regra, não cobertura
+
+**Teste existe para proteger regra de negócio e o que só quebra de verdade em produção — nunca para somar cobertura.** Antes de escrever, e antes de manter, a pergunta é a mesma: *se eu apagar ou inverter a linha da regra, este teste falha?* Teste que não falharia por mudança nenhuma que importe sobra; regra que nenhum teste pegaria falta. Teste novo sobre código que já existe passa de primeira — prove que ele protege quebrando a linha.
+
+| Onde | O que testa | O que não testa |
+|---|---|---|
+| Unitário do use case (`apps/api`) | cada ramo da regra, a ordem que é regra, o que **não** acontece quando falha | mapeamento campo a campo, eco do próprio mock |
+| E2e da API (`apps/api/test`) | DTO, SQL, transação e índice único, guard de canal, o que a resposta não pode vazar, o fluxo ponta a ponta | regra que o unitário já decide; o repositório isolado |
+| Jest da web | lógica: Server Action, schema, tradução de `code`, redirecionamento, função pura | **componente** — regra que mora num componente sai para uma função pura |
+
+Detalhes e armadilhas no `CLAUDE.md` de cada pacote e nas skills `create-unit-test` e `create-e2e-test`.
+
 ## Regras invioláveis
 
 Valem em todo pacote. Violação é bug, não preferência.
@@ -92,7 +104,9 @@ Fonte única em `packages/contracts/src/enums/index.ts`, nunca redeclarado em `a
 npm run lint && npm run type-check && npm run test
 ```
 
-Mexeu em rota, DTO ou migration: `npm run test:e2e --workspace apps/api` também (exige `npm run db:up` e `npm run typeorm:run --workspace apps/api`). A CI roda exatamente isso, mais `build` e a geração do `openapi.json`.
+Mexeu em rota, DTO ou migration: `npm run test:e2e --workspace apps/api` também (exige `npm run db:up`; o banco `_test` é criado e migrado sozinho). A CI roda exatamente isso, mais `build` e a geração do `openapi.json`.
+
+**O e2e não toca o banco de desenvolvimento:** roda em `hub_afiliados_test`, sem porta fixa, e convive com o `npm run dev` de pé.
 
 ## Stack
 

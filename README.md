@@ -106,7 +106,7 @@ O que pertence a um pacote mora nele:
 
 | Comando | O que faz |
 |---|---|
-| `npm run test:e2e --workspace apps/api` | Testes de integração da API (exige Postgres no ar) |
+| `npm run test:e2e --workspace apps/api` | Testes de integração da API (exige Postgres no ar; roda em `hub_afiliados_test`, criado e migrado sozinho) |
 | `npm run typeorm:create --workspace apps/api --name=X` | Cria migration com timestamp real da CLI |
 | `npm run typeorm:run --workspace apps/api` | Aplica as migrations |
 | `npm run typeorm:revert --workspace apps/api` | Reverte a última migration |
