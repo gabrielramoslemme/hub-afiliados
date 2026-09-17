@@ -1,5 +1,12 @@
 import { PixKeyTypeEnum } from '@porto/contracts';
-import { formatCpf, formatPhone, formatPixKey, formatRg, onlyDigits } from './masks';
+import {
+  formatCpf,
+  formatPhone,
+  formatPixKey,
+  formatRg,
+  onlyDigits,
+  pixKeyPlaceholder,
+} from './masks';
 
 describe('masks', () => {
   describe('onlyDigits', () => {
@@ -101,6 +108,19 @@ describe('masks', () => {
     it('drops digits beyond the eleventh', () => {
       expect(formatPhone('119999999999999')).toBe('(11) 99999-9999');
     });
+  });
+
+  describe('pixKeyPlaceholder', () => {
+    /* Exemplo que a máscara reformataria mostraria um formato que o campo não aceita. */
+    it.each(Object.values(PixKeyTypeEnum))(
+      'shows an example already shaped by the %s mask',
+      (type) => {
+        const placeholder = pixKeyPlaceholder(type);
+
+        expect(placeholder).not.toBe('');
+        expect(formatPixKey(type, placeholder)).toBe(placeholder);
+      },
+    );
   });
 
   describe('formatPixKey', () => {

@@ -59,6 +59,8 @@ export enum AuthErrorCodeEnum {
   ACCOUNT_INACTIVE = 'AUTH-005',
   /** Link de definir senha usado, vencido ou adulterado — a tela oferece um novo. */
   INVALID_TOKEN = 'AUTH-006',
+  /** Senha atual errada na confirmação de uma troca sensível, como a da chave PIX. */
+  WRONG_PASSWORD = 'AUTH-007',
 }
 
 /** O que uma linha do extrato do afiliado é: entrada de incentivo ou pagamento. */
@@ -72,6 +74,7 @@ export enum MailTemplateEnum {
   REGISTRATION_APPROVED = 'REGISTRATION_APPROVED',
   REGISTRATION_REJECTED = 'REGISTRATION_REJECTED',
   PASSWORD_RECOVERY = 'PASSWORD_RECOVERY',
+  PIX_KEY_CHANGED = 'PIX_KEY_CHANGED',
 }
 
 export enum RegistrationErrorCodeEnum {

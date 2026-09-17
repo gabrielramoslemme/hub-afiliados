@@ -7,6 +7,7 @@ import {
   formatPixKeyDisplay,
   formatSocialProfile,
   formatTime,
+  pixKeyTypeName,
   socialNetworkName,
 } from './format';
 
@@ -67,6 +68,14 @@ describe('formatPixKeyDisplay', () => {
 
   it('leaves an email key untouched', () => {
     expect(formatPixKeyDisplay(PixKeyTypeEnum.EMAIL, 'marina@email.com')).toBe('marina@email.com');
+  });
+});
+
+describe('pixKeyTypeName', () => {
+  it('names each type of key the way the form shows it', () => {
+    expect(pixKeyTypeName(PixKeyTypeEnum.EMAIL)).toBe('E-mail');
+    expect(pixKeyTypeName(PixKeyTypeEnum.PHONE)).toBe('Telefone');
+    expect(pixKeyTypeName(PixKeyTypeEnum.CPF)).toBe('CPF');
   });
 });
 

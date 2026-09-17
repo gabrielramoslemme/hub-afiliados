@@ -1,6 +1,7 @@
 import { ReactElement } from 'react';
-import { MailTemplateEnum } from '@porto/contracts';
+import { MailTemplateEnum, PixKeyTypeEnum } from '@porto/contracts';
 import { PasswordRecovery } from './password-recovery';
+import { PixKeyChanged } from './pix-key-changed';
 import { RegistrationApproved } from './registration-approved';
 import { RegistrationReceived } from './registration-received';
 import { RegistrationRejected } from './registration-rejected';
@@ -51,6 +52,20 @@ export const MAIL_TEMPLATES: Record<MailTemplateEnum, MailTemplateDefinition> = 
     requiredVariables: ['name', 'link'],
     build(variables) {
       return <PasswordRecovery name={variables.name} link={variables.link} />;
+    },
+  },
+  [MailTemplateEnum.PIX_KEY_CHANGED]: {
+    subject: 'Sua chave PIX foi alterada',
+    requiredVariables: ['name', 'pixKeyType', 'maskedPixKey'],
+    build(variables) {
+      return (
+        <PixKeyChanged
+          name={variables.name}
+          // O `ChangePixKeyUseCase` é quem envia, e ele passa o valor do enum.
+          pixKeyType={variables.pixKeyType as PixKeyTypeEnum}
+          maskedPixKey={variables.maskedPixKey}
+        />
+      );
     },
   },
 };

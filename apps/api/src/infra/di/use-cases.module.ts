@@ -1,5 +1,6 @@
 import { FactoryProvider, Module } from '@nestjs/common';
 import { ApproveAffiliateUseCase } from '@Application/affiliates/approve-affiliate.use-case';
+import { ChangePixKeyUseCase } from '@Application/affiliates/change-pix-key.use-case';
 import { CreateAffiliateUseCase } from '@Application/affiliates/create-affiliate.use-case';
 import { GetAffiliateUseCase } from '@Application/affiliates/get-affiliate.use-case';
 import { GetAffiliateAccountUseCase } from '@Application/affiliates/get-affiliate-account.use-case';
@@ -107,6 +108,12 @@ const USE_CASES = [
     CLOCK,
   ]),
   provideUseCase(GetAffiliateAccountUseCase, [USER_REPOSITORY]),
+  provideUseCase(ChangePixKeyUseCase, [
+    USER_REPOSITORY,
+    AFFILIATE_REPOSITORY,
+    PASSWORD_HASHER,
+    MAILER,
+  ]),
 ];
 
 @Module({

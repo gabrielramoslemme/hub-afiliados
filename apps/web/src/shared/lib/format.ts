@@ -19,6 +19,17 @@ export function socialNetworkName(network: SocialNetworkEnum): string {
   return SOCIAL_NETWORK_NAMES[network];
 }
 
+const PIX_KEY_TYPE_NAMES: Record<PixKeyTypeEnum, string> = {
+  EMAIL: 'E-mail',
+  PHONE: 'Telefone',
+  CPF: 'CPF',
+};
+
+/** Mesma razão do nome da rede: o cadastro e a troca pelo perfil leem daqui. */
+export function pixKeyTypeName(type: PixKeyTypeEnum): string {
+  return PIX_KEY_TYPE_NAMES[type];
+}
+
 /**
  * Fuso fixo em São Paulo, e não o do navegador: o servidor renderiza a mesma
  * string que o cliente hidrata, e a analista vê o horário do fato — não o da

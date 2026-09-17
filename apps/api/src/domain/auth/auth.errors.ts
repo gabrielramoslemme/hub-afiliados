@@ -69,6 +69,20 @@ export class InvalidResetTokenError extends DomainError {
   }
 }
 
+/**
+ * A senha que confirma uma troca sensível não confere. É 400 e não 401 de
+ * propósito: a sessão continua valendo, e o portal trata 401 como sessão
+ * vencida — mandaria para o login quem só errou a digitação.
+ */
+export class WrongPasswordError extends DomainError {
+  readonly kind = DomainErrorKindEnum.INVALID_INPUT;
+  readonly code = AuthErrorCodeEnum.WRONG_PASSWORD;
+
+  constructor() {
+    super('Senha incorreta.');
+  }
+}
+
 /** Token de afiliado cujo usuário sumiu, ou que nunca teve perfil de afiliado. */
 export class UnknownAffiliateError extends DomainError {
   readonly kind = DomainErrorKindEnum.UNAUTHORIZED;

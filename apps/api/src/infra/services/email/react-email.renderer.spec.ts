@@ -84,6 +84,34 @@ describe('ReactEmailRenderer', () => {
     expect(rendered.html).toContain(link);
   });
 
+  const pixKeyChanged = { name: 'Marina', pixKeyType: 'PHONE', maskedPixKey: '(11) *****-8888' };
+
+  it('renders the pix key change warning with the new key masked', async () => {
+    const rendered = await renderer.render(
+      inputFor(MailTemplateEnum.PIX_KEY_CHANGED, pixKeyChanged),
+    );
+
+    expect(rendered.subject).toBe('Sua chave PIX foi alterada');
+    expect(rendered.text).toContain('(11) *****-8888');
+  });
+
+  it('names the type of the new pix key in words', async () => {
+    const rendered = await renderer.render(
+      inputFor(MailTemplateEnum.PIX_KEY_CHANGED, pixKeyChanged),
+    );
+
+    expect(rendered.text).toContain('telefone');
+    expect(rendered.text).not.toContain('PHONE');
+  });
+
+  it('tells how to react to a pix key change nobody asked for', async () => {
+    const rendered = await renderer.render(
+      inputFor(MailTemplateEnum.PIX_KEY_CHANGED, pixKeyChanged),
+    );
+
+    expect(rendered.text).toContain('Se não foi você');
+  });
+
   it('produces a plain text alternative free of markup', async () => {
     const rendered = await renderer.render(
       inputFor(MailTemplateEnum.REGISTRATION_RECEIVED, { name: 'Marina' }),

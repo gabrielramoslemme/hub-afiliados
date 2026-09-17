@@ -147,6 +147,31 @@ function digitsOf(value: string): string {
   return value.replace(/\D/g, '');
 }
 
+const pixKeyTypeField = z.enum(PixKeyTypeEnum, { message: 'Escolha o tipo da chave PIX.' });
+
+const pixKeyField = z
+  .string()
+  .trim()
+  .min(1, 'Informe a chave PIX.')
+  .max(140, 'A chave PIX deve ter no máximo 140 caracteres.');
+
+/**
+ * A forma da chave de e-mail e de telefone, igual no cadastro e na troca pelo
+ * perfil. A do tipo CPF fica com cada schema: no cadastro ela se compara ao CPF
+ * digitado ao lado, e na troca a tela só conhece o CPF mascarado.
+ */
+function pixKeyFormatIssue(type: PixKeyTypeEnum, key: string): string | null {
+  if (type === PixKeyTypeEnum.EMAIL && !z.email().safeParse(key.toLowerCase()).success) {
+    return 'Informe um e-mail válido como chave PIX.';
+  }
+
+  if (type === PixKeyTypeEnum.PHONE && !PIX_PHONE_PATTERN.test(digitsOf(key))) {
+    return 'Informe um telefone válido como chave PIX.';
+  }
+
+  return null;
+}
+
 function normalizeRg(value: string): string {
   return value.replace(/[.\-\s]/g, '').toUpperCase();
 }
@@ -181,12 +206,8 @@ export const createAffiliateSchema = z
       .min(1, 'Informe o RG.')
       .transform(normalizeRg)
       .refine((value) => RG_PATTERN.test(value), 'Informe um RG válido.'),
-    pixKeyType: z.enum(PixKeyTypeEnum, { message: 'Escolha o tipo da chave PIX.' }),
-    pixKey: z
-      .string()
-      .trim()
-      .min(1, 'Informe a chave PIX.')
-      .max(140, 'A chave PIX deve ter no máximo 140 caracteres.'),
+    pixKeyType: pixKeyTypeField,
+    pixKey: pixKeyField,
     // Vazio é a ausência da rede, não um valor: o `select` do formulário começa
     // sem escolha, e ele é quem manda o `''`.
     socialNetwork: z
@@ -208,17 +229,12 @@ export const createAffiliateSchema = z
     const reject = (field: 'pixKey' | 'socialNetwork' | 'socialHandle', message: string) =>
       ctx.addIssue({ code: 'custom', path: [field], message });
 
-    if (input.pixKeyType === PixKeyTypeEnum.EMAIL) {
-      if (!z.email().safeParse(input.pixKey.toLowerCase()).success) {
-        reject('pixKey', 'Informe um e-mail válido como chave PIX.');
-      }
-    } else if (input.pixKeyType === PixKeyTypeEnum.PHONE) {
-      if (!PIX_PHONE_PATTERN.test(digitsOf(input.pixKey))) {
-        reject('pixKey', 'Informe um telefone válido como chave PIX.');
-      }
-      // A chave do tipo CPF é a única verificação de titularidade possível sem
-      // consultar terceiros: ela tem que ser o CPF de quem está se cadastrando.
-    } else if (digitsOf(input.pixKey) !== digitsOf(input.cpf)) {
+    const pixKeyIssue = pixKeyFormatIssue(input.pixKeyType, input.pixKey);
+    if (pixKeyIssue) reject('pixKey', pixKeyIssue);
+
+    // A chave do tipo CPF é a única verificação de titularidade possível sem
+    // consultar terceiros: ela tem que ser o CPF de quem está se cadastrando.
+    if (input.pixKeyType === PixKeyTypeEnum.CPF && digitsOf(input.pixKey) !== digitsOf(input.cpf)) {
       reject('pixKey', 'A chave PIX do tipo CPF precisa ser igual ao CPF informado.');
     }
 
@@ -254,3 +270,32 @@ export interface CreateAffiliateResponse {
   publicId: string;
   status: AffiliateStatusEnum;
 }
+
+/**
+ * A troca da chave PIX pelo perfil, espelhando `ChangePixKeyRequestDto` da API.
+ * A senha atual vai junto porque a chave é o destino do pagamento: uma sessão
+ * esquecida aberta não pode bastar para desviá-lo.
+ *
+ * Na chave do tipo CPF o schema cobra só os 11 dígitos. Ser o CPF do cadastro é
+ * conferido pela API — a tela recebe o CPF mascarado e não tem com o que comparar.
+ */
+export const changePixKeySchema = z
+  .object({
+    pixKeyType: pixKeyTypeField,
+    pixKey: pixKeyField,
+    // Sem `trim`: espaço é caractere válido de senha, e aparar mudaria o que a
+    // pessoa digitou antes de o bcrypt comparar.
+    currentPassword: z.string().min(1, 'Informe sua senha atual.'),
+  })
+  .superRefine((input, ctx) => {
+    const cpfKeyIssue =
+      digitsOf(input.pixKey).length === CPF_LENGTH ? null : 'Informe um CPF válido como chave PIX.';
+    const issue =
+      input.pixKeyType === PixKeyTypeEnum.CPF
+        ? cpfKeyIssue
+        : pixKeyFormatIssue(input.pixKeyType, input.pixKey);
+
+    if (issue) ctx.addIssue({ code: 'custom', path: ['pixKey'], message: issue });
+  });
+
+export type ChangePixKeyRequest = z.infer<typeof changePixKeySchema>;

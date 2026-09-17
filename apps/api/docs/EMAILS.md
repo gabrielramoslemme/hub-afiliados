@@ -9,6 +9,7 @@ Provider selecionado por `MAIL_PROVIDER`: `logger` em desenvolvimento e teste,
 | `REGISTRATION_APPROVED` | Operador aprova o cadastro | `name`, `link` (definir senha, 48h), `coupon`, `discountPercent` |
 | `REGISTRATION_REJECTED` | Operador reprova o cadastro | `name`, `reason` |
 | `PASSWORD_RECOVERY` | Pedido de recuperação | `name`, `link` (2h) |
+| `PIX_KEY_CHANGED` | Afiliado troca a chave PIX pelo perfil | `name`, `pixKeyType`, `maskedPixKey` |
 
 `PASSWORD_RECOVERY` sai do `RequestPasswordResetUseCase`, que atende os dois
 canais. O `link` aponta para `/redefinir-senha` quando o pedido veio do portal e
@@ -17,6 +18,13 @@ nunca do corpo. Ele só é enviado a quem consegue entrar (afiliado aprovado,
 operador com perfil, conta ativa) e no máximo um por minuto e cinco por hora por
 conta. Nos demais casos a API responde o mesmo 204 e não envia nada: responder
 diferente diria a quem tentou se aquele e-mail tem conta.
+
+`PIX_KEY_CHANGED` sai do `ChangePixKeyUseCase`, depois de a senha atual conferir
+e a chave nova estar gravada. A chave vai mascarada, como no perfil: quem ler o
+e-mail — inclusive numa caixa invadida — reconhece a troca sem levar o destino do
+pagamento. `pixKeyType` chega como o valor do enum (`'PHONE'`), e o template o
+escreve por extenso. O aviso existe para uma troca que o dono não fez não passar
+despercebida até o pagamento cair em outra conta.
 
 `REGISTRATION_APPROVED` só sai depois de o cupom estar emitido na Porto e
 gravado aqui, e mostra o código e o percentual acima do botão de criar a senha

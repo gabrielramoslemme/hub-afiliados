@@ -2,7 +2,12 @@ import { type INestApplication, ValidationPipe } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
-import { AffiliateStatusEnum, AuthErrorCodeEnum, MailTemplateEnum } from '@porto/contracts';
+import {
+  AffiliateStatusEnum,
+  AuthErrorCodeEnum,
+  MailTemplateEnum,
+  RegistrationErrorCodeEnum,
+} from '@porto/contracts';
 import { MAILER, SendMailInput } from '../src/domain/notifications/mailer';
 import { HttpExceptionFilter } from '../src/infra/shared/filters/http-exception.filter';
 import { mailerMock } from '../src/testing/mocks/services/mailer.mock';
@@ -366,22 +371,23 @@ describe('Affiliate account (e2e)', () => {
     });
   });
 
+  /** Aprova, cria a senha e entra, devolvendo o token da sessão do afiliado. */
+  async function signedIn(): Promise<{ accessToken: string; couponCode: string }> {
+    const { token, couponCode } = await approvedAffiliate();
+    await request(app.getHttpServer())
+      .post('/v1/affiliate/auth/set-password')
+      .send({ token, password: PASSWORD })
+      .expect(204);
+
+    const response = await request(app.getHttpServer())
+      .post('/v1/affiliate/auth/login')
+      .send({ email: signUp.email, password: PASSWORD })
+      .expect(200);
+
+    return { accessToken: response.body.accessToken, couponCode };
+  }
+
   describe('GET /v1/affiliate/me', () => {
-    async function signedIn(): Promise<{ accessToken: string; couponCode: string }> {
-      const { token, couponCode } = await approvedAffiliate();
-      await request(app.getHttpServer())
-        .post('/v1/affiliate/auth/set-password')
-        .send({ token, password: PASSWORD })
-        .expect(204);
-
-      const response = await request(app.getHttpServer())
-        .post('/v1/affiliate/auth/login')
-        .send({ email: signUp.email, password: PASSWORD })
-        .expect(200);
-
-      return { accessToken: response.body.accessToken, couponCode };
-    }
-
     it('answers the account with cpf, rg and pix key masked', async () => {
       const { accessToken, couponCode } = await signedIn();
 
@@ -415,6 +421,102 @@ describe('Affiliate account (e2e)', () => {
         .expect(403);
 
       expect(response.body.message).toContain('afiliado');
+    });
+  });
+
+  describe('PATCH /v1/affiliate/me/pix-key', () => {
+    const newKey = { pixKeyType: 'PHONE', pixKey: '(11) 98765-4321' };
+
+    async function storedPixKey(): Promise<{ pix_key_type: string; pix_key: string }> {
+      const [row] = await dataSource.query('SELECT pix_key_type, pix_key FROM affiliates');
+
+      return row;
+    }
+
+    it('replaces the key once the current password confirms it', async () => {
+      const { accessToken } = await signedIn();
+
+      await request(app.getHttpServer())
+        .patch('/v1/affiliate/me/pix-key')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ ...newKey, currentPassword: PASSWORD })
+        .expect(204);
+
+      const response = await request(app.getHttpServer())
+        .get('/v1/affiliate/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        pixKeyType: 'PHONE',
+        maskedPixKey: '(11) *****-4321',
+      });
+      expect(await storedPixKey()).toEqual({ pix_key_type: 'PHONE', pix_key: '11987654321' });
+    });
+
+    it('warns the owner by email with the new key masked', async () => {
+      const { accessToken } = await signedIn();
+
+      await request(app.getHttpServer())
+        .patch('/v1/affiliate/me/pix-key')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ ...newKey, currentPassword: PASSWORD })
+        .expect(204);
+
+      const warning = (mailer.send.mock.calls as [SendMailInput][])
+        .map(([input]) => input)
+        .find((input) => input.template === MailTemplateEnum.PIX_KEY_CHANGED);
+
+      expect(warning).toMatchObject({
+        to: signUp.email,
+        variables: { maskedPixKey: '(11) *****-4321' },
+      });
+    });
+
+    it('refuses a wrong password and keeps the key', async () => {
+      const { accessToken } = await signedIn();
+
+      const response = await request(app.getHttpServer())
+        .patch('/v1/affiliate/me/pix-key')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ ...newKey, currentPassword: 'SenhaErrada!2026' })
+        .expect(400);
+
+      expect(response.body.code).toBe(AuthErrorCodeEnum.WRONG_PASSWORD);
+      expect(await storedPixKey()).toEqual({ pix_key_type: 'EMAIL', pix_key: signUp.pixKey });
+    });
+
+    it('refuses a cpf key that is not the cpf of the registration', async () => {
+      const { accessToken } = await signedIn();
+
+      const response = await request(app.getHttpServer())
+        .patch('/v1/affiliate/me/pix-key')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ pixKeyType: 'CPF', pixKey: '111.444.777-35', currentPassword: PASSWORD })
+        .expect(400);
+
+      expect(response.body.code).toBe(RegistrationErrorCodeEnum.PIX_KEY_MISMATCH);
+    });
+
+    /* A chave é o único dado do cadastro que o afiliado altera sozinho. */
+    it('refuses to change anything but the pix key', async () => {
+      const { accessToken } = await signedIn();
+
+      await request(app.getHttpServer())
+        .patch('/v1/affiliate/me/pix-key')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ ...newKey, currentPassword: PASSWORD, cpf: '111.444.777-35' })
+        .expect(400);
+
+      expect(await storedPixKey()).toEqual({ pix_key_type: 'EMAIL', pix_key: signUp.pixKey });
+    });
+
+    it('refuses a token of the panel', async () => {
+      await request(app.getHttpServer())
+        .patch('/v1/affiliate/me/pix-key')
+        .set('Authorization', `Bearer ${await operatorToken()}`)
+        .send({ ...newKey, currentPassword: PASSWORD })
+        .expect(403);
     });
   });
 });

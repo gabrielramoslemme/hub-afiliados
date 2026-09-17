@@ -59,6 +59,17 @@ export function formatPhone(value: string): string {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
+const PIX_KEY_PLACEHOLDERS: Record<PixKeyTypeEnum, string> = {
+  [PixKeyTypeEnum.EMAIL]: 'voce@email.com',
+  [PixKeyTypeEnum.PHONE]: '(11) 99999-9999',
+  [PixKeyTypeEnum.CPF]: '000.000.000-00',
+};
+
+/** O exemplo do campo já no formato que a máscara do tipo produz. */
+export function pixKeyPlaceholder(type: PixKeyTypeEnum): string {
+  return PIX_KEY_PLACEHOLDERS[type];
+}
+
 /** E-mail não tem máscara: qualquer formatação atrapalharia quem digita. */
 export function formatPixKey(type: PixKeyTypeEnum, value: string): string {
   if (type === PixKeyTypeEnum.CPF) return formatCpf(value);

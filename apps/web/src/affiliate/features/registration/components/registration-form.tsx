@@ -23,23 +23,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
-import { socialNetworkName } from '@/shared/lib/format';
-import { formatCpf, formatPixKey, formatRg } from '@/shared/lib/masks';
+import { pixKeyTypeName, socialNetworkName } from '@/shared/lib/format';
+import { formatCpf, formatPixKey, formatRg, pixKeyPlaceholder } from '@/shared/lib/masks';
 import { registerAffiliate } from '../register-affiliate.action';
 
-const PIX_KEY_LABELS: Record<PixKeyTypeEnum, string> = {
-  [PixKeyTypeEnum.EMAIL]: 'E-mail',
-  [PixKeyTypeEnum.PHONE]: 'Telefone',
-  [PixKeyTypeEnum.CPF]: 'CPF',
-};
-
 const RG_HINT = 'Só o número, sem o órgão emissor.';
-
-const PIX_KEY_PLACEHOLDERS: Record<PixKeyTypeEnum, string> = {
-  [PixKeyTypeEnum.EMAIL]: 'voce@email.com',
-  [PixKeyTypeEnum.PHONE]: '(11) 99999-9999',
-  [PixKeyTypeEnum.CPF]: '000.000.000-00',
-};
 
 /**
  * `autoFocus` é decisão de quem monta a tela, não do formulário: ele é a seção
@@ -225,7 +213,7 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
                 <SelectContent>
                   {Object.values(PixKeyTypeEnum).map((type) => (
                     <SelectItem key={type} value={type}>
-                      {PIX_KEY_LABELS[type]}
+                      {pixKeyTypeName(type)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -249,7 +237,7 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
               required: true,
             })}
             autoComplete="off"
-            placeholder={PIX_KEY_PLACEHOLDERS[pixKeyType]}
+            placeholder={pixKeyPlaceholder(pixKeyType)}
             onChange={(event) => {
               event.target.value = formatPixKey(pixKeyType, event.target.value);
               return pixKeyField.onChange(event);
