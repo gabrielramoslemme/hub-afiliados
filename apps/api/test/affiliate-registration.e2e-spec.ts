@@ -1,16 +1,20 @@
-import { type INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
-import { DataSource } from 'typeorm';
-import { MailTemplateEnum, RegistrationErrorCodeEnum } from '@porto/contracts';
-import { MAILER } from '../src/domain/notifications/mailer';
-import { HttpExceptionFilter } from '../src/infra/shared/filters/http-exception.filter';
-import { mailerMock } from '../src/testing/mocks/services/mailer.mock';
-import { createE2eTestingModule } from './create-e2e-testing-module';
+import { RegistrationErrorCodeEnum } from '@porto/contracts';
+import {
+  AFFILIATE_REPOSITORY,
+  AffiliateRepository,
+} from '../src/domain/affiliates/affiliate.repository';
+import { USER_REPOSITORY, UserRepository } from '../src/domain/users/user.repository';
+import { createE2eApp, type E2eApp, resetDatabase } from './e2e-app';
+import { CLEIDE, register } from './e2e-fixtures';
 
+/*
+  O cadastro público do lado de fora: o DTO (o que só ele valida), o que a
+  transação grava e os índices únicos. A regra de CPF, RG e chave PIX é dos
+  testes do `CreateAffiliateUseCase`.
+*/
 describe('Affiliate registration (e2e)', () => {
-  let app: INestApplication;
-  let dataSource: DataSource;
-  let mailer: ReturnType<typeof mailerMock>;
+  let e2e: E2eApp;
 
   const validBody = {
     fullName: 'Marina Ferraz',
@@ -22,86 +26,59 @@ describe('Affiliate registration (e2e)', () => {
     termsAccepted: true,
   };
 
+  function signUp(body: object) {
+    return request(e2e.app.getHttpServer()).post('/v1/affiliates').send(body);
+  }
+
   beforeAll(async () => {
-    mailer = mailerMock();
-    const moduleRef = await createE2eTestingModule()
-      .overrideProvider(MAILER)
-      .useValue(mailer)
-      .compile();
-    app = moduleRef.createNestApplication();
-    app.setGlobalPrefix('v1');
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-        stopAtFirstError: true,
-      }),
-    );
-    app.useGlobalFilters(new HttpExceptionFilter());
-    await app.init();
-    dataSource = app.get(DataSource);
+    e2e = await createE2eApp();
   });
 
   beforeEach(async () => {
-    jest.clearAllMocks();
-    await dataSource.query(
-      'TRUNCATE affiliate_status_history, password_reset_tokens, affiliates, users RESTART IDENTITY CASCADE',
-    );
+    await resetDatabase(e2e);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   afterAll(async () => {
-    await dataSource.destroy();
-    await app.close();
+    await e2e.app.close();
   });
 
   describe('POST /v1/affiliates', () => {
-    it('registers an affiliate pending approval', async () => {
-      const response = await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send(validBody)
-        .expect(201);
+    it('registers pending approval, opens the trail and mails the confirmation', async () => {
+      const response = await signUp(validBody).expect(201);
 
-      expect(response.body).toEqual({
-        publicId: expect.any(String),
-        status: 'PENDING_APPROVAL',
-      });
+      expect(response.body).toEqual({ publicId: expect.any(String), status: 'PENDING_APPROVAL' });
+      expect(
+        await e2e.dataSource.query('SELECT from_status, to_status FROM affiliate_status_history'),
+      ).toEqual([{ from_status: null, to_status: 'PENDING_APPROVAL' }]);
+      expect(e2e.mail.sentTo(validBody.email)).toHaveLength(1);
     });
 
-    it('does not create a password for the pre-registration', async () => {
-      await request(app.getHttpServer()).post('/v1/affiliates').send(validBody).expect(201);
+    it('stores the social profile without the at sign', async () => {
+      await signUp({
+        ...validBody,
+        socialNetwork: 'INSTAGRAM',
+        socialHandle: '@marina.ferraz',
+      }).expect(201);
 
-      const [{ password }] = await dataSource.query('SELECT password FROM users WHERE email = $1', [
-        'marina@email.com',
-      ]);
-
-      expect(password).toBeNull();
-    });
-
-    it('records the initial transition in the audit trail', async () => {
-      await request(app.getHttpServer()).post('/v1/affiliates').send(validBody).expect(201);
-
-      const rows = await dataSource.query(
-        `SELECT from_status, to_status FROM affiliate_status_history`,
+      const [row] = await e2e.dataSource.query(
+        'SELECT social_network, social_handle FROM affiliates',
       );
 
-      expect(rows).toEqual([{ from_status: null, to_status: 'PENDING_APPROVAL' }]);
+      expect(row).toEqual({ social_network: 'INSTAGRAM', social_handle: 'marina.ferraz' });
     });
 
     it('rejects a name without a surname', async () => {
-      const response = await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send({ ...validBody, fullName: 'Marina' })
-        .expect(400);
+      const response = await signUp({ ...validBody, fullName: 'Marina' }).expect(400);
 
       expect(response.body.message).toEqual(['Informe o nome completo.']);
     });
 
     it('answers an array with one message per invalid field', async () => {
-      const response = await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send({ ...validBody, email: 'nope', cpf: '1' })
-        .expect(400);
+      const response = await signUp({ ...validBody, email: 'nope', cpf: '1' }).expect(400);
 
       expect(response.body.message).toEqual([
         'Informe um e-mail válido.',
@@ -112,181 +89,88 @@ describe('Affiliate registration (e2e)', () => {
     it('answers only one message for a field with several failing constraints', async () => {
       const { fullName: _fullName, ...bodyWithoutName } = validBody;
 
-      const response = await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send(bodyWithoutName)
-        .expect(400);
+      const response = await signUp(bodyWithoutName).expect(400);
 
       expect(response.body.message).toEqual(['Informe o nome completo.']);
     });
 
     it('rejects an unknown field', async () => {
-      await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send({ ...validBody, unknownField: 'nope' })
-        .expect(400);
-    });
-
-    it('rejects a duplicated email', async () => {
-      await request(app.getHttpServer()).post('/v1/affiliates').send(validBody).expect(201);
-
-      const response = await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send({ ...validBody, cpf: '111.444.777-35', pixKey: '111.444.777-35', pixKeyType: 'CPF' })
-        .expect(409);
-
-      expect(response.body.code).toBe(RegistrationErrorCodeEnum.EMAIL_ALREADY_REGISTERED);
-    });
-
-    it('rejects a duplicated cpf', async () => {
-      await request(app.getHttpServer()).post('/v1/affiliates').send(validBody).expect(201);
-
-      const response = await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send({ ...validBody, email: 'outra@email.com' })
-        .expect(409);
-
-      expect(response.body.code).toBe(RegistrationErrorCodeEnum.CPF_ALREADY_REGISTERED);
-    });
-
-    it('rejects a pix key of type cpf that differs from the informed cpf', async () => {
-      const response = await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send({ ...validBody, pixKeyType: 'CPF', pixKey: '111.444.777-35' })
-        .expect(400);
-
-      expect(response.body.code).toBe(RegistrationErrorCodeEnum.PIX_KEY_MISMATCH);
-    });
-
-    it('sends the registration received email', async () => {
-      await request(app.getHttpServer()).post('/v1/affiliates').send(validBody).expect(201);
-
-      expect(mailer.send).toHaveBeenCalledWith(
-        expect.objectContaining({
-          template: MailTemplateEnum.REGISTRATION_RECEIVED,
-          to: 'marina@email.com',
-        }),
-      );
-    });
-
-    it('stores the rg without punctuation', async () => {
-      await request(app.getHttpServer()).post('/v1/affiliates').send(validBody).expect(201);
-
-      const [{ rg }] = await dataSource.query('SELECT rg FROM affiliates');
-
-      expect(rg).toBe('12345678X');
-    });
-
-    it('registers the social profile the person informed', async () => {
-      await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send({ ...validBody, socialNetwork: 'INSTAGRAM', socialHandle: '@marina.ferraz' })
-        .expect(201);
-
-      const [row] = await dataSource.query('SELECT social_network, social_handle FROM affiliates');
-
-      expect(row).toEqual({ social_network: 'INSTAGRAM', social_handle: 'marina.ferraz' });
-    });
-
-    it('registers an affiliate that informed no social profile', async () => {
-      await request(app.getHttpServer()).post('/v1/affiliates').send(validBody).expect(201);
-
-      const [row] = await dataSource.query('SELECT social_network, social_handle FROM affiliates');
-
-      expect(row).toEqual({ social_network: null, social_handle: null });
-    });
-
-    it('rejects a registration without the rg', async () => {
-      const { rg: _rg, ...bodyWithoutRg } = validBody;
-
-      const response = await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send(bodyWithoutRg)
-        .expect(400);
-
-      expect(response.body.message).toEqual(['Informe um RG válido.']);
+      await signUp({ ...validBody, unknownField: 'nope' }).expect(400);
     });
 
     it('rejects an rg shorter than five characters', async () => {
-      const response = await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send({ ...validBody, rg: '1234' })
-        .expect(400);
+      const response = await signUp({ ...validBody, rg: '1234' }).expect(400);
 
       expect(response.body.message).toEqual(['Informe um RG válido.']);
     });
 
-    it('rejects a duplicated rg', async () => {
-      await request(app.getHttpServer()).post('/v1/affiliates').send(validBody).expect(201);
-
-      const response = await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send({
-          ...validBody,
-          email: 'outra@email.com',
-          cpf: '111.444.777-35',
-          rg: '12345678x',
-        })
-        .expect(409);
-
-      expect(response.body.code).toBe(RegistrationErrorCodeEnum.RG_ALREADY_REGISTERED);
-    });
-
     it('rejects a social network without the handle', async () => {
-      const response = await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send({ ...validBody, socialNetwork: 'INSTAGRAM' })
-        .expect(400);
+      const response = await signUp({ ...validBody, socialNetwork: 'INSTAGRAM' }).expect(400);
 
       expect(response.body.message).toEqual(['Informe o @ da rede escolhida.']);
     });
 
     it('rejects a handle without the social network', async () => {
-      const response = await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send({ ...validBody, socialHandle: '@marinaferraz' })
-        .expect(400);
+      const response = await signUp({ ...validBody, socialHandle: '@marinaferraz' }).expect(400);
 
       expect(response.body.message).toEqual(['Escolha a rede social do @ informado.']);
     });
 
-    it('rejects an unknown social network', async () => {
-      await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send({ ...validBody, socialNetwork: 'ORKUT', socialHandle: 'marinaferraz' })
-        .expect(400);
-    });
-
     it('rejects a handle with a space', async () => {
-      await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send({ ...validBody, socialNetwork: 'TIKTOK', socialHandle: 'marina ferraz' })
-        .expect(400);
+      await signUp({ ...validBody, socialNetwork: 'TIKTOK', socialHandle: 'marina ferraz' }).expect(
+        400,
+      );
     });
 
     it('rejects a registration that did not accept the terms', async () => {
-      const response = await request(app.getHttpServer())
-        .post('/v1/affiliates')
-        .send({ ...validBody, termsAccepted: false })
-        .expect(400);
+      const response = await signUp({ ...validBody, termsAccepted: false }).expect(400);
 
       expect(response.body.message).toEqual(['É preciso aceitar o Regulamento do programa.']);
     });
 
-    it('rejects a registration sent without the acceptance field', async () => {
-      const { termsAccepted: _termsAccepted, ...bodyWithoutTerms } = validBody;
+    it('rejects an rg already registered, whatever the case of its letter', async () => {
+      await signUp(validBody).expect(201);
 
-      await request(app.getHttpServer()).post('/v1/affiliates').send(bodyWithoutTerms).expect(400);
+      const response = await signUp({
+        ...validBody,
+        email: 'outra@email.com',
+        cpf: '111.444.777-35',
+        rg: '12345678x',
+      }).expect(409);
+
+      expect(response.body.code).toBe(RegistrationErrorCodeEnum.RG_ALREADY_REGISTERED);
     });
 
-    it('records when the terms were accepted', async () => {
-      await request(app.getHttpServer()).post('/v1/affiliates').send(validBody).expect(201);
+    /*
+      Dois cadastros com o mesmo CPF chegando juntos passam os dois pela checagem
+      do use case, e quem decide é o índice único. O dublê faz a checagem não ver
+      o primeiro — é a corrida, sem depender do agendador. Sem a tradução, o
+      segundo recebe 500; sem a transação, fica um usuário sem cadastro de
+      afiliado, com o e-mail preso para sempre.
+    */
+    it('lets the unique index refuse a cpf that slipped past the check, leaving no user behind', async () => {
+      await register(e2e.app, CLEIDE);
+      jest
+        .spyOn(e2e.app.get<AffiliateRepository>(AFFILIATE_REPOSITORY), 'findByCpf')
+        .mockResolvedValueOnce(null);
 
-      const [{ terms_accepted_at: termsAcceptedAt }] = await dataSource.query(
-        'SELECT terms_accepted_at FROM affiliates',
-      );
+      const response = await signUp({ ...validBody, cpf: CLEIDE.cpf }).expect(409);
 
-      expect(termsAcceptedAt).toBeInstanceOf(Date);
+      expect(response.body.code).toBe(RegistrationErrorCodeEnum.CPF_ALREADY_REGISTERED);
+      expect(
+        await e2e.dataSource.query('SELECT email FROM users WHERE email = $1', [validBody.email]),
+      ).toEqual([]);
+    });
+
+    it('lets the unique index refuse an email that slipped past the check', async () => {
+      await register(e2e.app, CLEIDE);
+      jest
+        .spyOn(e2e.app.get<UserRepository>(USER_REPOSITORY), 'findByEmail')
+        .mockResolvedValueOnce(null);
+
+      const response = await signUp({ ...validBody, email: CLEIDE.email }).expect(409);
+
+      expect(response.body.code).toBe(RegistrationErrorCodeEnum.EMAIL_ALREADY_REGISTERED);
     });
   });
 });

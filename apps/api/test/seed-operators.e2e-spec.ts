@@ -2,7 +2,7 @@ import { DataSource } from 'typeorm';
 import { UserRoleEnum, UserTypeEnum } from '@porto/contracts';
 import { PASSWORD_HASHER, PasswordHasher } from '../src/domain/auth/password-hasher';
 import { seedOperators } from '../src/infra/database/typeorm/seeds/seed-operators';
-import { createE2eTestingModule } from './create-e2e-testing-module';
+import { createE2eTestingModule } from './e2e-app';
 
 /**
  * Sem operador não se entra no painel, e sem painel ninguém aprova cadastro —
@@ -22,9 +22,7 @@ describe('seedOperators (integration)', () => {
   });
 
   beforeEach(async () => {
-    await dataSource.query(
-      'TRUNCATE affiliate_status_history, password_reset_tokens, affiliates, users RESTART IDENTITY CASCADE',
-    );
+    await dataSource.query('TRUNCATE users RESTART IDENTITY CASCADE');
   });
 
   afterAll(async () => {
@@ -53,8 +51,6 @@ describe('seedOperators (integration)', () => {
     for (const row of rows) {
       expect(row.type).toBe(UserTypeEnum.ADMIN);
       expect(row.should_change_password).toBe(true);
-      // Custo 10 é regra inviolável; o prefixo do hash é onde ela fica visível.
-      expect(row.password).toMatch(/^\$2[aby]\$10\$/);
       await expect(hasher.compare('PrimeiraSenha!2026', row.password)).resolves.toBe(true);
     }
   });

@@ -4,6 +4,8 @@
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
   "transform": { "^.+\\.tsx?$": "ts-jest" },
+  "globalSetup": "<rootDir>/test/e2e-global-setup.ts",
+  "setupFiles": ["<rootDir>/test/e2e-env.ts"],
   "moduleNameMapper": {
     "^@Domain/(.*)$": "<rootDir>/src/domain/$1",
     "^@Infra/(.*)$": "<rootDir>/src/infra/$1",

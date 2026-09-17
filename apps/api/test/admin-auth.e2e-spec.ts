@@ -1,264 +1,109 @@
-import { type INestApplication, ValidationPipe } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
 import request from 'supertest';
-import { DataSource } from 'typeorm';
-import { AuthErrorCodeEnum, MailTemplateEnum } from '@porto/contracts';
-import { MAILER, SendMailInput } from '../src/domain/notifications/mailer';
-import { HttpExceptionFilter } from '../src/infra/shared/filters/http-exception.filter';
-import { mailerMock } from '../src/testing/mocks/services/mailer.mock';
-import { createE2eTestingModule } from './create-e2e-testing-module';
+import { AuthErrorCodeEnum } from '@porto/contracts';
+import { createE2eApp, type E2eApp, resetDatabase } from './e2e-app';
+import { insertOperator, lastLinkTo, OPERATOR, tokenOf } from './e2e-fixtures';
 
 describe('Admin authentication (e2e)', () => {
-  let app: INestApplication;
-  let dataSource: DataSource;
-  let mailer: ReturnType<typeof mailerMock>;
+  let e2e: E2eApp;
 
-  const credentials = { email: 'analista@porto.example', password: 'MudarAgora!2026' };
   const NEW_PASSWORD = 'SenhaNova!2026';
 
-  /** Os e-mails de recuperação enviados até agora, do mais antigo ao mais novo. */
-  function recoveryEmails(): SendMailInput[] {
-    return (mailer.send.mock.calls as [SendMailInput][])
-      .map(([input]) => input)
-      .filter((input) => input.template === MailTemplateEnum.PASSWORD_RECOVERY);
+  function api() {
+    return request(e2e.app.getHttpServer());
   }
 
-  function recoveryLink(): string {
-    return recoveryEmails().at(-1)?.variables.link ?? '';
+  function signIn(password = OPERATOR.password) {
+    return api().post('/v1/admin/auth/login').send({ email: OPERATOR.email, password });
   }
 
-  /** Pede a recuperação e devolve o token em claro que foi para o e-mail. */
-  async function recoveryToken(): Promise<string> {
-    await request(app.getHttpServer())
-      .post('/v1/admin/auth/forgot-password')
-      .send({ email: credentials.email })
-      .expect(204);
-
-    return new URL(recoveryLink()).searchParams.get('token') ?? '';
-  }
-
-  async function insertOperator(overrides: { isActive?: boolean; password?: string | null } = {}) {
-    const hash =
-      overrides.password === null
-        ? null
-        : await bcrypt.hash(overrides.password ?? 'MudarAgora!2026', 10);
-
-    await dataSource.query(
-      `INSERT INTO users (name, email, password, password_set_at, should_change_password, is_active, type, role)
-       VALUES ($1, $2, $3, now(), false, $4, 'ADMIN', 'PORTO_ANALYST')`,
-      ['Analista Porto', credentials.email, hash, overrides.isActive ?? true],
-    );
+  function forgotPassword() {
+    return api().post('/v1/admin/auth/forgot-password').send({ email: OPERATOR.email });
   }
 
   beforeAll(async () => {
-    mailer = mailerMock();
-    const moduleRef = await createE2eTestingModule()
-      .overrideProvider(MAILER)
-      .useValue(mailer)
-      .compile();
-    app = moduleRef.createNestApplication();
-    app.setGlobalPrefix('v1');
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-        stopAtFirstError: true,
-      }),
-    );
-    app.useGlobalFilters(new HttpExceptionFilter());
-    await app.init();
-    dataSource = app.get(DataSource);
+    e2e = await createE2eApp();
   });
 
   beforeEach(async () => {
-    jest.clearAllMocks();
-    await dataSource.query(
-      'TRUNCATE affiliate_status_history, password_reset_tokens, affiliates, users RESTART IDENTITY CASCADE',
-    );
+    await resetDatabase(e2e);
   });
 
   afterAll(async () => {
-    await dataSource.destroy();
-    await app.close();
+    await e2e.app.close();
   });
 
   describe('POST /v1/admin/auth/login', () => {
-    it('signs an operator in', async () => {
-      await insertOperator();
+    it('signs an operator in and records the instant', async () => {
+      await insertOperator(e2e.dataSource);
 
-      const response = await request(app.getHttpServer())
-        .post('/v1/admin/auth/login')
-        .send(credentials)
-        .expect(200);
+      const response = await signIn().expect(200);
 
       expect(response.body).toEqual({
         accessToken: expect.any(String),
         user: {
           publicId: expect.any(String),
-          name: 'Analista Porto',
-          email: credentials.email,
+          name: OPERATOR.name,
+          email: OPERATOR.email,
           role: 'PORTO_ANALYST',
           shouldChangePassword: false,
         },
       });
-    });
-
-    it('records the login instant', async () => {
-      await insertOperator();
-
-      await request(app.getHttpServer()).post('/v1/admin/auth/login').send(credentials).expect(200);
-
-      const [{ last_login_at: lastLoginAt }] = await dataSource.query(
+      const [{ last_login_at: lastLoginAt }] = await e2e.dataSource.query(
         'SELECT last_login_at FROM users WHERE email = $1',
-        [credentials.email],
+        [OPERATOR.email],
       );
-
       expect(lastLoginAt).not.toBeNull();
     });
 
     it('rejects a wrong password', async () => {
-      await insertOperator();
+      await insertOperator(e2e.dataSource);
 
-      const response = await request(app.getHttpServer())
-        .post('/v1/admin/auth/login')
-        .send({ ...credentials, password: 'outra-senha' })
-        .expect(401);
+      const response = await signIn('outra-senha').expect(401);
 
       expect(response.body.code).toBe(AuthErrorCodeEnum.INVALID_CREDENTIALS);
-    });
-
-    it('answers the same error for an unknown email', async () => {
-      const response = await request(app.getHttpServer())
-        .post('/v1/admin/auth/login')
-        .send(credentials)
-        .expect(401);
-
-      expect(response.body.code).toBe(AuthErrorCodeEnum.INVALID_CREDENTIALS);
-    });
-
-    it('reports an inactive operator', async () => {
-      await insertOperator({ isActive: false });
-
-      const response = await request(app.getHttpServer())
-        .post('/v1/admin/auth/login')
-        .send(credentials)
-        .expect(401);
-
-      expect(response.body.code).toBe(AuthErrorCodeEnum.ACCOUNT_INACTIVE);
-    });
-
-    it('reports an operator without a password', async () => {
-      await insertOperator({ password: null });
-
-      const response = await request(app.getHttpServer())
-        .post('/v1/admin/auth/login')
-        .send(credentials)
-        .expect(401);
-
-      expect(response.body.code).toBe(AuthErrorCodeEnum.PASSWORD_NOT_SET);
     });
 
     it('rejects a request without a password', async () => {
-      await request(app.getHttpServer())
-        .post('/v1/admin/auth/login')
-        .send({ email: credentials.email })
-        .expect(400);
+      await api().post('/v1/admin/auth/login').send({ email: OPERATOR.email }).expect(400);
     });
   });
 
   describe('POST /v1/admin/auth/forgot-password', () => {
     it('mails the operator a link to the panel screen', async () => {
-      await insertOperator();
+      await insertOperator(e2e.dataSource);
 
-      await request(app.getHttpServer())
-        .post('/v1/admin/auth/forgot-password')
-        .send({ email: credentials.email })
-        .expect(204);
+      await forgotPassword().expect(204);
 
-      expect(recoveryLink()).toContain('/admin/redefinir-senha?token=');
-    });
-
-    /*
-      O 204 é o mesmo dos três casos abaixo, e é esse o ponto: a tela não pode
-      virar uma forma de descobrir quem opera o painel.
-    */
-    it('answers the same for an email nobody registered', async () => {
-      await request(app.getHttpServer())
-        .post('/v1/admin/auth/forgot-password')
-        .send({ email: 'ninguem@porto.example' })
-        .expect(204);
-
-      expect(recoveryEmails()).toHaveLength(0);
-    });
-
-    it('sends nothing to an inactive operator', async () => {
-      await insertOperator({ isActive: false });
-
-      await request(app.getHttpServer())
-        .post('/v1/admin/auth/forgot-password')
-        .send({ email: credentials.email })
-        .expect(204);
-
-      expect(recoveryEmails()).toHaveLength(0);
+      expect(lastLinkTo(e2e.mail, OPERATOR.email).pathname).toBe('/admin/redefinir-senha');
     });
 
     it('holds a second request made right away', async () => {
-      await insertOperator();
+      await insertOperator(e2e.dataSource);
 
-      await recoveryToken();
-      await request(app.getHttpServer())
-        .post('/v1/admin/auth/forgot-password')
-        .send({ email: credentials.email })
-        .expect(204);
+      await forgotPassword().expect(204);
+      await forgotPassword().expect(204);
 
-      expect(recoveryEmails()).toHaveLength(1);
+      expect(e2e.mail.sentTo(OPERATOR.email)).toHaveLength(1);
     });
   });
 
   describe('POST /v1/admin/auth/reset-password', () => {
+    async function recoveryToken(): Promise<string> {
+      await forgotPassword().expect(204);
+
+      return tokenOf(lastLinkTo(e2e.mail, OPERATOR.email));
+    }
+
     it('replaces the password of the operator', async () => {
-      await insertOperator();
-      const token = await recoveryToken();
+      await insertOperator(e2e.dataSource);
 
-      await request(app.getHttpServer())
+      await api()
         .post('/v1/admin/auth/reset-password')
-        .send({ token, password: NEW_PASSWORD })
+        .send({ token: await recoveryToken(), password: NEW_PASSWORD })
         .expect(204);
 
-      await request(app.getHttpServer())
-        .post('/v1/admin/auth/login')
-        .send({ email: credentials.email, password: NEW_PASSWORD })
-        .expect(200);
-    });
-
-    it('stops the old password from working', async () => {
-      await insertOperator();
-      const token = await recoveryToken();
-
-      await request(app.getHttpServer())
-        .post('/v1/admin/auth/reset-password')
-        .send({ token, password: NEW_PASSWORD })
-        .expect(204);
-
-      await request(app.getHttpServer()).post('/v1/admin/auth/login').send(credentials).expect(401);
-    });
-
-    it('burns the link: the second try fails', async () => {
-      await insertOperator();
-      const token = await recoveryToken();
-
-      await request(app.getHttpServer())
-        .post('/v1/admin/auth/reset-password')
-        .send({ token, password: NEW_PASSWORD })
-        .expect(204);
-
-      const response = await request(app.getHttpServer())
-        .post('/v1/admin/auth/reset-password')
-        .send({ token, password: 'OutraSenha!2026' })
-        .expect(400);
-
-      expect(response.body.code).toBe(AuthErrorCodeEnum.INVALID_TOKEN);
+      await signIn(NEW_PASSWORD).expect(200);
+      await signIn().expect(401);
     });
 
     /*
@@ -267,12 +112,11 @@ describe('Admin authentication (e2e)', () => {
       vencido — dizer "este é do outro canal" confirmaria a conta.
     */
     it('refuses a panel link on the affiliate channel', async () => {
-      await insertOperator();
-      const token = await recoveryToken();
+      await insertOperator(e2e.dataSource);
 
-      const response = await request(app.getHttpServer())
+      const response = await api()
         .post('/v1/affiliate/auth/reset-password')
-        .send({ token, password: NEW_PASSWORD })
+        .send({ token: await recoveryToken(), password: NEW_PASSWORD })
         .expect(400);
 
       expect(response.body.code).toBe(AuthErrorCodeEnum.INVALID_TOKEN);

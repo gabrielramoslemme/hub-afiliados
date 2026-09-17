@@ -3,7 +3,7 @@ import { DiscoveryModule, DiscoveryService, MetadataScanner } from '@nestjs/core
 import { IS_PUBLIC } from '../src/http/shared/decorators/public.decorator';
 import { AdminGuard } from '../src/http/shared/guards/admin.guard';
 import { AffiliateGuard } from '../src/http/shared/guards/affiliate.guard';
-import { createE2eTestingModule } from './create-e2e-testing-module';
+import { createE2eTestingModule } from './e2e-app';
 
 /**
  * A separação entre os canais mora numa linha por controller: o guard global
@@ -109,6 +109,30 @@ describe('Route protection (e2e)', () => {
     const publicRoutes = routes.filter((route) => route.isPublic).map((route) => route.signature);
 
     expect(publicRoutes.sort()).toEqual([...PUBLIC_ROUTES].sort());
+  });
+
+  /*
+    O guard de canal certo, e não só algum: um `AffiliateGuard` num controller
+    `admin/...` passaria no teste acima e abriria o painel para quem tem sessão
+    de afiliado.
+  */
+  it('guards each route with the guard of the channel its path names', () => {
+    const CHANNEL_GUARD_BY_PREFIX = [
+      { prefix: '/admin/', guard: AdminGuard },
+      { prefix: '/affiliate/', guard: AffiliateGuard },
+    ];
+
+    const mismatched = routes
+      .filter((route) => !route.isPublic)
+      .filter((route) => {
+        const path = route.signature.split(' ')[1];
+        const channel = CHANNEL_GUARD_BY_PREFIX.find(({ prefix }) => path.startsWith(prefix));
+
+        return !channel || !route.guards.includes(channel.guard);
+      })
+      .map((route) => route.signature);
+
+    expect(mismatched).toEqual([]);
   });
 
   it('never puts a channel guard on a public route', () => {
