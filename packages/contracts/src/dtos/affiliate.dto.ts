@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { AffiliateStatusEnum, StatementEntryKindEnum } from '../enums';
+import type { AffiliateStatusEnum, ReferralStatusEnum, StatementEntryKindEnum } from '../enums';
 import { PixKeyTypeEnum, SocialNetworkEnum } from '../enums';
 import type { CouponSummary } from './coupon.dto';
 
@@ -54,6 +54,8 @@ export interface AffiliateMeResponse {
   status: AffiliateStatusEnum;
   /** Nulo enquanto a Porto não emitir o cupom do afiliado aprovado. */
   coupon: string | null;
+  /** O desconto que o cupom concede a quem compra, de 1 a 25. Nulo junto com o cupom. */
+  couponDiscountPercent: number | null;
   createdAt: string;
 }
 
@@ -74,6 +76,45 @@ export interface AffiliateWalletResponse {
   paidCents: number;
   updatedAt: string;
   entries: AffiliateStatementEntry[];
+}
+
+/** Uma venda feita com o cupom do afiliado. */
+export interface AffiliateReferral {
+  id: string;
+  status: ReferralStatusEnum;
+  /** A categoria do serviço: "Serviços Automotivos". */
+  title: string;
+  /** O serviço contratado: "Guincho 24h". */
+  detail: string;
+  /** Valor do serviço vendido, em centavos. */
+  saleCents: number;
+  /** O incentivo do afiliado nesta venda, em centavos. */
+  incentiveCents: number;
+  occurredAt: string;
+}
+
+/** O acumulado da conta inteira, que não muda com o período pedido. */
+export interface AffiliateReferralsSummary {
+  /** Soma do valor das vendas concluídas, em centavos. */
+  salesCents: number;
+  /** Quantas vendas foram concluídas. */
+  salesCount: number;
+  /** Soma dos incentivos das vendas concluídas, em centavos. */
+  confirmedIncentiveCents: number;
+  /** Quantas vezes o cupom foi usado, com o serviço concluído ou não. */
+  couponUses: number;
+}
+
+/*
+  `GET /v1/affiliate/me/referrals?period=`. Só `entries` obedece o período: o
+  resumo é sempre o acumulado, para o número do topo da tela não mudar de
+  sentido conforme a aba que a pessoa escolheu na lista.
+*/
+export interface AffiliateReferralsResponse {
+  summary: AffiliateReferralsSummary;
+  updatedAt: string;
+  /** As indicações do período, da mais recente para a mais antiga. */
+  entries: AffiliateReferral[];
 }
 
 export const rejectAffiliateSchema = z.object({

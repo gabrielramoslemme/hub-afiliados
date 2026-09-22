@@ -87,7 +87,7 @@ Valem em todo pacote. Violação é bug, não preferência.
 
 Fonte única em `packages/contracts/src/enums/index.ts`, nunca redeclarado em `apps/api` nem em `apps/web`:
 
-`UserTypeEnum` · `UserRoleEnum` · `AffiliateStatusEnum` · `CouponStatusEnum` · `PixKeyTypeEnum` · `SocialNetworkEnum` · `TokenPurposeEnum` · `AuthAudienceEnum` · `AuthErrorCodeEnum` · `MailTemplateEnum` · `RegistrationErrorCodeEnum` · `CouponErrorCodeEnum` · `StatementEntryKindEnum`
+`UserTypeEnum` · `UserRoleEnum` · `AffiliateStatusEnum` · `CouponStatusEnum` · `PixKeyTypeEnum` · `SocialNetworkEnum` · `TokenPurposeEnum` · `AuthAudienceEnum` · `AuthErrorCodeEnum` · `MailTemplateEnum` · `RegistrationErrorCodeEnum` · `CouponErrorCodeEnum` · `StatementEntryKindEnum` · `ReferralStatusEnum` · `ReferralPeriodEnum`
 
 **O pacote é consumido compilado.** Depois de editar `packages/contracts/src`, rode `npm run build --workspace packages/contracts` — o `turbo` faz isso sozinho nas tasks, comando direto (`seed`, `openapi:generate`, `ts-node`) não.
 

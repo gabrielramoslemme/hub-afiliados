@@ -69,6 +69,22 @@ export enum StatementEntryKindEnum {
   PAYOUT = 'PAYOUT',
 }
 
+/** Em que pé está uma venda feita com o cupom do afiliado. */
+export enum ReferralStatusEnum {
+  /** O cliente contratou e o serviço ainda não foi concluído: o incentivo espera. */
+  PENDING = 'PENDING',
+  /** Serviço concluído: o incentivo está confirmado e entrou no extrato. */
+  COMPLETED = 'COMPLETED',
+}
+
+/** O recorte da lista de indicações na tela inicial do afiliado. */
+export enum ReferralPeriodEnum {
+  LAST_30_DAYS = 'LAST_30_DAYS',
+  /** O ano corrente, de 1º de janeiro até hoje. */
+  YEAR = 'YEAR',
+  ALL = 'ALL',
+}
+
 export enum MailTemplateEnum {
   REGISTRATION_RECEIVED = 'REGISTRATION_RECEIVED',
   REGISTRATION_APPROVED = 'REGISTRATION_APPROVED',
