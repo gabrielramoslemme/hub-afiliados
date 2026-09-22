@@ -214,7 +214,7 @@ describe('Affiliate account (e2e)', () => {
   });
 
   describe('GET /v1/affiliate/me', () => {
-    it('answers the account with cpf, rg and pix key masked, and no internal id', async () => {
+    it('answers the account with the coupon discount, masked documents and no internal id', async () => {
       const { accessToken, couponCode } = await signedIn();
 
       const response = await api()
@@ -226,6 +226,7 @@ describe('Affiliate account (e2e)', () => {
         name: MARINA.fullName,
         status: AffiliateStatusEnum.APPROVED,
         coupon: couponCode,
+        couponDiscountPercent: 10,
       });
       expect(response.body).not.toHaveProperty('id');
       const body = JSON.stringify(response.body);

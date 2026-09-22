@@ -24,6 +24,8 @@ export interface AffiliateAccountOutput {
   maskedPixKey: string;
   status: AffiliateStatusEnum;
   coupon: string | null;
+  /** O desconto que o cupom concede a quem compra; nulo junto com o cupom. */
+  couponDiscountPercent: number | null;
   createdAt: Date;
 }
 
@@ -51,6 +53,7 @@ export class GetAffiliateAccountUseCase implements UseCase<string, AffiliateAcco
       maskedPixKey: maskPixKey(affiliate.pixKeyType, affiliate.pixKey),
       status: affiliate.status,
       coupon: affiliate.coupon?.code ?? null,
+      couponDiscountPercent: affiliate.coupon?.discountPercent ?? null,
       createdAt: affiliate.createdAt,
     };
   }

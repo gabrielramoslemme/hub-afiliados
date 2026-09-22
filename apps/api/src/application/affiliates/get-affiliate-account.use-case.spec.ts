@@ -20,7 +20,7 @@ describe('GetAffiliateAccountUseCase', () => {
     status: AffiliateStatusEnum.APPROVED,
     socialNetwork: SocialNetworkEnum.TIKTOK,
     socialHandle: 'marina.ferraz',
-    coupon: buildCoupon({ code: 'MARINA25' }),
+    coupon: buildCoupon({ code: 'MARINA25', discountPercent: 15 }),
   });
 
   beforeEach(() => {
@@ -42,6 +42,7 @@ describe('GetAffiliateAccountUseCase', () => {
       maskedPixKey: 'ma***********@email.com',
       status: AffiliateStatusEnum.APPROVED,
       coupon: 'MARINA25',
+      couponDiscountPercent: 15,
       createdAt: new Date('2026-08-17T12:00:00Z'),
     });
   });
@@ -54,13 +55,16 @@ describe('GetAffiliateAccountUseCase', () => {
     expect(JSON.stringify(account)).not.toContain('marina.ferraz@email.com');
   });
 
-  it('answers without a coupon while the registration was not approved', async () => {
+  it('answers without a coupon nor its discount while the registration was not approved', async () => {
     userRepository.findByPublicId.mockResolvedValue({
       ...user,
       affiliate: buildAffiliate({ user, coupon: null }),
     });
 
-    await expect(useCase.execute(user.publicId)).resolves.toMatchObject({ coupon: null });
+    await expect(useCase.execute(user.publicId)).resolves.toMatchObject({
+      coupon: null,
+      couponDiscountPercent: null,
+    });
   });
 
   it('refuses a token of a user that is gone', async () => {

@@ -41,6 +41,13 @@ export class AffiliateAccountResponseDto implements AffiliateMeResponse {
   @ApiProperty({ nullable: true, description: 'Nulo enquanto a Porto não emitir o cupom' })
   coupon: string | null;
 
+  @ApiProperty({
+    nullable: true,
+    example: 10,
+    description: 'Desconto do cupom para quem compra, em %; nulo junto com o cupom',
+  })
+  couponDiscountPercent: number | null;
+
   @ApiProperty({ format: 'date-time' })
   createdAt: string;
 
