@@ -28,3 +28,12 @@ export function e2eDatabaseUrl(): string {
 }
 
 process.env.DATABASE_URL = e2eDatabaseUrl();
+
+/**
+ * O segredo do webhook de incentivos no e2e. Fixo, e escrito por cima do
+ * `.env`: o spec assina com ele, e um segredo de verdade no `.env` local não
+ * pode decidir se a suíte passa. A CI não precisa carregá-lo.
+ */
+export const E2E_WEBHOOK_SECRET = 'e2e-webhook-secret-with-at-least-32-chars';
+
+process.env.PORTO_WEBHOOK_SECRET = E2E_WEBHOOK_SECRET;

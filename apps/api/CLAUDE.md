@@ -8,7 +8,7 @@ NestJS 11 + TypeORM 0.3 + PostgreSQL 16. Uma aplicação, três canais de entrad
 |---|---|---|---|
 | `affiliate` | Portal web do afiliado (`apps/web`) | JWT com audiência `affiliate` | `AffiliateGuard` |
 | `admin` | Painel da Porto e da Mesa | JWT com audiência `admin` | `AdminGuard`, com `@Roles(...)` por rota |
-| `webhooks` | Sistemas externos | Assinatura própria, sem JWT | — |
+| `webhooks` | Sistemas externos | Assinatura HMAC, sem JWT | `@Public()` + `WebhookSignatureGuard` |
 | `health` | Monitoração | pública | `@Public()` |
 
 Identidade unificada em `users`, perfil 1:1 em `affiliates`. **Esquecer de checar a audiência é escalação de privilégio.**
@@ -25,7 +25,7 @@ Identidade unificada em `users`, perfil 1:1 em `affiliates`. **Esquecer de checa
 
 **Trocar de canal é 403, nos dois sentidos**, e há e2e para isso: token de afiliado em `/v1/admin/coupons/availability` e token de operador em `/v1/affiliate/me`. Além disso, o `route-protection.e2e-spec.ts` percorre as rotas registradas e confere que toda rota `admin/...` tem o `AdminGuard` e toda `affiliate/...` o `AffiliateGuard` — o guard do canal certo, e não só algum.
 
-Hoje `@Public()` marca exatamente nove rotas: `GET /v1/health`, `POST /v1/affiliates`, os dois `POST .../auth/login`, `POST /v1/affiliate/auth/set-password` e os dois pares `POST .../auth/forgot-password` e `POST .../auth/reset-password`, um em cada canal. As de senha são públicas porque são o que a pessoa tem **antes** de ter senha — ou depois de perdê-la: quem autentica a chamada é o token de uso único no corpo, e quem pede recuperação não tem sessão nenhuma para apresentar. Acrescentar a décima é decisão de segurança, não de conveniência; a lista literal em `test/route-protection.e2e-spec.ts` é o que obriga a decisão a passar por um diff.
+Hoje `@Public()` marca exatamente dez rotas: `GET /v1/health`, `POST /v1/affiliates`, os dois `POST .../auth/login`, `POST /v1/affiliate/auth/set-password`, os dois pares `POST .../auth/forgot-password` e `POST .../auth/reset-password`, um em cada canal, e `POST /v1/webhooks/porto/incentives`. As de senha são públicas porque são o que a pessoa tem **antes** de ter senha — ou depois de perdê-la: quem autentica a chamada é o token de uso único no corpo, e quem pede recuperação não tem sessão nenhuma para apresentar. A de webhook é pública só para o JWT: quem a fecha é o `WebhookSignatureGuard`, e o mesmo spec reprova rota `webhooks/...` sem ele. Acrescentar a próxima é decisão de segurança, não de conveniência; a lista literal em `test/route-protection.e2e-spec.ts` é o que obriga a decisão a passar por um diff.
 
 **As duas rotas de recuperação existem em cada canal, e o canal é quem diz a audiência.** O `RequestPasswordResetUseCase` e o `ResetPasswordUseCase` recebem `AuthAudienceEnum` na entrada, nunca no corpo: é isso que faz o link do painel não redefinir senha pela tela do afiliado. Os dois ficam em silêncio — 204 — para conta que não existe, não pode entrar ou pediu demais, porque responder diferente entregaria quem participa do programa.
 
@@ -98,6 +98,7 @@ Quem liga token a implementação é `*.module.ts`, em dois passos: o `Repositor
 | `@nestjs/jwt` | `AccessTokenIssuer` e `AccessTokenVerifier` (`src/domain/auth/`) | `JwtAccessTokenService` |
 | bcrypt | `PasswordHasher` (`src/domain/auth/`) | `BcryptPasswordHasher` |
 | `node:crypto` | `TokenGenerator` (`src/domain/auth/`) | `CryptoTokenGenerator` |
+| HMAC do webhook e `PORTO_WEBHOOK_SECRET` | `WebhookSignatureVerifier` (`src/domain/auth/`) | `HmacWebhookSignatureVerifier` |
 | O relógio | `Clock` (`src/domain/shared/`) | `SystemClock` |
 | `APP_BASE_URL` | `LinkBuilder` (`src/domain/notifications/`) | `AppLinkBuilder` |
 | Nest, como container de DI | nada — o use case é classe comum | `src/infra/di/use-cases.module.ts` |
@@ -308,7 +309,7 @@ O `HttpExceptionFilter` global normaliza toda resposta de erro:
   ```
 
 - **Traduzir `kind` para status é do filtro**, e é a tabela inteira: `NOT_FOUND` 404 · `CONFLICT` 409 · `INVALID_INPUT` 400 · `UNAUTHORIZED` 401 · `FORBIDDEN` 403 · `UNAVAILABLE` 503.
-- `code` vem de um `*ErrorCodeEnum` de `@porto/contracts` (`AuthErrorCodeEnum`, `RegistrationErrorCodeEnum`, `CouponErrorCodeEnum`) quando o cliente precisa distinguir o caso para escolher a mensagem; nas demais respostas é `null`.
+- `code` vem de um `*ErrorCodeEnum` de `@porto/contracts` (`AuthErrorCodeEnum`, `RegistrationErrorCodeEnum`, `CouponErrorCodeEnum`, `IncentiveErrorCodeEnum`) quando o cliente precisa distinguir o caso para escolher a mensagem; nas demais respostas é `null`.
 - **Guard e controller continuam podendo lançar exceção do Nest** — eles já são a camada de HTTP.
 - 5xx é logado com stack e responde `Erro interno`: a mensagem original pode carregar nome de coluna ou detalhe de schema. 4xx não é logado. **Não logue a exceção você mesmo** — o filtro já faz.
 - O `ValidationPipe` global usa `whitelist`, `forbidNonWhitelisted`, `transform` e `stopAtFirstError`: campo fora do DTO devolve 400 sozinho, com uma mensagem por campo. Ele é montado em `configureApp` (`src/configure-app.ts`), junto com o filtro — nunca direto no `main.ts`, senão o e2e volta a testar uma configuração que produção não usa.
@@ -368,6 +369,18 @@ O que sobra é o registro **e** a consulta ficarem sem resposta seguidas: o cupo
 **Toda mudança de cupom vai para `affiliate_coupon_history`**, na mesma transação da mudança: a criação dentro do `changeStatus`, cada alteração dentro do `CouponRepository.change`. Tabela própria, e não a trilha do cadastro, porque o antes e o depois são outros; o painel junta as duas numa linha do tempo só, lendo `GET .../coupon/history`.
 
 **O registro nunca esquece um código, nem o falso.** Teste e2e que aprova duas vezes precisa de dois códigos: o `TRUNCATE` entre os testes limpa a nossa tabela, não a memória de quem registrou.
+
+## Webhook de incentivos (INT-03)
+
+**`POST /v1/webhooks/porto/incentives` é por onde a venda feita com o cupom chega aqui.** A Porto Serviços decide se a venda comissiona e notifica três eventos: `VENDA_REGISTRADA` (pendente), `VENDA_CONCLUIDA` (liberado) e `VENDA_NAO_CONCLUIDA` (cancelado). O contrato devolvido à Porto — URL, assinatura, respostas e reprocessamento — está em [`docs/INT-03-incentivos.md`](docs/INT-03-incentivos.md).
+
+- **Autenticação por HMAC-SHA256 de `"<timestamp>.<corpo cru>"`**, nos headers `X-Timestamp` e `X-Signature`, com janela de `PORTO_WEBHOOK_TOLERANCE_SECONDS`. A assinatura cobre bytes: por isso a aplicação sobe com `rawBody: true`, no `main.ts` **e** no `createE2eApp` — sem o segundo, toda chamada assinada do e2e volta 401. **`PORTO_WEBHOOK_SECRET` vazio fecha a rota**, nunca a abre: é opcional para não derrubar a subida de ambiente sem o segredo combinado.
+- **Duas tabelas.** `affiliate_sales` guarda o estado atual — é a fonte da tela de Vendas e do extrato. `porto_incentive_events` guarda toda chamada que passou pela assinatura, aplicada, repetida ou recusada, com o corpo inteiro em `payload`.
+- **A idempotência é `venda.id` + tipo de evento**, a chave do contrato da Porto; o `idEvento` muda a cada envio e não é único. Repetição é 200 `ALREADY_APPLIED`, sem escrita na venda.
+- **Fora de ordem é 409 `INC-002`**, decisão da Mesa: conclusão sem registro prévio não cria a venda, e a Porto reprocessa o registro. Venda encerrada não reabre (`INC-003`).
+- **A corrida é decidida no banco**: `external_id` único com `ON CONFLICT DO NOTHING` no registro, `SELECT ... FOR UPDATE` conferindo pendente no encerramento. Quem perde relê e vira repetição ou conflito.
+- **Campo desconhecido é descartado, não recusado.** O `@WebhookBody()` valida com um `ValidationPipe` próprio, sem `forbidNonWhitelisted`; o global não alcança decorator customizado. Um 400 porque a Porto acrescentou um campo derrubaria a integração, e ela não reenvia sozinha.
+- **O valor do incentivo ainda não existe**: o payload só traz `valorVenda`, guardado em centavos. `incentivo.valor` e a data real da venda foram pedidos à Porto.
 
 ## Testes
 

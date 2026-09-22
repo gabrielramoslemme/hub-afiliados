@@ -43,4 +43,10 @@ export const envValidationSchema = Joi.object({
   PORTO_CLIENT_ID: Joi.string().when('NODE_ENV', REQUIRED_OUTSIDE_TEST),
   PORTO_CLIENT_SECRET: Joi.string().when('NODE_ENV', REQUIRED_OUTSIDE_TEST),
   PORTO_API_TIMEOUT_MS: Joi.number().default(10000),
+
+  // Vazio fecha o webhook de incentivos: toda chamada volta 401. Opcional de
+  // propósito — obrigatório, derrubaria a subida de todo ambiente que ainda não
+  // combinou o segredo com a Porto, e o que se quer ali é só a rota fechada.
+  PORTO_WEBHOOK_SECRET: Joi.string().min(32).allow('').default(''),
+  PORTO_WEBHOOK_TOLERANCE_SECONDS: Joi.number().integer().min(1).default(300),
 });

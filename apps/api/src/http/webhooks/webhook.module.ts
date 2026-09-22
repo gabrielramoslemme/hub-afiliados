@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
-import { RepositoriesModule } from '@Infra/database/typeorm/repositories/repositories.module';
+import { UseCasesModule } from '@Infra/di/use-cases.module';
+import { PortoIncentivesController } from './porto/porto-incentives.controller';
 
-@Module({ imports: [RepositoriesModule] })
+@Module({
+  imports: [UseCasesModule],
+  controllers: [PortoIncentivesController],
+})
 export class WebhookModule {}
