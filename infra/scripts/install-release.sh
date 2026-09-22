@@ -126,6 +126,9 @@ MAIL_FROM_NAME=Hub de Afiliados
 # os de homologação.
 PORTO_CLIENT_ID=${PORTO_CLIENT_ID}
 PORTO_CLIENT_SECRET=${PORTO_CLIENT_SECRET}
+# O segredo do webhook de incentivos é opcional de propósito: sem a linha no
+# parâmetro, a API sobe e a rota recusa toda chamada com 401.
+PORTO_WEBHOOK_SECRET=${PORTO_WEBHOOK_SECRET:-}
 ENV
 
     # Nada de segredo aqui, e é essa a fronteira: a web não tem o que vazar.
