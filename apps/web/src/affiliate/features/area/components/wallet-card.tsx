@@ -42,9 +42,13 @@ export function WalletCard({ wallet, pixKeyType, maskedPixKey }: WalletCardProps
       <dl className="mt-7 grid gap-3 border-t border-white/15 pt-6 sm:grid-cols-2">
         <div className="flex items-start gap-3">
           <Landmark className="mt-0.5 size-4 shrink-0 text-cyan-300" aria-hidden />
-          <div>
+          {/*
+            `min-w-0` e `break-all`: a chave de e-mail mascarada não tem espaço
+            para quebrar, e sem os dois ela passa por cima do "já pago" ao lado.
+          */}
+          <div className="min-w-0">
             <dt className="text-[0.8125rem] text-blue-200">Recebe na chave</dt>
-            <dd className="mt-0.5 text-[0.9375rem] font-semibold" data-tabular>
+            <dd className="mt-0.5 break-all text-[0.9375rem] font-semibold" data-tabular>
               {maskedPixKey}
               <span className="ml-2 font-normal text-blue-200">{PIX_LABELS[pixKeyType]}</span>
             </dd>
