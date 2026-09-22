@@ -16,7 +16,7 @@ const kit = join(web, 'public/brand/porto-servico-horizontal-primary.svg');
 
 const icons = {
   portal: 'src/app/icon.svg',
-  painel: 'src/app/(admin)/admin/icon.svg',
+  painel: 'src/app/(backoffice)/admin/icon.svg',
 };
 
 function read(file: string): string {
@@ -63,7 +63,7 @@ describe('ícones da aplicação', () => {
     `apple-icon` para a tela de início do iOS — o afiliado entra por web
     responsivo.
 
-    Em `(admin)/admin`, **só o SVG**, e não por economia: com `icon.ico` e
+    Em `(backoffice)/admin`, **só o SVG**, e não por economia: com `icon.ico` e
     `icon.svg` na mesma pasta o Next linka o `.ico` e descarta o SVG em
     silêncio, porque a precedência de extensão do `icon.*` escolhe um só. Quem
     não lê SVG cai no `/favicon.ico` da raiz, que o painel continua linkando —
@@ -74,7 +74,7 @@ describe('ícones da aplicação', () => {
     'src/app/icon.svg',
     'src/app/favicon.ico',
     'src/app/apple-icon.png',
-    'src/app/(admin)/admin/icon.svg',
+    'src/app/(backoffice)/admin/icon.svg',
   ])('serve %s', (file) => {
     expect(existsSync(join(web, file))).toBe(true);
   });

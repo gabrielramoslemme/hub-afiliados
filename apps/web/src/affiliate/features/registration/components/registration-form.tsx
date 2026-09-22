@@ -32,7 +32,7 @@ import {
   formatSocialHandle,
   pixKeyPlaceholder,
 } from '@/shared/lib/masks';
-import { registerAffiliate } from '../register-affiliate.action';
+import { registerAffiliate } from '../actions/register-affiliate.action';
 
 const RG_HINT = 'Só o número, sem o órgão emissor.';
 

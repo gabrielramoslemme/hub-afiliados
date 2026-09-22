@@ -4,7 +4,7 @@ import { Check, Copy, Share2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/lib/cn';
-import { copyText, couponShareMessage, type ShareOutcome, shareOrCopy } from '../coupon-share';
+import { copyText, couponShareMessage, type ShareOutcome, shareOrCopy } from '../lib/coupon-share';
 
 type Feedback = 'code-copied' | 'message-copied' | 'failed' | null;
 

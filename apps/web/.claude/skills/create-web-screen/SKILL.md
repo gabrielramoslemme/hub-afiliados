@@ -7,21 +7,21 @@ description: Use ao criar ou alterar tela em apps/web do porto-hub-afiliados —
 
 ## Antes de escrever
 
-1. **De quem é a tela?** Do afiliado mora em `src/app/(affiliate)/`, com a feature em `src/affiliate/features/<nome>/`; da Porto, em `src/app/(admin)/admin/(shell)/`, com a feature em `src/admin/features/<nome>/`. O route group decide layout e bundle, e o Biome não deixa uma fatia importar da outra — ver `CLAUDE.md` do pacote.
+1. **De quem é a tela?** Do afiliado mora em `src/app/(affiliate)/`, com a feature em `src/affiliate/features/<nome>/`; da Porto, em `src/app/(backoffice)/admin/(shell)/`, com a feature em `src/backoffice/features/<nome>/`. O route group decide layout e bundle, e o Biome não deixa uma fatia importar da outra — ver `CLAUDE.md` do pacote.
 2. **A rota já existe na API?** `/v1/admin`, `/v1/affiliate/auth`, `GET /v1/affiliate/me` e `PATCH /v1/affiliate/me/pix-key` existem. Só a carteira (`/v1/affiliate/me/wallet`) e as indicações (`/v1/affiliate/me/referrals`) ainda são dubladas, em `src/shared/http/mocks/mock-api.ts`.
 3. **A resposta ou o schema já estão em `@porto/contracts`?** Se a API e a web dividem o tipo, ele sai de lá — skill `create-contract`. **Não redeclare.**
 
 ## Ordem
 
-1. **Teste primeiro**, para o que é lógica: parser de query string, máscara, tradução de `code` em mensagem, schema, Server Action. **Componente não tem teste** — nem de apresentação, nem formulário. Regra que mora dentro de um componente (qual campo vai no PATCH, para onde um link aponta) sai para uma função pura ao lado e ganha o teste ali, como `coupon-changes.ts` e `site-destinations.ts`.
+1. **Teste primeiro**, para o que é lógica: parser de query string, máscara, tradução de `code` em mensagem, schema, Server Action. **Componente não tem teste** — nem de apresentação, nem formulário. Regra que mora dentro de um componente (qual campo vai no PATCH, para onde um link aponta) sai para uma função pura em `lib/` da feature e ganha o teste ali, como `lib/coupon-changes.ts` e `site-destinations.ts`.
 
-2. **A rota é casca.** `page.tsx` importa e monta a tela da feature (`src/<fatia>/features/<nome>/`), e nada mais. `metadata` e leitura de `params`/`searchParams` ficam na rota; o resto, na feature.
+2. **A rota é casca.** `page.tsx` importa e monta a tela da feature (`src/<fatia>/features/<nome>/`, com `components/`, `actions/` e `lib/`), e nada mais. `metadata` e leitura de `params`/`searchParams` ficam na rota; o resto, na feature.
 
 3. **Server Component por padrão.** `'use client'` só onde há estado, efeito ou Radix. Se a tela precisa de filtro, ordenação ou página, o estado mora na **URL** e a rota lê `searchParams` — não crie estado de cliente para isso.
 
 4. **Leitura** por `authedApiFetch` (painel), `affiliateApiFetch` (área do afiliado) ou `publicApiFetch` (rota pública), sempre no `data.ts` da feature — que importa `server-only` e por isso **não** é reexportado pelo `index.ts`. Backoffice lê com `cache: 'no-store'`. **Nunca chame `fetch` direto** e nunca exponha `API_BASE_URL` ao navegador.
 
-5. **Escrita** é Server Action em `*.action.ts`:
+5. **Escrita** é Server Action em `actions/*.action.ts`:
    - revalida a entrada com o mesmo schema zod do formulário;
    - devolve resultado tipado (`{ status: 'invalid' | 'failed' | 'success' }`), **nunca lança para a UI**;
    - traduz `ApiError.code` em erro de campo — a tela escolhe a mensagem pelo `code`, nunca pelo texto;

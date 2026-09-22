@@ -4,7 +4,7 @@ import { House, type LucideIcon, Megaphone, UserRound, Wallet } from 'lucide-rea
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/shared/lib/cn';
-import { ACCOUNT_TABS, type AccountTabHref, activeTabHref } from '../account-tabs';
+import { ACCOUNT_TABS, type AccountTabHref, activeTabHref } from '../lib/account-tabs';
 
 const ICONS: Record<AccountTabHref, LucideIcon> = {
   '/minha-conta': House,

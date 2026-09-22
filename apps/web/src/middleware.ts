@@ -1,12 +1,12 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import { AFFILIATE_AREA_PATH, AFFILIATE_LOGIN_PATH } from '@/affiliate/shared/routes';
 import {
   DASHBOARD_PATH,
   isPanelIconPath,
   isPanelPasswordPath,
   LOGIN_PATH,
   REDIRECT_PARAM,
-} from '@/admin/shared/routes';
-import { AFFILIATE_AREA_PATH, AFFILIATE_LOGIN_PATH } from '@/affiliate/shared/routes';
+} from '@/backoffice/shared/routes';
 import { AFFILIATE_SESSION_COOKIE, SESSION_COOKIE } from '@/shared/lib/session-cookie';
 
 function redirectTo(request: NextRequest, pathname: string, keepTarget = false): NextResponse {

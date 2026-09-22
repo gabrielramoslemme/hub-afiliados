@@ -14,8 +14,8 @@ export const SESSION_USER_COOKIE = 'porto_session_user';
  *
  * O caminho fica aqui, junto do nome, porque cookie é identificado pelo par —
  * apagar com um sem o outro não apaga nada. E fica em `shared/` porque
- * `app/(admin)/**` e a feature de auth precisam do mesmo valor, sem que
- * `shared/` possa importar `@/admin/**`.
+ * `app/(backoffice)/**` e a feature de auth precisam do mesmo valor, sem que
+ * `shared/` possa importar `@/backoffice/**`.
  *
  * O cookie do afiliado continua em `/`: `/entrar` e `/minha-conta` não
  * compartilham prefixo, e escopar na área deixaria o login sem enxergar a

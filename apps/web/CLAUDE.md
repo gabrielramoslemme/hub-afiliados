@@ -10,18 +10,26 @@ O primeiro nível de `src/` é o **dono**, não o domínio. Três fatias, e o Bi
 |---|---|
 | `src/affiliate/features/<nome>/` | `landing`, `registration`, `auth`, `area` — as telas do afiliado |
 | `src/affiliate/shared/` | o que a fatia inteira divide: `content.ts` (toda a copy), `routes.ts`, `components/` |
-| `src/admin/features/<nome>/` | `auth`, `affiliates`, `campaigns`, `dashboard`, `shell` — as telas da Porto |
-| `src/admin/shared/routes.ts` | as rotas do painel |
+| `src/backoffice/features/<nome>/` | `auth`, `affiliates`, `campaigns`, `dashboard`, `shell` — as telas da Porto |
+| `src/backoffice/shared/routes.ts` | as rotas do painel |
 | `src/shared/` | transversal de verdade: `components/ui/` (shadcn), `components/porto-logo`, `hooks/`, `lib/`, `http/` |
-| `src/app/` | só casca de rota, espelhando as fatias em `(affiliate)/` e `(admin)/` |
+| `src/app/` | só casca de rota, espelhando as fatias em `(affiliate)/` e `(backoffice)/` |
 
 Alias `@/*` → `src/*`. Um só: o caminho já nomeia o dono.
 
-Dentro de uma feature: `components/`, `index.ts` e, quando há leitura de servidor, `data.ts`.
+Dentro de uma feature, a raiz só guarda as entradas públicas — `index.ts` e, quando existem, `data.ts` e `session.ts` — e o resto mora em três pastas, cada arquivo com o `*.spec.ts` ao lado:
+
+| Pasta | O que mora |
+|---|---|
+| `components/` | a tela, um componente por arquivo |
+| `actions/` | Server Action, `*.action.ts` com `'use server'` |
+| `lib/` | lógica pura: schema, parser de query string, tradução de `code`, destino de redirecionamento, mock de dado que ainda não tem rota |
+
+Pasta que ficaria vazia não nasce: `landing` só tem `components/`.
 
 **A rota é casca:** `page.tsx` importa e monta a tela, nada mais. Isso mantém a rota do Next trocável sem reescrever a tela — e é o que permite `/cadastro` e a seção da landing servirem o mesmo componente.
 
-**O route group não aparece na URL.** `(affiliate)/(public)`, `(affiliate)/(account)` e `(admin)` existem para separar layout e bundle: a landing page não carrega uma linha de código do painel.
+**O route group não aparece na URL.** `(affiliate)/(public)`, `(affiliate)/(account)` e `(backoffice)` existem para separar layout e bundle: a landing page não carrega uma linha de código do painel.
 
 **`/admin` é o dashboard, e é a home do painel:** `safeAdminTarget` e o `middleware` mandam para lá depois do login, e a fila virou destino escolhido. O item do dashboard casa a rota por igualdade e não por `startsWith` — sendo a raiz de `/admin`, ele ficaria aceso em toda tela do painel.
 
@@ -31,9 +39,9 @@ Quatro `overrides` com `noRestrictedImports` no [`biome.jsonc`](../../biome.json
 
 | Origem | Não importa | Por quê |
 |---|---|---|
-| `src/admin/**`, `src/app/(admin)/**` | `@/affiliate/**` | o painel não conhece o portal |
-| `src/affiliate/**`, `src/app/(affiliate)/**` | `@/admin/**` | e o portal não conhece o painel |
-| `src/shared/**` | `@/admin/**`, `@/affiliate/**`, `@/app/**` | a seta aponta para dentro |
+| `src/backoffice/**`, `src/app/(backoffice)/**` | `@/affiliate/**` | o painel não conhece o portal |
+| `src/affiliate/**`, `src/app/(affiliate)/**` | `@/backoffice/**` | e o portal não conhece o painel |
+| `src/shared/**` | `@/backoffice/**`, `@/affiliate/**`, `@/app/**` | a seta aponta para dentro |
 | `src/**` | o miolo de outra feature | de fora, só pelo `index.ts` |
 
 O que os dois lados precisam sobe para `src/shared/`. **Nunca** faça `src/shared/` alcançar uma feature: foi essa inversão que colocou a máscara de CPF dentro de `features/registration` com o painel dependendo dela.
@@ -63,9 +71,9 @@ import { fetchWallet } from '@/affiliate/features/area/data';  // leitura de ser
 | `authedApiFetch` | canal `/admin`; lê o cookie do operador | idem |
 | `affiliateApiFetch` | canal `/affiliate/me`; lê o cookie do afiliado | idem |
 
-São três funções e não um parâmetro `auth` de propósito: esquecer um booleano é fácil, escolher o nome errado da função não é. E as duas autenticadas leem **cookies diferentes** — trocar de audiência por engano abriria o canal errado com o token errado. As duas convertem o corpo de erro padrão da API em `ApiError`, com `statusCode` e `code`. **A tela escolhe a mensagem pelo `code`, nunca pelo texto** — a tradução mora em `registration/errors.ts` e em `auth/errors.ts`.
+São três funções e não um parâmetro `auth` de propósito: esquecer um booleano é fácil, escolher o nome errado da função não é. E as duas autenticadas leem **cookies diferentes** — trocar de audiência por engano abriria o canal errado com o token errado. As duas convertem o corpo de erro padrão da API em `ApiError`, com `statusCode` e `code`. **A tela escolhe a mensagem pelo `code`, nunca pelo texto** — a tradução mora em `registration/lib/errors.ts` e em `auth/lib/errors.ts`.
 
-**Escrita é Server Action**, sempre em `*.action.ts` com `'use server'`. O action revalida a entrada com o mesmo schema zod do formulário — é isso que impede um POST montado à mão de contornar a tela — e devolve resultado tipado, nunca lança para a UI.
+**Escrita é Server Action**, sempre em `actions/*.action.ts` com `'use server'`. O action revalida a entrada com o mesmo schema zod do formulário — é isso que impede um POST montado à mão de contornar a tela — e devolve resultado tipado, nunca lança para a UI.
 
 **Leitura é Server Component.** A fila do admin lê `searchParams`, então filtro, ordenação e página vivem na URL: recarregar, voltar e compartilhar o endereço funcionam de graça, e não há uma linha de JavaScript de dados no cliente. Não há TanStack Query neste app — se uma tela precisar de polling ou lista otimista, ele volta; enquanto não precisar, a URL resolve.
 
@@ -109,7 +117,7 @@ O App Router injeta os `<link>` sozinho a partir do nome do arquivo. São dois c
 | `src/app/icon.svg` | tudo que não é `/admin` | navegador moderno |
 | `src/app/favicon.ico` | toda rota | 16, 32 e 48, para quem não lê SVG |
 | `src/app/apple-icon.png` | toda rota | 180, tela de início do iOS |
-| `src/app/(admin)/admin/icon.svg` | `/admin/**` | a aba do painel |
+| `src/app/(backoffice)/admin/icon.svg` | `/admin/**` | a aba do painel |
 
 O desenho é o mesmo nos dois: o símbolo do kit, traçado idêntico ao de `porto-servico-horizontal-primary.svg`, sem redesenho. **A diferença é só o tom do azulejo** — `#4499d4` do kit no portal, `color-blue-900` no painel —, porque quem analisa cadastro abre os dois lado a lado e a 16px a cor é o que separa uma aba da outra. `icon.spec.ts` trava as duas coisas: que o traçado continua vindo do kit e que os dois tons continuam diferentes.
 
@@ -168,9 +176,9 @@ Saldo e total pago são **somados a partir do extrato** em `fixtures.ts`, nunca 
 
 A resposta volta pelo mesmo `request()`, então cabeçalho montado, 204 sem corpo e tradução do corpo de erro em `ApiError` continuam exercitados. Quando as rotas nascerem, tire a flag e nenhuma tela muda.
 
-**O dashboard não passa por aqui.** Os números da tela inicial do painel são constantes em `admin/features/dashboard/mock-data.ts`: faturamento, comissão e venda dependem de tabelas que a Onda 1 não tem, então não há rota para dublar. `mock-data.spec.ts` trava as somas que a tela mostra lado a lado — segmento que fecha o total, fatia que fecha 100%, comissão que sai da mesma taxa. Quando as leituras nascerem, o arquivo vira `data.ts` e a montagem não muda.
+**O dashboard não passa por aqui.** Os números da tela inicial do painel são constantes em `backoffice/features/dashboard/lib/mock-data.ts`: faturamento, comissão e venda dependem de tabelas que a Onda 1 não tem, então não há rota para dublar. `mock-data.spec.ts` trava as somas que a tela mostra lado a lado — segmento que fecha o total, fatia que fecha 100%, comissão que sai da mesma taxa. Quando as leituras nascerem, o arquivo vira `data.ts` e a montagem não muda.
 
-**Campanhas segue o mesmo desenho.** `admin/features/campaigns/mock-data.ts` guarda os registros e `list-campaigns.ts` corta em memória o que a API vai cortar com `WHERE`, `ORDER BY` e `LIMIT` — devolvendo o mesmo `{ data, total }` de `PaginatedResult`, que é o que mantém a tela intacta na troca. Criar, editar e encerrar campanha aparecem desabilitados com "em breve": a Onda 1 não tem rota de escrita, e oferecer o clique seria oferecer um caminho que não chega.
+**Campanhas segue o mesmo desenho.** `backoffice/features/campaigns/lib/mock-data.ts` guarda os registros e `list-campaigns.ts` corta em memória o que a API vai cortar com `WHERE`, `ORDER BY` e `LIMIT` — devolvendo o mesmo `{ data, total }` de `PaginatedResult`, que é o que mantém a tela intacta na troca. Criar, editar e encerrar campanha aparecem desabilitados com "em breve": a Onda 1 não tem rota de escrita, e oferecer o clique seria oferecer um caminho que não chega.
 
 ### Atenção: por que não é MSW
 
@@ -188,7 +196,7 @@ Criou `--text-*`, `--shadow-*` ou `--radius-*` novo? Acrescente em `extendTailwi
 
 **Só lógica, em Jest (`*.spec.ts`, ao lado do arquivo):** Server Action, schema, parser de query string, máscara e formatação, tradução de `code`, destino de redirecionamento, função pura extraída de componente. O ambiente é o do Node — não há jsdom nem Testing Library no pacote.
 
-**Componente não tem teste.** Renderizar para conferir texto, foco, classe ou tique de animação quebra a cada mudança de copy e não protege regra nenhuma. **Regra que mora dentro de um componente sai para uma função pura ao lado e ganha o teste ali:** `admin/features/affiliates/coupon-changes.ts` (o PATCH do cupom leva só o campo que a analista tocou, porque o INT-01 trata campo presente como pedido de mudança) e `affiliate/shared/site-destinations.ts` (fora da landing, o menu aponta para `/#secao`).
+**Componente não tem teste.** Renderizar para conferir texto, foco, classe ou tique de animação quebra a cada mudança de copy e não protege regra nenhuma. **Regra que mora dentro de um componente sai para uma função pura ao lado e ganha o teste ali:** `backoffice/features/affiliates/lib/coupon-changes.ts` (o PATCH do cupom leva só o campo que a analista tocou, porque o INT-01 trata campo presente como pedido de mudança) e `affiliate/shared/site-destinations.ts` (fora da landing, o menu aponta para `/#secao`).
 
 **O Jest roda em UTC** (`jest.config.mjs`). Os testes de data esperam o horário de São Paulo, então esquecer o `timeZone` num formatador quebra o teste em qualquer máquina — numa em -03 ele passaria mesmo errado.
 

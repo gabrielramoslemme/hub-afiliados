@@ -250,7 +250,7 @@
       }
     },
     {
-      "includes": ["apps/web/src/admin/**", "apps/web/src/app/(admin)/**"],
+      "includes": ["apps/web/src/backoffice/**", "apps/web/src/app/(backoffice)/**"],
       "linter": {
         "rules": {
           "style": {
@@ -287,7 +287,7 @@
               "options": {
                 "patterns": [
                   {
-                    "group": ["@/admin/**"],
+                    "group": ["@/backoffice/**"],
                     "message": "The affiliate portal must not import from the admin panel. What both sides need goes to src/shared."
                   },
                   {
@@ -318,7 +318,7 @@
               "options": {
                 "patterns": [
                   {
-                    "group": ["@/admin/**", "@/affiliate/**", "@/app/**"],
+                    "group": ["@/backoffice/**", "@/affiliate/**", "@/app/**"],
                     "message": "src/shared must not depend on a slice. Move what it needs down into src/shared, or keep the code in the slice that owns it."
                   },
                   {

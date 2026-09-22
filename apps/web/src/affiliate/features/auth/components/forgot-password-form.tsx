@@ -10,7 +10,7 @@ import { AFFILIATE_LOGIN_PATH } from '@/affiliate/shared/routes';
 import { Button } from '@/shared/components/ui/button';
 import { Field, fieldAria } from '@/shared/components/ui/field';
 import { Input } from '@/shared/components/ui/input';
-import { requestPasswordReset } from '../forgot-password.action';
+import { requestPasswordReset } from '../actions/forgot-password.action';
 
 /**
  * A confirmação é a mesma exista ou não conta com aquele e-mail — é o que

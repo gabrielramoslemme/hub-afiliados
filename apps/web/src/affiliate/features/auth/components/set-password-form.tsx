@@ -1,7 +1,7 @@
 'use client';
 
 import { AFFILIATE_FORGOT_PASSWORD_PATH } from '@/affiliate/shared/routes';
-import { setPassword } from '../set-password.action';
+import { setPassword } from '../actions/set-password.action';
 import { PasswordForm } from './password-form';
 
 /**

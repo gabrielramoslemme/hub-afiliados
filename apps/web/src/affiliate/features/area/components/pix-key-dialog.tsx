@@ -29,7 +29,7 @@ import {
 } from '@/shared/components/ui/select';
 import { pixKeyTypeName } from '@/shared/lib/format';
 import { formatPixKey, pixKeyPlaceholder } from '@/shared/lib/masks';
-import { changePixKey } from '../change-pix-key.action';
+import { changePixKey } from '../actions/change-pix-key.action';
 
 interface ChangePixKeyDialogProps {
   pixKeyType: PixKeyTypeEnum;

@@ -9,7 +9,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Field, fieldAria } from '@/shared/components/ui/field';
 import { Input } from '@/shared/components/ui/input';
 import { PasswordInput } from '@/shared/components/ui/password-input';
-import { signIn } from '../sign-in.action';
+import { signIn } from '../actions/sign-in.action';
 
 export function SignInForm() {
   const [pending, startTransition] = useTransition();

@@ -7,7 +7,7 @@ import {
 import { Badge } from '@/shared/components/ui/badge';
 import { cn } from '@/shared/lib/cn';
 import { formatBRL, formatDate, formatDateTime } from '@/shared/lib/format';
-import { referralPeriodHref } from '../referral-period';
+import { referralPeriodHref } from '../lib/referral-period';
 
 const PERIODS: { period: ReferralPeriodEnum; tab: string; caption: string }[] = [
   { period: ReferralPeriodEnum.LAST_30_DAYS, tab: '30 dias', caption: 'Últimos 30 dias' },

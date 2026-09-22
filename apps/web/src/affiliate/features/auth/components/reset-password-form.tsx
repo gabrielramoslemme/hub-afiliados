@@ -1,7 +1,7 @@
 'use client';
 
 import { AFFILIATE_FORGOT_PASSWORD_PATH } from '@/affiliate/shared/routes';
-import { resetPassword } from '../reset-password.action';
+import { resetPassword } from '../actions/reset-password.action';
 import { PasswordForm } from './password-form';
 
 /** A senha que nasce do link de recuperação, que vale 2 horas e serve uma vez. */
