@@ -77,6 +77,20 @@ export enum ReferralStatusEnum {
   COMPLETED = 'COMPLETED',
 }
 
+/**
+ * O incentivo de uma venda feita com o cupom do afiliado, como a Porto Serviços
+ * decidiu e nos notificou. Pendente e liberado viram entrada no extrato; cancelado
+ * encerra a venda sem comissão.
+ */
+export enum IncentiveStatusEnum {
+  /** Venda registrada, serviço ainda não executado. */
+  PENDING = 'PENDING',
+  /** Serviço concluído: o incentivo pode ser pago. */
+  RELEASED = 'RELEASED',
+  /** Venda não concluída: não há incentivo. */
+  CANCELED = 'CANCELED',
+}
+
 /** O recorte da lista de indicações na tela inicial do afiliado. */
 export enum ReferralPeriodEnum {
   LAST_30_DAYS = 'LAST_30_DAYS',
@@ -119,4 +133,25 @@ export enum CouponErrorCodeEnum {
 }
 
 /** Todo `code` que o corpo de erro da API pode carregar. */
-export type ApiErrorCode = AuthErrorCodeEnum | RegistrationErrorCodeEnum | CouponErrorCodeEnum;
+/**
+ * Recusas do webhook de incentivos. Quem lê é o suporte da Porto Serviços, que
+ * decide pelo código se reprocessa, corrige o envio ou abre um chamado.
+ */
+export enum IncentiveErrorCodeEnum {
+  /** O cupom da venda não é de nenhum afiliado. */
+  UNKNOWN_COUPON = 'INC-001',
+  /** Conclusão ou cancelamento de uma venda que nunca foi registrada aqui. */
+  SALE_NOT_REGISTERED = 'INC-002',
+  /** A venda já foi encerrada com o desfecho oposto, e venda encerrada não reabre. */
+  SALE_ALREADY_SETTLED = 'INC-003',
+  /** O tipo do evento e o status do incentivo não formam um par válido. */
+  INCONSISTENT_EVENT = 'INC-004',
+  /** A venda já existe aqui com outro cupom. */
+  SALE_COUPON_MISMATCH = 'INC-005',
+}
+
+export type ApiErrorCode =
+  | AuthErrorCodeEnum
+  | RegistrationErrorCodeEnum
+  | CouponErrorCodeEnum
+  | IncentiveErrorCodeEnum;
