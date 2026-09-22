@@ -34,8 +34,8 @@ export function CouponCard() {
           {/*
             Amostra, e não o cupom da pessoa: sem botão de copiar, de propósito.
             Um código copiável aqui é lido como um cupom que já existe — e o de
-            verdade só nasce na área do afiliado, depois da aprovação, onde o
-            `CopyCoupon` continua.
+            verdade só nasce na área do afiliado, depois da aprovação, e é lá
+            que ficam os botões de copiar e compartilhar.
           */}
           <p
             className="inline-flex rounded-md border border-ink-200 bg-white px-2.5 py-1.5 font-mono text-sm font-semibold tracking-[0.08em] text-ink-900"

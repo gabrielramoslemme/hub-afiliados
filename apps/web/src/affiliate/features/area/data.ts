@@ -1,14 +1,20 @@
 import 'server-only';
 
 import { redirect } from 'next/navigation';
-import type { AffiliateMeResponse, AffiliateWalletResponse } from '@porto/contracts';
+import type {
+  AffiliateMeResponse,
+  AffiliateReferralsResponse,
+  AffiliateWalletResponse,
+  ReferralPeriodEnum,
+} from '@porto/contracts';
 import { AFFILIATE_SESSION_EXPIRED_PATH } from '@/affiliate/shared/routes';
 import { affiliateApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
 
 /**
- * Saldo e extrato não podem vir de cache: entre a pessoa abrir a carteira e
- * olhar de novo, uma venda pode ter entrado ou um pagamento pode ter saído.
+ * Saldo, extrato e indicações não podem vir de cache: entre a pessoa abrir a
+ * tela e olhar de novo, uma venda pode ter entrado ou um pagamento pode ter
+ * saído.
  */
 const FRESH: RequestInit = { cache: 'no-store' };
 
@@ -32,5 +38,14 @@ export function fetchAccount(): Promise<AffiliateMeResponse> {
 export function fetchWallet(): Promise<AffiliateWalletResponse> {
   return readOrSignIn(() =>
     affiliateApiFetch<AffiliateWalletResponse>('/affiliate/me/wallet', FRESH),
+  );
+}
+
+export function fetchReferrals(period: ReferralPeriodEnum): Promise<AffiliateReferralsResponse> {
+  return readOrSignIn(() =>
+    affiliateApiFetch<AffiliateReferralsResponse>(
+      `/affiliate/me/referrals?period=${period}`,
+      FRESH,
+    ),
   );
 }

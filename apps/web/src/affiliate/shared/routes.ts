@@ -6,6 +6,11 @@
 export const AFFILIATE_LOGIN_PATH = '/entrar';
 export const AFFILIATE_AREA_PATH = '/minha-conta';
 
+/** O Início é a raiz da área: é para ele que o login manda. */
+export const AFFILIATE_WALLET_PATH = '/minha-conta/carteira';
+export const AFFILIATE_MATERIALS_PATH = '/minha-conta/materiais';
+export const AFFILIATE_PROFILE_PATH = '/minha-conta/perfil';
+
 /**
  * As duas telas da recuperação de senha, e a de criar a senha depois da
  * aprovação. Nenhuma passa pelo `middleware`: são públicas por natureza — quem

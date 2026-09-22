@@ -8,7 +8,7 @@ description: Use ao criar ou alterar tela em apps/web do porto-hub-afiliados —
 ## Antes de escrever
 
 1. **De quem é a tela?** Do afiliado mora em `src/app/(affiliate)/`, com a feature em `src/affiliate/features/<nome>/`; da Porto, em `src/app/(admin)/admin/(shell)/`, com a feature em `src/admin/features/<nome>/`. O route group decide layout e bundle, e o Biome não deixa uma fatia importar da outra — ver `CLAUDE.md` do pacote.
-2. **A rota já existe na API?** `/v1/admin`, `/v1/affiliate/auth`, `GET /v1/affiliate/me` e `PATCH /v1/affiliate/me/pix-key` existem. Só a carteira (`/v1/affiliate/me/wallet`) ainda é dublada, em `src/shared/http/mocks/mock-api.ts`.
+2. **A rota já existe na API?** `/v1/admin`, `/v1/affiliate/auth`, `GET /v1/affiliate/me` e `PATCH /v1/affiliate/me/pix-key` existem. Só a carteira (`/v1/affiliate/me/wallet`) e as indicações (`/v1/affiliate/me/referrals`) ainda são dubladas, em `src/shared/http/mocks/mock-api.ts`.
 3. **A resposta ou o schema já estão em `@porto/contracts`?** Se a API e a web dividem o tipo, ele sai de lá — skill `create-contract`. **Não redeclare.**
 
 ## Ordem

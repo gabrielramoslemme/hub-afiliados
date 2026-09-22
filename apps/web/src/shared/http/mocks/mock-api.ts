@@ -1,9 +1,10 @@
-import { mockWallet } from './fixtures';
+import { ReferralPeriodEnum } from '@porto/contracts';
+import { mockReferrals, mockWallet } from './fixtures';
 
 /**
- * O que sobrou do dublê: a carteira do afiliado, que depende de extrato e
- * pagamento — tabelas que a Onda 1 não tem. Login, conta e o canal `/v1/admin`
- * saíram daqui: as três pontas falam com a API de verdade.
+ * O que sobrou do dublê: a carteira e as indicações do afiliado, que dependem
+ * de venda, extrato e pagamento — tabelas que a Onda 1 não tem. Login, conta e
+ * o canal `/v1/admin` saíram daqui: as três pontas falam com a API de verdade.
  *
  * É uma função que devolve `Response`, e **não** um interceptador de `fetch`
  * global. A diferença não é de estilo: o Next reaplica o próprio patch de cache
@@ -49,6 +50,21 @@ const routes: MockRoute[] = [
       return json(mockWallet);
     },
   },
+  {
+    method: 'GET',
+    pattern: /^\/affiliate\/me\/referrals$/,
+    handle({ path, query }) {
+      const period = query.get('period') ?? ReferralPeriodEnum.LAST_30_DAYS;
+
+      // A API vai recusar o período desconhecido na validação do DTO, e o dublê
+      // recusa do mesmo jeito: devolver a lista inteira esconderia o erro.
+      if (!Object.values<string>(ReferralPeriodEnum).includes(period)) {
+        return fail(400, null, `Período inválido: ${period}`, path);
+      }
+
+      return json(mockReferrals(period as ReferralPeriodEnum));
+    },
+  },
 ];
 
 async function readBody(init: RequestInit): Promise<Record<string, unknown>> {
@@ -70,7 +86,7 @@ async function readBody(init: RequestInit): Promise<Record<string, unknown>> {
   de qualquer canal, e precisa continuar gravando no Postgres com a mesma flag
   ligada.
 */
-const DUBBED = ['/affiliate/me/wallet'];
+const DUBBED = ['/affiliate/me/wallet', '/affiliate/me/referrals'];
 
 /**
  * Recebe a URL absoluta que o `api-client` montaria e devolve o que a API

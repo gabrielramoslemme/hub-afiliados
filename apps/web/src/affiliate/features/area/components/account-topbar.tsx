@@ -5,7 +5,7 @@ import { Button } from '@/shared/components/ui/button';
 import { AccountNav } from './account-nav';
 
 /** Primeiro nome só: a barra é estreita e "Olá, Cleide" basta para reconhecer. */
-function firstNameOf(name: string): string {
+export function firstNameOf(name: string): string {
   return name.trim().split(/\s+/)[0];
 }
 
@@ -27,7 +27,7 @@ export function AccountTopbar({ name }: { name: string }) {
             que encerra sessão é encerrado por qualquer prefetch do navegador.
           */}
           <form action={signOut}>
-            <Button type="submit" variant="ghost" size="sm" className="gap-2">
+            <Button type="submit" variant="outline" size="sm" className="gap-2">
               <LogOut aria-hidden />
               <span className="hidden sm:inline">Sair</span>
               <span className="sr-only sm:hidden">Sair</span>

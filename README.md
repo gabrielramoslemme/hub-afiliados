@@ -67,14 +67,15 @@ Para ver o fluxo inteiro rodando contra a API:
    funciona uma vez só.
 4. Crie a senha e entre em http://localhost:3005/entrar.
 
-### A carteira ainda roda contra dublê
+### A carteira e as indicações ainda rodam contra dublê
 
-`GET /v1/affiliate/me/wallet` não existe na API — saldo e extrato dependem de
-tabelas que a Onda 1 não tem. Com `API_MOCKING=enabled` no `apps/web/.env.local`,
-um dublê em memória responde no lugar dela.
+`GET /v1/affiliate/me/wallet` e `GET /v1/affiliate/me/referrals` não existem na
+API — saldo, extrato e vendas pelo cupom dependem de tabelas que a Onda 1 não
+tem. Com `API_MOCKING=enabled` no `apps/web/.env.local`, um dublê em memória
+responde no lugar delas.
 
-O dublê cobre apenas esse prefixo; todo o resto vai para a API de verdade com a
-mesma flag ligada. Quando a rota nascer, tire a flag.
+O dublê cobre apenas esses dois prefixos; todo o resto vai para a API de verdade
+com a mesma flag ligada. Quando as rotas nascerem, tire a flag.
 
 ### Operadores criados pelo seed
 
