@@ -5,7 +5,7 @@ import { RegistrationForm } from './registration-form';
 
 export function RegistrationSection({ autoFocus = false }: { autoFocus?: boolean } = {}) {
   return (
-    <section id="cadastro" className="border-t border-blue-200 bg-blue-50 py-24">
+    <section className="border-t border-blue-200 bg-blue-50 py-24">
       <Container className="grid gap-12 lg:grid-cols-12 lg:gap-16">
         <div className="reveal lg:col-span-5">
           <SectionHeading
@@ -49,8 +49,18 @@ export function RegistrationSection({ autoFocus = false }: { autoFocus?: boolean
           </p>
         </div>
 
-        <div className="reveal-pop lg:col-span-7">
-          <div className="rounded-panel border border-ink-200 bg-white p-7 shadow-card sm:p-9">
+        {/*
+          A âncora do "Quero me cadastrar" é a coluna do formulário, e não a
+          seção. No celular as colunas empilham, e a seção abria no título, nos
+          selos e na jornada inteira, com o primeiro campo quase uma tela abaixo.
+          No desktop dá no mesmo: as duas colunas começam na mesma altura.
+
+          O `id` fica fora do `reveal-pop` de propósito: o navegador mira a caixa
+          já transformada, e com a animação ainda no começo o formulário parava
+          uns 25px acima do lugar, encostado no header.
+        */}
+        <div id="cadastro" className="lg:col-span-7">
+          <div className="reveal-pop rounded-panel border border-ink-200 bg-white p-7 shadow-card sm:p-9">
             <RegistrationForm autoFocus={autoFocus} />
           </div>
         </div>

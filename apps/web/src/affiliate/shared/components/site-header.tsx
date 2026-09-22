@@ -154,10 +154,17 @@ export function SiteHeader() {
             <Link href={AFFILIATE_LOGIN_PATH}>{site.accountCta}</Link>
           </Button>
 
-          <Button asChild size="sm" className="group hidden sm:inline-flex">
+          {/*
+            No celular o botão fica também, encurtado: é a única ação da página,
+            e escondê-la atrás do menu obrigava a pessoa a rolar até o hero ou
+            abrir o menu para achar o cadastro. Abaixo de 360px ele encostaria
+            no logotipo; ali o cadastro continua no menu e no hero.
+          */}
+          <Button asChild size="sm" className="group hidden min-[360px]:inline-flex">
             <Link href={destinations.registration}>
-              Quero me cadastrar
-              <ArrowRight className="transition-transform duration-200 group-hover:translate-x-0.5" />
+              <span className="sm:hidden">Cadastrar</span>
+              <span className="hidden sm:inline">Quero me cadastrar</span>
+              <ArrowRight className="hidden transition-transform duration-200 group-hover:translate-x-0.5 sm:block" />
             </Link>
           </Button>
 

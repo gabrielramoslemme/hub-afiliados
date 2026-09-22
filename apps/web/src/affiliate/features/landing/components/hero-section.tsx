@@ -15,10 +15,10 @@ export function HeroSection() {
   return (
     <section className="surface-brand surface-mesh surface-grid relative isolate overflow-hidden">
       {/*
-        Três blocos, e não dois: no celular a promessa vem primeiro, os dois
-        objetos que a pessoa recebe entram no meio como prova, e a ação fecha a
-        dobra. Empilhados como texto-inteiro-e-depois-os-cartões, eles liam como
-        dois blocos soltos no fim de um parágrafo comprido.
+        Três blocos, e não dois: no celular a promessa vem primeiro e a ação logo
+        abaixo, ainda na primeira dobra; os dois objetos que a pessoa recebe
+        entram depois, como prova. Com os cartões no meio, o botão de cadastro
+        caía abaixo de quase uma tela inteira de rolagem.
 
         A partir de `lg` a grade recompõe as duas colunas de sempre: promessa e
         ação uma sobre a outra à esquerda, os cartões ocupando as duas linhas à
@@ -46,7 +46,7 @@ export function HeroSection() {
           e a inclinação é de cada cartão — separadas, porque as duas escrevem
           `transform` e uma sobrescreveria a outra no mesmo elemento.
         */}
-        <div className="animate-float flex justify-center lg:col-span-6 lg:row-span-2 lg:self-center lg:justify-end">
+        <div className="animate-float order-last flex justify-center lg:order-none lg:col-span-6 lg:row-span-2 lg:self-center lg:justify-end">
           <div className="flex w-full max-w-sm flex-col gap-5">
             <Tilt>
               <CouponCard />
