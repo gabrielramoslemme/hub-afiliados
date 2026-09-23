@@ -1,17 +1,20 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  porto-hub-afiliados - ambiente de DESENVOLVIMENTO. Instancia unica com Docker
-  Compose (Caddy + web + API), RDS Postgres em subnets privadas, imagens no ECR
-  e deploy por documento SSM. CloudFront na frente termina o TLS e da um nome
-  estavel para a Imperva apontar. Sem ALB, NAT Gateway, ASG nem Multi-AZ: as
-  escolhas e os custos estao em infra/cloudformation/README.md.
+  porto-hub-afiliados - ambientes de desenvolvimento e de producao, um por
+  stack. Instancia unica com Docker Compose (Caddy + web + API), RDS Postgres
+  em subnets privadas, imagens no ECR e deploy por documento SSM. CloudFront na
+  frente termina o TLS e da um nome estavel para a Imperva apontar. Em prod a
+  instancia fica em subnet privada atras de VPC origin, com NAT, RDS Multi-AZ e
+  alarmes. As escolhas e os custos estao em infra/cloudformation/README.md.
 
 Parameters:
   EnvironmentName:
     Type: String
     Default: dev
-    AllowedPattern: '^[a-z0-9-]{2,12}$'
-    Description: Prefixo de nome e tag de todo recurso da stack.
+    AllowedValues: [dev, prod]
+    Description: >
+      Prefixo de nome e tag de todo recurso da stack, e o que liga o
+      endurecimento de producao (IsProd).
 
   # Os tres parametros abaixo nascem VAZIOS de proposito, e e isso que permite
   # o ambiente subir antes de a Porto emitir o certificado. Sao tres modos:
@@ -219,6 +222,48 @@ Parameters:
       Confirmacao de que DbAccessCidr=0.0.0.0/0 e intencional. Irrelevante com
       qualquer outro CIDR, e ignorado com o banco fechado.
 
+  # VAZIOS em dev, e ai valem os padroes da API - os de homologacao. Em prod sao
+  # obrigatorios (regra ProdRequiresPortoGateway): credencial de producao
+  # falando com HML falharia sem dizer por que. A trava fica aqui, e nao na
+  # API, porque os dois ambientes rodam com NODE_ENV=production.
+  PortoOAuthUrl:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^https://\S+$'
+    Description: Endpoint de token do gateway Sensedia da Porto. Obrigatorio em prod.
+
+  PortoApiBaseUrl:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^https://\S+$'
+    Description: Base da API do gateway Sensedia da Porto. Obrigatorio em prod.
+
+  AlertEmail:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^[^@\s]+@[^@\s]+\.[^@\s]+$'
+    Description: >
+      Quem recebe os alarmes de producao por e-mail. A assinatura so vale
+      depois de confirmada no link que o SNS manda. Ignorado em dev.
+
+  # VPC origin nao funciona na zona use1-az3, e o nome `us-east-1x` mapeia para
+  # um id diferente em cada conta - `!GetAZs` pode cair justamente nela. Vazios,
+  # o template escolhe a primeira e a segunda da regiao, como sempre fez.
+  PrimaryAvailabilityZone:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^[a-z]{2}-[a-z]+-\d[a-z]$'
+    Description: >
+      Zona da instancia e das subnets A. Em prod, escolha uma cujo ZoneId nao
+      seja use1-az3: `aws ec2 describe-availability-zones --region us-east-1
+      --query 'AvailabilityZones[].[ZoneName,ZoneId]' --output text`.
+
+  SecondaryAvailabilityZone:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^[a-z]{2}-[a-z]+-\d[a-z]$'
+    Description: Zona das subnets B, a outra perna do RDS. Diferente da primaria.
+
 # Os tres parametros de dominio se acoplam, e o tipo deles nao expressa isso.
 # Sem estas regras a combinacao errada falha dois minutos depois, no CloudFront,
 # com mensagem que nao aponta para o parametro. Com elas, falha na hora do
@@ -252,7 +297,48 @@ Rules:
           do master como unico controle. Passe AcknowledgeDbOpenToInternet=true
           para confirmar que a exposicao e intencional.
 
+  # Producao nao tem o modo de banco aberto: o acesso e so pelo tunel do SSM,
+  # que deixa no CloudTrail quem entrou. E a instancia de prod mora na subnet
+  # privada, que DbAccessCidr apontaria para o internet gateway.
+  ProdKeepsDatabaseClosed:
+    RuleCondition: !Equals [!Ref EnvironmentName, 'prod']
+    Assertions:
+      - Assert: !Equals [!Ref DbAccessCidr, '']
+        AssertDescription: >
+          DbAccessCidr nao existe em producao. Use o RdsTunnelCommand.
+
+  ProdRequiresPortoGateway:
+    RuleCondition: !Equals [!Ref EnvironmentName, 'prod']
+    Assertions:
+      - Assert: !And
+          - !Not [!Equals [!Ref PortoOAuthUrl, '']]
+          - !Not [!Equals [!Ref PortoApiBaseUrl, '']]
+        AssertDescription: >
+          Producao exige PortoOAuthUrl e PortoApiBaseUrl. Vazios, a API cai nos
+          padroes, que sao os de homologacao.
+
+  ProdRequiresAlertEmail:
+    RuleCondition: !Equals [!Ref EnvironmentName, 'prod']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AlertEmail, '']]
+        AssertDescription: Producao exige AlertEmail - alarme sem destino nao avisa ninguem.
+
+# Um template para os dois ambientes, e nao um arquivo por ambiente: a
+# referencia do bolao tem dois quase iguais e eles ja divergiram. O que muda
+# entre dev e prod pende de IsProd, e o dev tem que continuar resolvendo para
+# exatamente o que era antes - confira por change set antes de executar.
+Mappings:
+  Environment:
+    dev:
+      VpcOctet: '0'
+    prod:
+      VpcOctet: '1'
+
 Conditions:
+  IsProd: !Equals [!Ref EnvironmentName, 'prod']
+  IsDev: !Not [!Condition IsProd]
+  HasPrimaryAz: !Not [!Equals [!Ref PrimaryAvailabilityZone, '']]
+  HasSecondaryAz: !Not [!Equals [!Ref SecondaryAvailabilityZone, '']]
   CreateOidcProvider: !Equals [!Ref CreateGitHubOidcProvider, 'true']
   # Duas, e nao uma: o modo mais provavel de rodar e dominio na web e nada na
   # API - o host da API so existe para o webhook, que ainda nao foi escrito.
@@ -265,7 +351,10 @@ Resources:
   Vpc:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 10.0.0.0/16
+      # 10.0 em dev, 10.1 em prod: sem sobreposicao, se um dia houver peering.
+      CidrBlock: !Sub
+        - '10.${Octet}.0.0/16'
+        - Octet: !FindInMap [Environment, !Ref EnvironmentName, VpcOctet]
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
@@ -285,16 +374,21 @@ Resources:
       VpcId: !Ref Vpc
       InternetGatewayId: !Ref InternetGateway
 
-  # A instancia fica aqui, com Elastic IP. E o que apaga o NAT Gateway
+  # Em dev a instancia fica aqui, com Elastic IP. E o que apaga o NAT Gateway
   # (~US$ 33/mes): ela alcanca ECR, SSM, Secrets Manager e Resend pelo proprio
-  # internet gateway. A exposicao e controlada pelo security group, que abre 80
-  # e 443 e mais nada - nao ha porta 22 nem key pair.
+  # internet gateway. A exposicao e controlada pelo security group, que abre a
+  # 80 so para o CloudFront - nao ha porta 22 nem key pair.
+  #
+  # Em prod aqui fica so o NAT Gateway. A instancia vai para a PrivateSubnetA,
+  # sem IP publico, e o CloudFront a alcanca por VPC origin.
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref Vpc
-      CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Sub
+        - '10.${Octet}.1.0/24'
+        - Octet: !FindInMap [Environment, !Ref EnvironmentName, VpcOctet]
+      AvailabilityZone: !If [HasPrimaryAz, !Ref PrimaryAvailabilityZone, !Select [0, !GetAZs '']]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -311,8 +405,10 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref Vpc
-      CidrBlock: 10.0.11.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Sub
+        - '10.${Octet}.11.0/24'
+        - Octet: !FindInMap [Environment, !Ref EnvironmentName, VpcOctet]
+      AvailabilityZone: !If [HasPrimaryAz, !Ref PrimaryAvailabilityZone, !Select [0, !GetAZs '']]
       Tags:
         - Key: Name
           Value: !Sub 'porto-hub-${EnvironmentName}-private-a'
@@ -321,8 +417,10 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref Vpc
-      CidrBlock: 10.0.12.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Sub
+        - '10.${Octet}.12.0/24'
+        - Octet: !FindInMap [Environment, !Ref EnvironmentName, VpcOctet]
+      AvailabilityZone: !If [HasSecondaryAz, !Ref SecondaryAvailabilityZone, !Select [1, !GetAZs '']]
       Tags:
         - Key: Name
           Value: !Sub 'porto-hub-${EnvironmentName}-private-b'
@@ -367,6 +465,66 @@ Resources:
       SubnetId: !Ref PrivateSubnetB
       RouteTableId: !Ref PublicRouteTable
 
+  # Saida das subnets privadas em prod: a instancia precisa de ECR, SSM,
+  # Secrets Manager, Resend e do gateway da Porto, e nada disso esta na VPC.
+  # O Elastic IP do NAT e o IP de saida do ambiente - output EgressIp, caso a
+  # Sensedia de producao peca allowlist.
+  #
+  # O RDS divide a subnet e a rota, e nao ganha nada com isso: sem IP publico e
+  # com o security group sem saida, nao inicia conexao nenhuma.
+  NatElasticIp:
+    Type: AWS::EC2::EIP
+    Condition: IsProd
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-nat-eip'
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Condition: IsProd
+    Properties:
+      AllocationId: !GetAtt NatElasticIp.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-nat'
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: IsProd
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-private-rt'
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Condition: IsProd
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  # Em prod a regra ProdKeepsDatabaseClosed garante que as DbSubnet*
+  # acima nao existem - uma subnet so tem uma route table.
+  PrivateSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: IsProd
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: IsProd
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTable
+
   # =========================================================== Security groups
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -377,6 +535,11 @@ Resources:
       # existe aqui, e nao ha ACME porque nao ha certificado nesta maquina.
       # Sem CloudFront na frente, a instancia nao responde a ninguem - nem a
       # quem souber o Elastic IP.
+      #
+      # A mesma regra serve o VPC origin de prod: a AWS aceita a prefix list do
+      # CloudFront como origem da entrada, e ela ja existe antes do VpcOrigin -
+      # a alternativa, o security group que o CloudFront cria sozinho, so
+      # nasce depois e fecharia um ciclo aqui.
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -489,8 +652,12 @@ Resources:
   # Secret proprio - e nao um campo do anterior - porque GenerateSecretString
   # gera UMA chave por segredo. Vale os US$ 0,40/mes: a alternativa era a senha
   # publicada no README (MudarAgora!2026) valendo num painel exposto a internet.
+  #
+  # So em dev. Producao nao roda seed: os operadores dele sao contas ficticias
+  # com senha compartilhada, e operador de verdade nasce a mao, pelo tunel.
   SeedSecret:
     Type: AWS::SecretsManager::Secret
+    Condition: IsDev
     Properties:
       # "Hub de Afiliados" nos quatro: e por essa descricao que o comando de
       # limpeza do README acha os segredos, agora que nao ha mais nome fixo.
@@ -500,6 +667,22 @@ Resources:
         GenerateStringKey: admin_password
         PasswordLength: 24
         ExcludePunctuation: true
+
+  # As credenciais do gateway da Porto e o segredo do webhook de incentivos.
+  # Nascem REPLACE_ME e sao preenchidas a mao depois do create - o comando sai
+  # no output SetPortoSecretCommand. Antes moravam em linhas escritas a mao no
+  # parametro de config, que e `String`: legivel por quem tem ssm:GetParameter,
+  # e apagado por qualquer update de stack que regravasse o parametro.
+  #
+  # `webhook_secret` vazio e valido: a API sobe e o webhook recusa tudo com 401.
+  #
+  # Nao mexa no SecretString abaixo depois do create: o CloudFormation o
+  # regravaria por cima dos valores preenchidos a mao.
+  PortoSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Credenciais do gateway da Porto e segredo do webhook do Hub de Afiliados
+      SecretString: '{"client_id":"REPLACE_ME","client_secret":"REPLACE_ME","webhook_secret":""}'
 
   # =========================================================== Banco
   DbSubnetGroup:
@@ -528,16 +711,22 @@ Resources:
       cfn-lint:
         config:
           ignore_checks: [E3005]
-    # Ambiente de desenvolvimento: o banco e recriavel pelo seed e a stack
-    # precisa poder ser deletada inteira sem briga.
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
+    # Snapshot nos dois ambientes. Em prod e o que impede que deletar a stack,
+    # ou uma propriedade que exija substituicao, leve o banco sem volta. Em dev
+    # custa um snapshot orfao ao deletar a stack, que o README ensina a apagar.
+    # Variar por ambiente exigiria o transform AWS::LanguageExtensions, que nao
+    # documenta o caso e proibe o "Use existing template" dos updates.
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub 'porto-hub-${EnvironmentName}-db'
       Engine: postgres
       EngineVersion: !Ref DBEngineVersion
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: '20'
+      # Autoscaling de disco so em prod: disco cheio para o banco, e la nao ha
+      # seed para recriar nada.
+      MaxAllocatedStorage: !If [IsProd, 100, !Ref 'AWS::NoValue']
       StorageType: gp3
       # Ligado tambem em dev: a tabela guarda CPF e chave PIX de afiliado.
       StorageEncrypted: true
@@ -548,7 +737,11 @@ Resources:
       # Mesma AZ da instancia. Sem isto o single-AZ cai onde o RDS quiser, e
       # metade das vezes e a outra AZ: todo o trafego do banco vira cross-AZ,
       # cobrado nos dois sentidos e com mais latencia, sem nada em troca.
-      AvailabilityZone: !Select [0, !GetAZs '']
+      # Multi-AZ (prod) recusa AZ declarada: o RDS escolhe as duas.
+      AvailabilityZone: !If
+        - IsProd
+        - !Ref 'AWS::NoValue'
+        - !If [HasPrimaryAz, !Ref PrimaryAvailabilityZone, !Select [0, !GetAZs '']]
       VPCSecurityGroups:
         - !Ref DbSecurityGroup
       # Fechado por padrao - o acesso de fora e por port-forward do SSM,
@@ -556,9 +749,12 @@ Resources:
       # parametro em vez de escondida aqui. Trocar este valor e um modify do
       # RDS: sem substituicao e sem perder dado.
       PubliclyAccessible: !If [DbIsPublic, true, false]
-      MultiAZ: false
-      BackupRetentionPeriod: 1
-      DeletionProtection: false
+      # Em prod o banco sobrevive a perda de uma AZ, guarda 14 dias de
+      # point-in-time e recusa ser deletado - DeletionProtection vale inclusive
+      # para o delete da stack, que para ate alguem desliga-la de proposito.
+      MultiAZ: !If [IsProd, true, false]
+      BackupRetentionPeriod: !If [IsProd, 14, 1]
+      DeletionProtection: !If [IsProd, true, false]
       AutoMinorVersionUpgrade: true
       CopyTagsToSnapshot: true
       # Janelas em UTC, escolhidas para cair de madrugada no horario de Brasilia
@@ -647,7 +843,9 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub '/porto-hub/${EnvironmentName}'
-      RetentionInDays: 14
+      # Em prod o log e o que responde "o que aconteceu com o cadastro de
+      # fulano" semanas depois; em dev ninguem olha para tras de duas semanas.
+      RetentionInDays: !If [IsProd, 90, 14]
 
   # Toda a configuracao da maquina vive aqui, e nao no UserData. UserData e
   # imutavel na pratica: mudar um valor nele ou substitui a instancia - levando
@@ -657,14 +855,9 @@ Resources:
   # endpoint novo do RDS e um update de stack seguido do proximo deploy.
   #
   # O template escreve aqui ARNs de segredo, nunca o conteudo deles. As
-  # credenciais da Porto (PORTO_CLIENT_ID e PORTO_CLIENT_SECRET) sao
-  # acrescentadas A MAO no parametro publicado, depois da ultima linha abaixo, e
-  # ficam em claro: o tipo e `String`.
-  #
-  # O CloudFormation so regrava o parametro quando o Value abaixo muda. Update de
-  # stack que nao mexe nele preserva as linhas manuais; update que mexe - outro
-  # MailProvider, dominio novo, endpoint novo do RDS - apaga as duas, e o deploy
-  # seguinte falha ate elas voltarem.
+  # credenciais da Porto moram no PortoSecret, e nao mais em linhas escritas a
+  # mao no fim deste parametro: o CloudFormation o regrava inteiro a cada
+  # update que mude o Value, e as linhas iam junto.
   ConfigParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -693,7 +886,10 @@ Resources:
           DB_SECRET_ARN=${DbSecret}
           DB_RW_SECRET_ARN=${DbRwSecret}
           APP_SECRET_ARN=${AppSecret}
-          SEED_SECRET_ARN=${SeedSecret}
+          SEED_SECRET_ARN=${SeedSecretArn}
+          PORTO_SECRET_ARN=${PortoSecret}
+          PORTO_OAUTH_URL=${PortoOAuthUrl}
+          PORTO_API_BASE_URL=${PortoApiBaseUrl}
           DOMAIN_NAME=${EffectiveDomainName}
           API_DOMAIN_NAME=${ApiDomainName}
           MAIL_PROVIDER=${MailProvider}
@@ -703,6 +899,8 @@ Resources:
             - HasDomain
             - !Ref DomainName
             - !GetAtt Distribution.DomainName
+          # Vazio em prod, e e isso que desliga o seed no install-release.sh.
+          SeedSecretArn: !If [IsDev, !Ref SeedSecret, '']
 
   # =========================================================== IAM
   InstanceRole:
@@ -729,7 +927,8 @@ Resources:
                   - !Ref DbSecret
                   - !Ref DbRwSecret
                   - !Ref AppSecret
-                  - !Ref SeedSecret
+                  - !Ref PortoSecret
+                  - !If [IsDev, !Ref SeedSecret, !Ref 'AWS::NoValue']
               - Effect: Allow
                 Action: ecr:GetAuthorizationToken
                 Resource: '*'
@@ -895,8 +1094,11 @@ Resources:
                 - '/opt/porto-hub/install-release.sh "{{ imageTag }}"'
 
   # =========================================================== Instancia
+  # So em dev. Em prod a instancia nao tem IP publico: entra pelo VpcOrigin e
+  # sai pelo NAT.
   ElasticIp:
     Type: AWS::EC2::EIP
+    Condition: IsDev
     DependsOn: VpcGatewayAttachment
     Properties:
       Domain: vpc
@@ -906,6 +1108,7 @@ Resources:
 
   ElasticIpAssociation:
     Type: AWS::EC2::EIPAssociation
+    Condition: IsDev
     Properties:
       AllocationId: !GetAtt ElasticIp.AllocationId
       InstanceId: !Ref Instance
@@ -916,17 +1119,43 @@ Resources:
   #  2. Da um nome ESTAVEL para a Imperva apontar. Sem ele, o origin registrado
   #     la seria o Elastic IP, e recriar a stack viraria uma RDM no time deles.
   # O cache de /_next/static/* e bonus: sao arquivos com hash no nome.
+  #
+  # Em prod o origin e um VPC origin: o CloudFront entra na VPC por uma ENI que
+  # ele mesmo gerencia e fala com o IP privado da instancia. O trafego de origin
+  # nao passa pela internet, e a instancia nao tem endereco publico para achar.
+  # A AWS exige a instancia de pe (o CreationPolicy garante) e um internet
+  # gateway na VPC, mesmo sem rota por ele.
+  VpcOrigin:
+    Type: AWS::CloudFront::VpcOrigin
+    Condition: IsProd
+    Properties:
+      VpcOriginEndpointConfig:
+        Name: !Sub 'porto-hub-${EnvironmentName}-instance'
+        Arn: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${Instance}'
+        HTTPPort: 80
+        HTTPSPort: 443
+        # Em claro, mas dentro da rede da AWS e so ate o IP privado. Nao ha
+        # certificado na instancia para renovar.
+        OriginProtocolPolicy: http-only
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-vpc-origin'
+
   Distribution:
     Type: AWS::CloudFront::Distribution
+    # So existe em dev; em prod a dependencia com a instancia vem do VpcOrigin.
     DependsOn: ElasticIpAssociation
     # W1030 avisa que `CertificateArn` pode nao ser um ARN de certificado -
     # verdade, ele aceita vazio. Quem garante que nao esta vazio no ramo que o
     # usa e a regra DomainRequiresCertificate, que o cfn-lint nao le.
+    # E3005: DependsOn de recurso condicional, ignorado quando a condicao e
+    # falsa - que e o que se quer em prod.
     Metadata:
       cfn-lint:
         config:
           ignore_checks:
             - W1030
+            - E3005
     Properties:
       DistributionConfig:
         Enabled: true
@@ -952,23 +1181,30 @@ Resources:
           - CloudFrontDefaultCertificate: true
         HttpVersion: http2and3
         IPV6Enabled: true
-        Origins:
-          - Id: instance
-            # CloudFront exige NOME para origin customizado - nao aceita IP. Este
-            # e o DNS publico que a AWS da ao Elastic IP; o formato `compute-1`
-            # e o de us-east-1, que ja e obrigatoria por causa do ACM.
-            DomainName: !Sub
-              - 'ec2-${DashedIp}.compute-1.amazonaws.com'
-              - DashedIp: !Join ['-', !Split ['.', !Ref ElasticIp]]
-            CustomOriginConfig:
-              HTTPPort: 80
-              # A perna CloudFront -> origin vai em claro. E o preco de nao ter
-              # certificado na instancia, e o que a limita e o security group,
-              # que so aceita as faixas do CloudFront. ACEITAVEL EM DEV, NAO EM
-              # PRODUCAO: la, um nome de origin proprio com certificado valido e
-              # `https-only` fecham isso.
-              OriginProtocolPolicy: http-only
-              OriginReadTimeout: 60
+        Origins: !If
+          - IsProd
+          - - Id: instance
+              # Para VPC origin de EC2 a AWS pede o nome DNS privado da
+              # instancia, e so ele.
+              DomainName: !GetAtt Instance.PrivateDnsName
+              VpcOriginConfig:
+                VpcOriginId: !Ref VpcOrigin
+                OriginReadTimeout: 60
+          - - Id: instance
+              # CloudFront exige NOME para origin customizado - nao aceita IP.
+              # Este e o DNS publico que a AWS da ao Elastic IP; o formato
+              # `compute-1` e o de us-east-1, que ja e obrigatoria por causa do
+              # ACM.
+              DomainName: !Sub
+                - 'ec2-${DashedIp}.compute-1.amazonaws.com'
+                - DashedIp: !Join ['-', !Split ['.', !Ref ElasticIp]]
+              CustomOriginConfig:
+                HTTPPort: 80
+                # A perna CloudFront -> origin vai em claro e pela internet. O
+                # que a limita e o security group, que so aceita as faixas do
+                # CloudFront. Aceitavel em dev; prod usa o VpcOrigin acima.
+                OriginProtocolPolicy: http-only
+                OriginReadTimeout: 60
         DefaultCacheBehavior:
           TargetOriginId: instance
           # Todos os metodos: as sete Server Actions do Next sao POST, e o
@@ -1006,7 +1242,19 @@ Resources:
     # principal da VPC, que so tem a rota local. Instancia que boota nessa
     # janela nao alcanca o dnf, nem o GitHub, nem o proprio signal-resource - e
     # sem o sinal a stack espera os PT15M inteiros antes de dizer que falhou.
-    DependsOn: [VpcGatewayAttachment, PublicSubnetARouteTableAssociation]
+    #
+    # Em prod a mesma coisa vale para a rota do NAT: sem ela o boot na subnet
+    # privada nao sai para lugar nenhum. As duas de prod sao condicionais, e a
+    # AWS ignora DependsOn de recurso que nao existe - dai o E3005 abaixo.
+    DependsOn:
+      - VpcGatewayAttachment
+      - PublicSubnetARouteTableAssociation
+      - PrivateRoute
+      - PrivateSubnetARouteTableAssociation
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks: [E3005]
     # Sem isto o CREATE_COMPLETE chega assim que a instancia fica `running`, e
     # um UserData que falhou vira falso positivo silencioso - o erro so
     # apareceria no primeiro deploy, com "docker: command not found".
@@ -1017,7 +1265,7 @@ Resources:
     Properties:
       ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
-      SubnetId: !Ref PublicSubnetA
+      SubnetId: !If [IsProd, !Ref PrivateSubnetA, !Ref PublicSubnetA]
       SecurityGroupIds: [!Ref AppSecurityGroup]
       IamInstanceProfile: !Ref InstanceProfile
       # Sem key pair de proposito: o acesso e por SSM Session Manager.
@@ -1103,6 +1351,170 @@ Resources:
 
           signal SUCCESS
 
+  # =========================================================== Alarmes (prod)
+  # Em dev quem percebe que quebrou e quem esta usando. Em prod nao pode ser o
+  # afiliado: tudo abaixo avisa por e-mail, e a assinatura so vale depois de
+  # confirmada no link que o SNS manda para o AlertEmail.
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Condition: IsProd
+    Properties:
+      TopicName: !Sub 'porto-hub-${EnvironmentName}-alerts'
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+
+  # Falha de hardware ou do host: o recover leva a instancia para outro host com
+  # o mesmo id, IP privado e volume. O VpcOrigin continua apontando para ela.
+  InstanceSystemCheckAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProd
+    Properties:
+      AlarmName: !Sub 'porto-hub-${EnvironmentName}-instance-system-check'
+      AlarmDescription: Status check de sistema da EC2 falhando - recover automatico disparado
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed_System
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref Instance
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Sub 'arn:${AWS::Partition}:automate:${AWS::Region}:ec2:recover'
+        - !Ref AlertTopic
+      OKActions: [!Ref AlertTopic]
+
+  # Falha dentro da maquina (kernel, disco cheio, rede do SO): reboot resolve o
+  # caso comum, e o compose sobe de novo sozinho pelo restart policy.
+  InstanceStatusCheckAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProd
+    Properties:
+      AlarmName: !Sub 'porto-hub-${EnvironmentName}-instance-status-check'
+      AlarmDescription: Status check da instancia falhando - reboot automatico disparado
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed_Instance
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref Instance
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Sub 'arn:${AWS::Partition}:automate:${AWS::Region}:ec2:reboot'
+        - !Ref AlertTopic
+      OKActions: [!Ref AlertTopic]
+
+  InstanceCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProd
+    Properties:
+      AlarmName: !Sub 'porto-hub-${EnvironmentName}-instance-cpu'
+      AlarmDescription: CPU da EC2 acima de 80% por 15 minutos
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref Instance
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: [!Ref AlertTopic]
+      OKActions: [!Ref AlertTopic]
+
+  DbCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProd
+    Properties:
+      AlarmName: !Sub 'porto-hub-${EnvironmentName}-db-cpu'
+      AlarmDescription: CPU do RDS acima de 80% por 15 minutos
+      Namespace: AWS/RDS
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref Database
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: [!Ref AlertTopic]
+      OKActions: [!Ref AlertTopic]
+
+  # O autoscaling de disco cresce sozinho ate o MaxAllocatedStorage; este alarme
+  # e para quando ele chegar la, ou crescer rapido demais para acompanhar.
+  DbFreeStorageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProd
+    Properties:
+      AlarmName: !Sub 'porto-hub-${EnvironmentName}-db-free-storage'
+      AlarmDescription: Menos de 2 GB livres no RDS
+      Namespace: AWS/RDS
+      MetricName: FreeStorageSpace
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref Database
+      Statistic: Minimum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 2147483648
+      ComparisonOperator: LessThanThreshold
+      AlarmActions: [!Ref AlertTopic]
+      OKActions: [!Ref AlertTopic]
+
+  # A aplicacao abre um pool pequeno por processo. Passar de 100 conexoes e
+  # vazamento de conexao ou alguem conectado pelo tunel sem fechar - nao carga.
+  DbConnectionsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProd
+    Properties:
+      AlarmName: !Sub 'porto-hub-${EnvironmentName}-db-connections'
+      AlarmDescription: Mais de 100 conexoes abertas no RDS
+      Namespace: AWS/RDS
+      MetricName: DatabaseConnections
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref Database
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 100
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: [!Ref AlertTopic]
+      OKActions: [!Ref AlertTopic]
+
+  # O que o afiliado ve: 5xx na borda, venha da instancia fora do ar ou da
+  # aplicacao quebrando. Metrica padrao do CloudFront, publicada em us-east-1
+  # com Region=Global. Sem trafego nao ha dado, e sem dado nao ha problema.
+  CdnErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProd
+    Properties:
+      AlarmName: !Sub 'porto-hub-${EnvironmentName}-cdn-5xx'
+      AlarmDescription: Mais de 5% das respostas do CloudFront em 5xx por 5 minutos
+      Namespace: AWS/CloudFront
+      MetricName: 5xxErrorRate
+      Dimensions:
+        - Name: DistributionId
+          Value: !Ref Distribution
+        - Name: Region
+          Value: Global
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertTopic]
+      OKActions: [!Ref AlertTopic]
+
 Outputs:
   # Sem dominio proprio os dois saem no nome do CloudFront - e continuam sendo
   # a URL de verdade do ambiente, com HTTPS pelo certificado padrao da AWS.
@@ -1138,11 +1550,18 @@ Outputs:
     Value: !Sub 'https://${ApiDomainName}'
 
   ElasticIpAddress:
+    Condition: IsDev
     Description: >
       Origin do CloudFront, e detalhe interno: a Porto NAO aponta DNS para ca.
       A instancia so aceita conexao das faixas do CloudFront, entao este
       endereco nao responde a mais ninguem.
     Value: !Ref ElasticIp
+
+  # IP de saida do ambiente: o do NAT em prod, o da instancia em dev. E o que
+  # vai para a Porto se a Sensedia de producao pedir allowlist.
+  EgressIp:
+    Description: IP publico de onde saem as chamadas ao gateway da Porto e ao Resend
+    Value: !If [IsProd, !Ref NatElasticIp, !Ref ElasticIp]
 
   InstanceId:
     Value: !Ref Instance
@@ -1163,7 +1582,9 @@ Outputs:
     Value: !Ref DeployDocument
 
   GitHubOidcRoleArn:
-    Description: Vai no secret AWS_DEPLOY_ROLE_ARN, usado pelo ci.yml e pelo cd.yml
+    Description: >
+      Vai no secret AWS_DEPLOY_ROLE_ARN (dev) ou AWS_PROD_DEPLOY_ROLE_ARN
+      (prod), usados pelo ci.yml e pelo cd.yml
     Value: !GetAtt GitHubOidcRole.Arn
 
   SsmSessionCommand:
@@ -1201,6 +1622,7 @@ Outputs:
     Value: !Sub 'aws secretsmanager get-secret-value --secret-id ${DbSecret} --region ${AWS::Region} --query SecretString --output text'
 
   ReadSeedPasswordCommand:
+    Condition: IsDev
     Description: Senha inicial dos operadores do painel (trocada no primeiro login)
     Value: !Sub 'aws secretsmanager get-secret-value --secret-id ${SeedSecret} --region ${AWS::Region} --query SecretString --output text'
 
@@ -1209,3 +1631,11 @@ Outputs:
   SetResendKeyCommand:
     Description: Injeta o RESEND_API_KEY lendo de ./resend_key.txt, preservando os demais campos
     Value: !Sub 'aws secretsmanager get-secret-value --secret-id ${AppSecret} --region ${AWS::Region} --query SecretString --output text | python3 -c ''import json,sys;s=json.load(sys.stdin);s["resend_api_key"]=open("resend_key.txt").read().strip();sys.stdout.write(json.dumps(s))'' > secret.json && aws secretsmanager put-secret-value --secret-id ${AppSecret} --region ${AWS::Region} --secret-string file://secret.json && rm -f secret.json resend_key.txt'
+
+  # Mesmo cuidado do SetResendKeyCommand: o valor vem de arquivo, nunca de argv.
+  # O arquivo e o JSON inteiro do segredo, com as tres chaves.
+  SetPortoSecretCommand:
+    Description: >
+      Grava as credenciais da Porto lendo ./porto_secret.json, no formato
+      {"client_id":"...","client_secret":"...","webhook_secret":"..."}
+    Value: !Sub 'aws secretsmanager put-secret-value --secret-id ${PortoSecret} --region ${AWS::Region} --secret-string file://porto_secret.json && rm -f porto_secret.json'
