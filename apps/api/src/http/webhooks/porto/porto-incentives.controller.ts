@@ -1,4 +1,12 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -8,9 +16,11 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { IncentiveErrorCodeEnum } from '@porto/contracts';
 import { ApplyIncentiveEventUseCase } from '@Application/sales/apply-incentive-event.use-case';
+import { RecordInvalidIncentiveNotificationUseCase } from '@Application/sales/record-invalid-incentive-notification.use-case';
 import { Public } from '@Http/shared/decorators/public.decorator';
-import { WebhookBody } from '@Http/shared/decorators/webhook-body.decorator';
+import { InvalidWebhookBody, WebhookBody } from '@Http/shared/decorators/webhook-body.decorator';
 import {
   SIGNATURE_HEADER,
   TIMESTAMP_HEADER,
@@ -30,7 +40,10 @@ import { IncentiveNotificationResponseDto } from './dtos/incentive-notification.
 @UseGuards(WebhookSignatureGuard)
 @Controller('webhooks/porto/incentives')
 export class PortoIncentivesController {
-  constructor(private readonly applyIncentiveEventUseCase: ApplyIncentiveEventUseCase) {}
+  constructor(
+    private readonly applyIncentiveEventUseCase: ApplyIncentiveEventUseCase,
+    private readonly recordInvalidIncentiveNotificationUseCase: RecordInvalidIncentiveNotificationUseCase,
+  ) {}
 
   /**
    * Notificação de incentivo da Porto Serviços (INT-03): venda registrada,
@@ -40,7 +53,8 @@ export class PortoIncentivesController {
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: IncentiveNotificationResponseDto })
   @ApiBadRequestResponse({
-    description: 'Corpo inválido, ou tipo do evento e status que não formam par (INC-004)',
+    description:
+      'Corpo fora do contrato (INC-006), ou tipo do evento e status que não formam par (INC-004)',
   })
   @ApiNotFoundResponse({ description: 'Cupom de nenhum afiliado (INC-001)' })
   @ApiConflictResponse({
@@ -48,9 +62,21 @@ export class PortoIncentivesController {
       'Venda não registrada (INC-002), já encerrada com outro desfecho (INC-003) ou com outro cupom (INC-005)',
   })
   async notify(
-    @WebhookBody() notification: IncentiveNotificationRequestDto,
+    @WebhookBody(IncentiveNotificationRequestDto)
+    notification: IncentiveNotificationRequestDto | InvalidWebhookBody,
     @Body() payload: Record<string, unknown>,
   ): Promise<IncentiveNotificationResponseDto> {
+    if (notification instanceof InvalidWebhookBody) {
+      await this.recordInvalidIncentiveNotificationUseCase.execute({
+        ...IncentiveNotificationRequestDto.traceOf(payload),
+        payload,
+      });
+      throw new BadRequestException({
+        code: IncentiveErrorCodeEnum.INVALID_PAYLOAD,
+        message: notification.problems,
+      });
+    }
+
     return IncentiveNotificationResponseDto.from(
       await this.applyIncentiveEventUseCase.execute(
         IncentiveNotificationRequestDto.toInput(notification, payload),

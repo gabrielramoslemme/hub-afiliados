@@ -74,7 +74,7 @@ X-Signature: sha256=e990860912bec1ef024d29a0a524074ccd5d71a7c1c491d08e8c48cba94d
 | HTTP | `code` | Significado | O que fazer |
 |---|---|---|---|
 | 401 | `null` | Assinatura ausente, inválida ou fora da janela de 5 minutos | Conferir segredo, relógio e serialização. Reenviar com assinatura nova. |
-| 400 | `null` | Corpo fora do contrato. `message` lista os campos | Corrigir o envio. |
+| 400 | `INC-006` | Corpo fora do contrato. `message` lista os campos | Corrigir o envio. |
 | 400 | `INC-004` | `tipoEvento` e `incentivo.status` não formam um dos três pares válidos | Corrigir o envio. |
 | 404 | `INC-001` | O cupom não pertence a nenhum afiliado do programa | Verificar o cupom. Não há o que reprocessar. |
 | 409 | `INC-002` | Conclusão ou cancelamento de venda que a Mesa nunca recebeu como registrada | Reenviar o `VENDA_REGISTRADA` da venda e, depois, este evento. |
@@ -91,7 +91,7 @@ Como a Porto não faz retentativa automática no piloto, a combinação é:
 - **Timeout, erro de rede, 401 e 5xx: reprocessar o mesmo evento.** É seguro repetir — a idempotência por `venda.id` + `tipoEvento` faz a repetição responder `ALREADY_APPLIED` sem efeito. O `idEvento` pode ser novo a cada envio, como já é hoje.
 - **409 `INC-002`: reenviar primeiro o `VENDA_REGISTRADA`** da venda, depois o evento que falhou. A Mesa não aceita conclusão ou cancelamento fora de ordem: a venda precisa passar por pendente.
 - **400 e 404: não reprocessar** sem corrigir antes. Repetir devolve o mesmo erro.
-- **Toda chamada que passa pela assinatura fica registrada na Mesa**, aplicada ou não, com o `idEvento` e o corpo recebido. Para conciliar, o suporte informa o `venda.id` ou o `idEvento`.
+- **Toda chamada que passa pela assinatura fica registrada na Mesa**, aplicada ou não — inclusive a recusada por corpo fora do contrato (`INC-006`) —, com o `idEvento` e o corpo recebido. Para conciliar, o suporte informa o `venda.id` ou o `idEvento`.
 
 ## 5. Dois pedidos à Porto
 

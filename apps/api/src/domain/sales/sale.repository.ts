@@ -1,15 +1,21 @@
 import { IncentiveStatusEnum } from '@porto/contracts';
 import { createToken } from '@Domain/shared/token';
-import { IncentiveEventEntity } from './incentive-event.entity';
+import { IncentiveEventEntity, IncentiveEventTypeEnum } from './incentive-event.entity';
 import { SaleEntity } from './sale.entity';
 
 export const SALE_REPOSITORY = createToken<SaleRepository>('SALE_REPOSITORY');
 
-/** O evento que acompanha a escrita da venda, gravado como aplicado na mesma transação. */
-export type AppliedIncentiveEvent = Pick<
-  IncentiveEventEntity,
-  'eventId' | 'externalSaleId' | 'eventType' | 'payload' | 'sentAt' | 'receivedAt'
->;
+/**
+ * O evento que acompanha a escrita da venda, gravado como aplicado na mesma
+ * transação. Chamada aplicada passou pelo contrato: nada aqui é nulo.
+ */
+export interface AppliedIncentiveEvent
+  extends Pick<IncentiveEventEntity, 'payload' | 'receivedAt'> {
+  eventId: string;
+  externalSaleId: string;
+  eventType: IncentiveEventTypeEnum;
+  sentAt: Date;
+}
 
 export interface RegisterSaleInput {
   couponId: number;

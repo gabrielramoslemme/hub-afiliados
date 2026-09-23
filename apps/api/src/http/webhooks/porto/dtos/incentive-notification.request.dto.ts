@@ -36,6 +36,9 @@ const INCENTIVE_STATUS_BY_WIRE = {
   CANCELADO: IncentiveStatusEnum.CANCELED,
 } as const;
 
+/** O tamanho das colunas `event_id` e `external_sale_id` da trilha. */
+const MAX_ID_LENGTH = 100;
+
 type WireEventType = keyof typeof EVENT_TYPE_BY_WIRE;
 type WireIncentiveStatus = keyof typeof INCENTIVE_STATUS_BY_WIRE;
 
@@ -64,7 +67,7 @@ export class IncentiveSaleDto {
   @ApiProperty({ example: '7c4f7b20-709a-4bde-8646-2fd1a5ae6fd4' })
   @IsString({ message: 'id é obrigatório' })
   @IsNotEmpty({ message: 'id é obrigatório' })
-  @MaxLength(100, { message: 'id aceita até 100 caracteres' })
+  @MaxLength(MAX_ID_LENGTH, { message: 'id aceita até 100 caracteres' })
   id: string;
 
   @ApiProperty({ example: 'PARCEIRO10' })
@@ -73,8 +76,11 @@ export class IncentiveSaleDto {
   @MaxLength(200, { message: 'cupom aceita até 200 caracteres' })
   cupom: string;
 
-  @ApiProperty({ example: 310.99, description: 'Em reais, com até duas casas decimais' })
-  @IsNumber({ maxDecimalPlaces: 2 }, { message: 'valorVenda deve ter até duas casas decimais' })
+  // Sem limite de casas decimais: sobra de float (0.30000000000000004) viraria
+  // 400, e a venda recusada só volta por reprocessamento manual. O `toInput`
+  // arredonda para centavos.
+  @ApiProperty({ example: 310.99, description: 'Em reais' })
+  @IsNumber({ allowNaN: false, allowInfinity: false }, { message: 'valorVenda deve ser número' })
   @Min(0, { message: 'valorVenda não pode ser negativo' })
   valorVenda: number;
 
@@ -88,7 +94,7 @@ export class IncentiveNotificationRequestDto {
   @ApiProperty({ example: '8d4a9d5f-4f17-4ad8-bec7-16db8d0e2a4b' })
   @IsString({ message: 'idEvento é obrigatório' })
   @IsNotEmpty({ message: 'idEvento é obrigatório' })
-  @MaxLength(100, { message: 'idEvento aceita até 100 caracteres' })
+  @MaxLength(MAX_ID_LENGTH, { message: 'idEvento aceita até 100 caracteres' })
   idEvento: string;
 
   @ApiProperty({ format: 'date-time', example: '2026-09-11T12:17:08.319Z' })
@@ -131,4 +137,29 @@ export class IncentiveNotificationRequestDto {
       payload,
     };
   }
+
+  /**
+   * O que dá para aproveitar de um corpo que não passou pelo DTO: os dois ids
+   * pelos quais o suporte procura a chamada na trilha. Id que não é texto, ou
+   * que não cabe na coluna, fica nulo — a chamada inteira está no `payload`.
+   */
+  static traceOf(payload: unknown): { eventId: string | null; externalSaleId: string | null } {
+    const body = asRecord(payload);
+    return {
+      eventId: readableId(body?.idEvento),
+      externalSaleId: readableId(asRecord(body?.venda)?.id),
+    };
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function readableId(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 && value.length <= MAX_ID_LENGTH
+    ? value
+    : null;
 }

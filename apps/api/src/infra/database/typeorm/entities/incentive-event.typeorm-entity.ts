@@ -27,6 +27,12 @@ import { SaleTypeormEntity } from './sale.typeorm-entity';
   'ck_porto_incentive_events_rejection_code',
   `("outcome" = 'REJECTED') = ("rejection_code" IS NOT NULL)`,
 )
+@Check(
+  'ck_porto_incentive_events_readable',
+  `"rejection_code" IS NOT DISTINCT FROM 'INC-006' OR (
+    "event_id" IS NOT NULL AND "external_sale_id" IS NOT NULL
+    AND "event_type" IS NOT NULL AND "sent_at" IS NOT NULL)`,
+)
 export class IncentiveEventTypeormEntity implements IncentiveEventEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -35,8 +41,8 @@ export class IncentiveEventTypeormEntity implements IncentiveEventEntity {
   @Generated('uuid')
   publicId: string;
 
-  @Column({ name: 'event_id', type: 'varchar', length: 100 })
-  eventId: string;
+  @Column({ name: 'event_id', type: 'varchar', length: 100, nullable: true })
+  eventId: string | null;
 
   @Column({ name: 'sale_id', type: 'int', nullable: true })
   saleId: number | null;
@@ -48,11 +54,11 @@ export class IncentiveEventTypeormEntity implements IncentiveEventEntity {
   })
   sale: SaleTypeormEntity | null;
 
-  @Column({ name: 'external_sale_id', type: 'varchar', length: 100 })
-  externalSaleId: string;
+  @Column({ name: 'external_sale_id', type: 'varchar', length: 100, nullable: true })
+  externalSaleId: string | null;
 
-  @Column({ name: 'event_type', type: 'varchar', length: 30 })
-  eventType: IncentiveEventTypeEnum;
+  @Column({ name: 'event_type', type: 'varchar', length: 30, nullable: true })
+  eventType: IncentiveEventTypeEnum | null;
 
   @Column({ type: 'varchar', length: 20 })
   outcome: IncentiveEventOutcomeEnum;
@@ -63,8 +69,8 @@ export class IncentiveEventTypeormEntity implements IncentiveEventEntity {
   @Column({ type: 'jsonb' })
   payload: Record<string, unknown>;
 
-  @Column({ name: 'sent_at', type: 'timestamptz' })
-  sentAt: Date;
+  @Column({ name: 'sent_at', type: 'timestamptz', nullable: true })
+  sentAt: Date | null;
 
   @Column({ name: 'received_at', type: 'timestamptz' })
   receivedAt: Date;

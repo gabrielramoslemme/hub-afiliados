@@ -65,7 +65,7 @@ describe('Porto incentives webhook (e2e)', () => {
 
   async function events() {
     return e2e.dataSource.query(
-      `SELECT event_type, outcome, rejection_code, sale_id, payload
+      `SELECT event_id, external_sale_id, event_type, outcome, rejection_code, sale_id, payload
          FROM porto_incentive_events ORDER BY id`,
     );
   }
@@ -172,7 +172,53 @@ describe('Porto incentives webhook (e2e)', () => {
         400,
       );
 
+      expect(response.body.code).toBe(IncentiveErrorCodeEnum.INVALID_PAYLOAD);
       expect(response.body.message).toEqual(['venda.cupom é obrigatório']);
+    });
+
+    /*
+      A Porto não reenvia sozinha: o corpo recusado só volta por reprocessamento
+      manual, e é na trilha que o suporte procura pelo idEvento ou pela venda.
+    */
+    it('records a refused body with the ids it carried', async () => {
+      const payload = notification('VENDA_REGISTRADA', coupon);
+      const invalid = { ...payload, venda: { ...payload.venda, cupom: '' } };
+
+      await send(invalid).expect(400);
+
+      expect(await events()).toEqual([
+        {
+          event_id: payload.idEvento,
+          external_sale_id: SALE_ID,
+          event_type: null,
+          outcome: 'REJECTED',
+          rejection_code: IncentiveErrorCodeEnum.INVALID_PAYLOAD,
+          sale_id: null,
+          payload: invalid,
+        },
+      ]);
+    });
+
+    it('records a refused body even when it carries no usable id', async () => {
+      await send({ idEvento: 42, venda: 'nada' }).expect(400);
+
+      expect(await events()).toEqual([
+        expect.objectContaining({
+          event_id: null,
+          external_sale_id: null,
+          rejection_code: IncentiveErrorCodeEnum.INVALID_PAYLOAD,
+          payload: { idEvento: 42, venda: 'nada' },
+        }),
+      ]);
+    });
+
+    /* Recusar sobra de float perderia a venda; o valor vira centavos arredondado. */
+    it('accepts a value with float noise and keeps it in cents', async () => {
+      const payload = notification('VENDA_REGISTRADA', coupon);
+
+      await send({ ...payload, venda: { ...payload.venda, valorVenda: 0.1 + 0.2 } }).expect(200);
+
+      expect(await sales()).toEqual([expect.objectContaining({ amount_cents: 30 })]);
     });
 
     it('refuses an event type Porto does not send', async () => {

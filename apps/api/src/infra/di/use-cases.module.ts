@@ -16,6 +16,7 @@ import { ChangeAffiliateCouponUseCase } from '@Application/coupons/change-affili
 import { CheckCouponAvailabilityUseCase } from '@Application/coupons/check-coupon-availability.use-case';
 import { ListCouponHistoryUseCase } from '@Application/coupons/list-coupon-history.use-case';
 import { ApplyIncentiveEventUseCase } from '@Application/sales/apply-incentive-event.use-case';
+import { RecordInvalidIncentiveNotificationUseCase } from '@Application/sales/record-invalid-incentive-notification.use-case';
 import { AFFILIATE_REPOSITORY } from '@Domain/affiliates/affiliate.repository';
 import { AFFILIATE_STATUS_HISTORY_REPOSITORY } from '@Domain/affiliates/affiliate-status-history.repository';
 import { ACCESS_TOKEN_ISSUER } from '@Domain/auth/access-token';
@@ -123,6 +124,7 @@ const USE_CASES = [
     INCENTIVE_EVENT_REPOSITORY,
     CLOCK,
   ]),
+  provideUseCase(RecordInvalidIncentiveNotificationUseCase, [INCENTIVE_EVENT_REPOSITORY, CLOCK]),
 ];
 
 @Module({

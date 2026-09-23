@@ -51,24 +51,32 @@ export class CreateAffiliateSales1790115542435 implements MigrationInterface {
 
       O índice único parcial é a chave de idempotência do contrato — venda e tipo
       de evento — sobre as chamadas que de fato mudaram a venda.
+
+      Os campos lidos do payload só ficam nulos na recusa por corpo fora do
+      contrato (INC-006): a chamada é gravada mesmo assim, com o que tiver, e o
+      corpo inteiro vai em `payload`.
     */
     await queryRunner.query(`
       CREATE TABLE "porto_incentive_events" (
         "id" SERIAL PRIMARY KEY,
         "public_id" uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
-        "event_id" varchar(100) NOT NULL,
+        "event_id" varchar(100),
         "sale_id" int,
-        "external_sale_id" varchar(100) NOT NULL,
-        "event_type" varchar(30) NOT NULL,
+        "external_sale_id" varchar(100),
+        "event_type" varchar(30),
         "outcome" varchar(20) NOT NULL,
         "rejection_code" varchar(20),
         "payload" jsonb NOT NULL,
-        "sent_at" timestamptz NOT NULL,
+        "sent_at" timestamptz,
         "received_at" timestamptz NOT NULL,
         CONSTRAINT "porto_incentive_events_sale_id_fkey"
           FOREIGN KEY ("sale_id") REFERENCES "affiliate_sales" ("id") ON DELETE RESTRICT,
         CONSTRAINT "ck_porto_incentive_events_rejection_code"
-          CHECK (("outcome" = 'REJECTED') = ("rejection_code" IS NOT NULL))
+          CHECK (("outcome" = 'REJECTED') = ("rejection_code" IS NOT NULL)),
+        CONSTRAINT "ck_porto_incentive_events_readable"
+          CHECK ("rejection_code" IS NOT DISTINCT FROM 'INC-006' OR (
+            "event_id" IS NOT NULL AND "external_sale_id" IS NOT NULL
+            AND "event_type" IS NOT NULL AND "sent_at" IS NOT NULL))
       )
     `);
 

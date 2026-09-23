@@ -27,16 +27,20 @@ export enum IncentiveEventOutcomeEnum {
 export interface IncentiveEventEntity {
   id: number;
   publicId: string;
-  /** O `idEvento` da Porto — um por tentativa de envio, e por isso não é único. */
-  eventId: string;
+  /**
+   * O `idEvento` da Porto — um por tentativa de envio, e por isso não é único.
+   * Os quatro campos do payload são nulos só na recusa por corpo fora do
+   * contrato (`INC-006`), quando não havia o que ler.
+   */
+  eventId: string | null;
   /** Nulo quando a chamada foi recusada antes de a venda existir. */
   saleId: number | null;
-  externalSaleId: string;
-  eventType: IncentiveEventTypeEnum;
+  externalSaleId: string | null;
+  eventType: IncentiveEventTypeEnum | null;
   outcome: IncentiveEventOutcomeEnum;
   rejectionCode: IncentiveErrorCodeEnum | null;
   payload: Record<string, unknown>;
   /** O `dataHoraEvento`: hora do envio pela Porto, não a da venda. */
-  sentAt: Date;
+  sentAt: Date | null;
   receivedAt: Date;
 }
