@@ -18,11 +18,11 @@ Parameters:
   #
   #   vazio / vazio / vazio  -> serve em https://<id>.cloudfront.net, com o
   #                             certificado padrao da AWS. Valida o ambiente
-  #                             inteiro; o host da API nao existe.
-  #   dev. / vazio / cert    -> ambiente de verdade. A API continua alcancavel
-  #                             so pelo servidor do Next e pelo tunel do SSM.
-  #   dev. / api-dev. / cert -> quando /v1/webhooks existir e a Porto for
-  #                             chamar de fora.
+  #                             inteiro. A API sai em /v1/* no mesmo host.
+  #   dev. / vazio / cert    -> ambiente de verdade. A API continua em /v1/*
+  #                             no host da web.
+  #   dev. / api-dev. / cert -> quando a API precisar de host proprio,
+  #                             separado do da web.
   #
   # Passar do primeiro modo para os outros e um update de stack seguido de um
   # deploy: Aliases e ViewerCertificate mudam a distribuicao no lugar, sem
@@ -44,15 +44,12 @@ Parameters:
     Type: String
     Default: ''
     Description: >
-      Host da API, ex. api-dev.hubafiliados.com.br. Existe para chamada
-      SERVIDOR-A-SERVIDOR - o servico de cupom da Porto batendo em
-      /v1/webhooks. O navegador continua sem falar com a API: quem chama e o
-      servidor do Next, pela rede interna do compose. Por isso o Caddy so
-      publica /v1/webhooks e /v1/health neste host, e devolve 404 no resto.
-      VAZIO enquanto /v1/webhooks nao existir - hoje o modulo e uma casca sem
-      controller, entao este host serviria apenas o health check. Sem ele o
-      Caddy nao escreve o bloco, e nada se perde. Preencher exige DomainName
-      preenchido: alias de API sem a web nao e configuracao, e engano.
+      Host da API, ex. api-dev.hubafiliados.com.br. A API ja sai em /v1/* no
+      host da web; este da a ela um nome proprio, sem a web atras, e devolve
+      404 fora de /v1/*. Serve para o servico de cupom da Porto ter um nome
+      estavel para /v1/webhooks. Sem ele o Caddy nao escreve o bloco, e nada
+      se perde. Preencher exige DomainName preenchido: alias de API sem a web
+      nao e configuracao, e engano.
     AllowedPattern: '^$|^(?!-)[a-zA-Z0-9-]{1,63}(\.[a-zA-Z0-9-]{1,63})+$'
 
   CertificateArn:
@@ -1035,10 +1032,10 @@ Outputs:
 
   # Condicional porque sem ApiDomainName o Caddy nao escreve o bloco, e uma URL
   # que devolve 404 no output e pior que output nenhum. A API segue alcancavel
-  # pelo servidor do Next e pelo tunel do SwaggerTunnelCommand.
+  # em /v1/* no host da web.
   ApiUrl:
     Condition: HasApiDomain
-    Description: Host da API, so para chamada servidor-a-servidor (/v1/webhooks)
+    Description: Host proprio da API, so /v1/*
     Value: !Sub 'https://${ApiDomainName}'
 
   ElasticIpAddress:
@@ -1076,8 +1073,8 @@ Outputs:
 
   SwaggerTunnelCommand:
     Description: >
-      Swagger em http://localhost:3000/v1/docs. A API nao e publicada na
-      internet - so o servidor do Next fala com ela - entao este e o caminho.
+      Swagger em http://localhost:3000/v1/docs, sem passar pelo CloudFront.
+      A API tambem sai em /v1/* no host da web.
     Value: !Sub 'aws ssm start-session --target ${Instance} --region ${AWS::Region} --document-name AWS-StartPortForwardingSession --parameters ''{"portNumber":["3000"],"localPortNumber":["3000"]}'''
 
   RdsTunnelCommand:
