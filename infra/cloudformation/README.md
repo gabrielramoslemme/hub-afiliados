@@ -19,8 +19,8 @@ CloudFront                 mesmo certificado, importado no ACM us-east-1
    ▼  :80, em claro
 EC2 (subnet pública, Elastic IP)   security group: uma porta, só CloudFront
    │  caddy   :80    auto_https off — não há certificado nesta máquina
-   │    ├─ Host dev.<domínio>      → web:3005
-   │    └─ Host api-dev.<domínio>  → api:3000, só /v1/webhooks e /v1/health
+   │    ├─ Host dev.<domínio>      → /v1/* em api:3000, o resto em web:3005
+   │    └─ Host api-dev.<domínio>  → api:3000, só /v1/*
    │  web     :3005  rede `internal`: sem rota para RDS, internet ou IMDS
    │  api     :3000  publicada só em 127.0.0.1
    └────────────────────► RDS Postgres 16 (subnets privadas, 2 AZs)
@@ -63,31 +63,39 @@ souber o Elastic IP não consegue nada com ele.
 > `OriginProtocolPolicy: https-only` fecham isso. Está marcado no template, no
 > ponto exato.
 
-## A API pode ter hostname, e mesmo assim não é o navegador que fala com ela
+## A API é pública, e mesmo assim não é o navegador da web que fala com ela
+
+A API inteira sai em `/v1/*` pela mesma URL do CloudFront — o Caddy manda esse
+caminho para `api:3000` e o resto para a web. É de propósito: consumidor externo
+integra com a API sem conta na AWS. Nenhuma rota da web começa com `/v1`, então
+o prefixo separa os dois sem esconder tela nenhuma. O Swagger vem junto, em
+`/v1/docs`.
+
+**O que protege `/v1/admin` e `/v1/affiliate` são os guards**, com audiência de
+JWT — não mais a rede interna do compose, que antes era a segunda camada. Rota
+nova com `@Public()` sai na internet no deploy seguinte; o
+`route-protection.e2e-spec.ts` é quem impede que uma saia sem guard por omissão.
+A API não tem rate limit: login e esqueci-a-senha ficam abertos a tentativa em
+volume.
+
+O CORS continua restrito a `PANEL_BASE_URL`. Integração servidor-a-servidor,
+Postman e curl não passam por CORS; uma aplicação de navegador em outra origem
+seria recusada até a origem dela entrar na lista.
 
 `CLAUDE.md`, regra inviolável: *"o navegador nunca fala com a API; quem chama é o
-servidor do Next"*. Ela continua valendo — a sessão é cookie `httpOnly` gravado
-pelo servidor do Next, e um token alcançável por JavaScript desmontaria isso.
-Nenhum `NEXT_PUBLIC_*` existe em `apps/web`, e é assim que se confere.
+servidor do Next"*. Ela continua valendo **para a web** — a sessão é cookie
+`httpOnly` gravado pelo servidor do Next, que segue chamando por
+`http://api:3000/v1` na rede interna. Nenhum `NEXT_PUBLIC_*` existe em
+`apps/web`, e é assim que se confere.
 
-O que o `ApiDomainName` existe para atender é **chamada servidor-a-servidor**: o
-serviço de cupom da Porto batendo em `/v1/webhooks`. Por isso o Caddy, nesse
-host, publica **só `/v1/webhooks` e `/v1/health`** e devolve 404 no resto. Os
-canais `/v1/admin` e `/v1/affiliate` seguem alcançáveis apenas pelo container da
-web, por `http://api:3000/v1` na rede interna do compose.
-
-**A rota já existe: `POST /v1/webhooks/porto/incentives`**, as notificações de
-incentivo da Porto (INT-03). O hostname continua opcional no template, mas é por
-ele que a Porto chama: sem `ApiDomainName` preenchido o Caddy não escreve o bloco,
-e a homologação integrada não tem para onde apontar. Contrato e autenticação em
+O `ApiDomainName` é opcional: ele dá à mesma API um host próprio, sem a web
+atrás, e devolve 404 fora de `/v1/*`. O webhook de incentivos da Porto (INT-03),
+`POST /v1/webhooks/porto/incentives`, já responde no host da web sem ele; o host
+próprio é para quando a Porto precisar de um nome estável e separado. Contrato e
+autenticação em
 [`apps/api/docs/INT-03-incentivos.md`](../../apps/api/docs/INT-03-incentivos.md).
 
-É defesa em profundidade, não substituto de guard: os canais continuam
-protegidos por audiência de JWT. Ampliar é uma linha no `Caddyfile`, quando
-houver motivo.
-
-Consequência prática: **Swagger e psql saem por túnel do SSM**, com os comandos
-prontos nos outputs `SwaggerTunnelCommand` e `RdsTunnelCommand`.
+O psql segue por túnel do SSM, com o comando pronto no output `RdsTunnelCommand`.
 
 ## Por que a web fica numa rede `internal`
 
@@ -142,13 +150,11 @@ restrição de origem, e quem souber dela entra.
 |---|---|---|---|
 | vazio | vazio | vazio | Validar o ambiente antes de a Porto emitir o certificado |
 | `dev.…` | vazio | cobre `dev.` | Ambiente de verdade. **É o modo esperado hoje** |
-| `dev.…` | `api-dev.…` | cobre os dois | Quando `/v1/webhooks` existir na API |
+| `dev.…` | `api-dev.…` | cobre os dois | Quando a API precisar de host próprio |
 
-O segundo modo é o esperado porque o host da API só tem uma razão de existir —
-o serviço de cupom da Porto batendo em `/v1/webhooks` — e essa rota **ainda não
-foi escrita**: `apps/api/src/http/webhooks/` tem só o módulo, sem controller.
-Enquanto isso, o host publicaria apenas o health check. Quem fala com a API é o
-servidor do Next, pela rede interna do compose, e não precisa de nome nenhum.
+O segundo modo basta porque a API já sai em `/v1/*` no host da web — inclusive
+o webhook de incentivos da Porto. O host próprio só separa o nome dela do da
+web; a API que responde nele é a mesma.
 
 Preencher `DomainName` sem `CertificateArn` — ou `ApiDomainName` sem
 `DomainName` — falha **na hora do create**, com o nome do parâmetro que falta:
@@ -374,8 +380,8 @@ com uma nova tentativa.
    ```
 
 2. **CloudFormation → a stack → Update → Use existing template**, e preencha
-   `DomainName` e `CertificateArn` (`ApiDomainName` só quando `/v1/webhooks`
-   existir). Desmarque o *Preserve* desta vez.
+   `DomainName` e `CertificateArn` (`ApiDomainName` só quando a API precisar
+   de host próprio). Desmarque o *Preserve* desta vez.
 3. Um deploy depois do update, para o `Caddyfile` pegar o nome. Um push na
    `development` basta.
 
@@ -468,7 +474,7 @@ permissão `ssm:StartSession`, revogável por pessoa e auditável no CloudTrail.
 | O quê | Como |
 |---|---|
 | Shell na máquina | `aws ssm start-session --target <id>` |
-| Swagger | túnel do output `SwaggerTunnelCommand`, depois `http://localhost:3000/v1/docs` |
+| Swagger | `https://<DomainName ou domínio do CloudFront>/v1/docs`; o túnel do output `SwaggerTunnelCommand` continua valendo |
 | psql no RDS | `npm run db:tunnel` na raiz, depois `psql -h localhost -p 5433 -U hub_rw hub_afiliados` |
 | Senha do `hub_rw` | `npm run db:password` na raiz |
 | Senha do master | output `ReadDbPasswordCommand` — só para o que exige DDL |

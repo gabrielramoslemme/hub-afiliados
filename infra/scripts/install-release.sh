@@ -158,9 +158,12 @@ ENV
 #
 # `DOMAIN_NAME` nunca chega vazio: sem domínio próprio a stack o resolve para o
 # nome da distribuição do CloudFront. `API_DOMAIN_NAME`, sim — e aí o bloco da
-# API não é escrito, porque um host só não dá para separar web de API por nome.
-# Não se perde nada: o único consumidor externo seria o serviço de cupom da
-# Porto batendo em /v1/webhooks, que ainda não existe na API.
+# API não é escrito. Não se perde nada: o host da web também publica /v1/*.
+#
+# A API é pública de propósito, para consumidor externo usá-la pela mesma URL
+# do CloudFront. Nenhuma rota da web começa com /v1, então separar por caminho
+# não esconde tela nenhuma. O que protege /v1/admin e /v1/affiliate são os
+# guards da API, com audiência de JWT — não mais a rede interna do compose.
 write_caddyfile() {
   ( umask 022
     cat > "${APP_DIR}/Caddyfile" <<CADDY
@@ -174,21 +177,25 @@ write_caddyfile() {
 
 http://${DOMAIN_NAME} {
 	encode zstd gzip
-	reverse_proxy web:3005
+
+	handle /v1/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		reverse_proxy web:3005
+	}
 }
 CADDY
 
-    # A API existe para chamada servidor-a-servidor. São os dois únicos caminhos
-    # publicados; os canais /v1/admin e /v1/affiliate ficam de fora, alcançáveis
-    # apenas pelo container da web, pela rede interna do compose.
+    # Host próprio da API: mesma API do bloco acima, sem a web atrás.
     if [ -n "${API_DOMAIN_NAME}" ]; then
       cat >> "${APP_DIR}/Caddyfile" <<CADDY
 
 http://${API_DOMAIN_NAME} {
 	encode zstd gzip
 
-	@publico path /v1/webhooks /v1/webhooks/* /v1/health
-	handle @publico {
+	handle /v1/* {
 		reverse_proxy api:3000
 	}
 
