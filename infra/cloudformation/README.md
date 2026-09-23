@@ -96,6 +96,8 @@ autenticação em
 [`apps/api/docs/INT-03-incentivos.md`](../../apps/api/docs/INT-03-incentivos.md).
 
 O psql segue por túnel do SSM, com o comando pronto no output `RdsTunnelCommand`.
+Quando `DbAccessCidr` está preenchido há uma saída alternativa — ver *Acesso
+direto ao banco, sem túnel*.
 
 ## Por que a web fica numa rede `internal`
 
@@ -468,14 +470,101 @@ id da instância, o endpoint do RDS e o ARN do segredo.
 O túnel exige o `session-manager-plugin` (`brew install --cask session-manager-plugin`),
 que não vem junto com o AWS CLI. Com ele instalado, qualquer cliente — psql,
 TablePlus, DBeaver, DataGrip — conecta em `localhost:5433` como se o banco fosse
-local, com o usuário `hub_rw`. O RDS continua sem rota para a internet: o controle de acesso é a
+local, com o usuário `hub_rw`. Nesse modo o RDS não tem rota para a internet: o controle de acesso é a
 permissão `ssm:StartSession`, revogável por pessoa e auditável no CloudTrail.
+
+### Acesso direto ao banco, sem túnel
+
+O parâmetro `DbAccessCidr` abre o Postgres na 5432 para um CIDR. Vazio — o
+padrão — nada muda e o acesso continua sendo só pelo túnel. Preenchido, três
+coisas passam a valer juntas: as subnets do banco ganham rota para o internet
+gateway, a instância recebe IP público e o security group libera o CIDR.
+
+```bash
+aws cloudformation deploy \
+  --template-file infra/cloudformation/porto-hub-dev-stack.yaml \
+  --stack-name porto-hub-dev \
+  --region us-east-1 \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides DbAccessCidr=200.201.202.0/24
+```
+
+Para `0.0.0.0/0` é preciso confirmar junto:
+
+```bash
+  --parameter-overrides DbAccessCidr=0.0.0.0/0 AcknowledgeDbOpenToInternet=true
+```
+
+Sem o segundo parâmetro a stack falha no gate, antes de criar change set e antes
+de qualquer modify no RDS. Não é proteção contra quem decide abrir — é contra
+abrir sem perceber, que é o que sobra de controle: sem VPN não há faixa fixa
+para listar, então a camada de rede não está disponível como restrição. Como o
+`deploy` reusa o valor anterior de parâmetro não informado, a fricção é uma vez
+só.
+
+Depois é conectar direto no `RdsEndpoint`, porta 5432, com **`hub_rw`** e a
+senha de `npm run db:password`.
+
+O usuário não é o master. O `hub_rw` tem `SELECT`, `INSERT`, `UPDATE` e `DELETE`
+no schema `public` e nada de DDL: o que vazar dele não cria papel, não dropa
+tabela e não vira superusuário. É o papel que o deploy provisiona a cada
+release, logo depois das migrations — por isso tabela nova já nasce acessível.
+O master continua existindo para migration e seed, e sai do
+`ReadDbPasswordCommand` quando alguém realmente precisar dele.
+
+**Num endpoint público, `sslmode=require` não basta.** No libpq o `require`
+cifra mas não verifica certificado nem hostname — protege de quem escuta, não de
+quem se põe no meio, que é o risco que a exposição pública acabou de criar. Use
+`verify-full` com o bundle das CAs da Amazon, já versionado no repositório:
+
+```bash
+psql "postgresql://hub_rw@$RDS_HOST:5432/hub_afiliados?sslmode=verify-full&sslrootcert=infra/certs/rds-global-bundle.pem"
+```
+
+No DBeaver: aba SSL, `SSL mode: verify-full` e o mesmo arquivo em *Root
+certificate*. Pelo túnel continua sendo `require` — ali o certificado é emitido
+para o endpoint do RDS e o cliente fala com `localhost`, então `verify-full`
+falharia por hostname.
+
+O servidor recusa conexão sem TLS porque o `rds.force_ssl` vem em `1` no
+parameter group padrão do PostgreSQL 16. **Isso é default da AWS, não garantia
+deste template** — a stack não define `DBParameterGroupName`, então quem trocar
+o `DBEngineVersion` para uma família mais antiga, ou apontar um parameter group
+próprio, perde a obrigatoriedade sem nenhum aviso.
+
+Para fechar de novo, `DbAccessCidr=''` no mesmo comando. Nenhum dos dois sentidos
+substitui a instância nem perde dado: é `modify-db-instance` mais rota e regra de
+security group.
+
+Antes do primeiro deploy real, confirme isso com um change set em vez de confiar
+na afirmação. O `Database` carrega `DeletionPolicy: Delete` e
+`UpdateReplacePolicy: Delete` com `BackupRetentionPeriod: 1`: se a premissa não
+valesse, o banco iria embora sem snapshot.
+
+```bash
+aws cloudformation create-change-set --stack-name porto-hub-dev --change-set-name open-db \
+  --template-body file://infra/cloudformation/porto-hub-dev-stack.yaml \
+  --parameters ParameterKey=DbAccessCidr,ParameterValue=200.201.202.0/24 \
+  --capabilities CAPABILITY_NAMED_IAM
+
+aws cloudformation describe-change-set --stack-name porto-hub-dev --change-set-name open-db \
+  --query 'Changes[].ResourceChange.[LogicalResourceId,Action,Replacement]' --output table
+```
+
+Execute só com `Replacement: False` na linha do `Database`.
+
+**O que muda ao abrir.** A tabela guarda CPF e chave PIX de afiliado, e a senha
+do master passa a ser o único controle de quem entra — sem revogação por pessoa
+e sem o rastro que o `ssm:StartSession` deixa no CloudTrail. `0.0.0.0/0` expõe
+isso para a internet inteira; a faixa de saída da VPN é uma decisão bem
+diferente. Se abrir para valer, vale criar um usuário só com DML no schema da
+aplicação e deixar o master fora de circulação.
 
 | O quê | Como |
 |---|---|
 | Shell na máquina | `aws ssm start-session --target <id>` |
 | Swagger | `https://<DomainName ou domínio do CloudFront>/v1/docs`; o túnel do output `SwaggerTunnelCommand` continua valendo |
-| psql no RDS | `npm run db:tunnel` na raiz, depois `psql -h localhost -p 5433 -U hub_rw hub_afiliados` |
+| psql no RDS | `npm run db:tunnel` na raiz, depois `psql -h localhost -p 5433 -U hub_rw hub_afiliados` (ou direto no `RdsEndpoint`, se `DbAccessCidr` estiver preenchido) |
 | Senha do `hub_rw` | `npm run db:password` na raiz |
 | Senha do master | output `ReadDbPasswordCommand` — só para o que exige DDL |
 | Senha inicial do painel | output `ReadSeedPasswordCommand` |
