@@ -132,7 +132,6 @@ export enum CouponErrorCodeEnum {
   PROVIDER_ACCESS_DENIED = 'CPN-004',
 }
 
-/** Todo `code` que o corpo de erro da API pode carregar. */
 /**
  * Recusas do webhook de incentivos. Quem lê é o suporte da Porto Serviços, que
  * decide pelo código se reprocessa, corrige o envio ou abre um chamado.
@@ -148,8 +147,11 @@ export enum IncentiveErrorCodeEnum {
   INCONSISTENT_EVENT = 'INC-004',
   /** A venda já existe aqui com outro cupom. */
   SALE_COUPON_MISMATCH = 'INC-005',
+  /** O corpo está fora do contrato; a mensagem lista os campos. */
+  INVALID_PAYLOAD = 'INC-006',
 }
 
+/** Todo `code` que o corpo de erro da API pode carregar. */
 export type ApiErrorCode =
   | AuthErrorCodeEnum
   | RegistrationErrorCodeEnum
