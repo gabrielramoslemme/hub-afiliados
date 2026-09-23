@@ -1,8 +1,12 @@
 name: CI
 
 # `development` e o ambiente de desenvolvimento, `main` e producao. As duas
-# rodam a verificacao inteira; so a `development` termina em deploy, porque a
-# stack de producao ainda nao existe.
+# rodam a verificacao inteira e terminam em deploy - a de producao parada no
+# revisor obrigatorio do environment `production`.
+#
+# A `main` so publica e faz deploy com a variavel de repositorio
+# PRODUCTION_READY=true. Sem ela, cada push na `main` antes de a stack de
+# producao existir quebraria no describe-stacks.
 on:
   push:
     branches: [development, main]
@@ -20,7 +24,6 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  STACK_NAME: porto-hub-dev
 
 jobs:
   # Os quatro primeiros jobs rodam em paralelo: o tempo de parede passa a ser o
@@ -121,8 +124,10 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    # A branch escolhe a stack e a role: cada uma so alcanca o proprio ECR.
     env:
-      PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development' }}
+      PUBLISH: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/development' || (github.ref == 'refs/heads/main' && vars.PRODUCTION_READY == 'true')) }}
+      STACK_NAME: ${{ github.ref == 'refs/heads/main' && 'porto-hub-prod' || 'porto-hub-dev' }}
     outputs:
       api-repo: ${{ steps.stack.outputs.ApiRepositoryUri }}
       web-repo: ${{ steps.stack.outputs.WebRepositoryUri }}
@@ -134,7 +139,7 @@ jobs:
         if: env.PUBLISH == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ github.ref == 'refs/heads/main' && secrets.AWS_PROD_DEPLOY_ROLE_ARN || secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Ler os outputs da stack
@@ -198,24 +203,19 @@ jobs:
       environment: development
     secrets: inherit
 
-  # Producao ainda nao tem stack. Quando tiver, o job e este, e nada mais muda:
-  # o `cd.yml` ja recebe `stackName` e `environment` por parametro.
-  #
-  #   deploy-prod:
-  #     name: Deploy prod
-  #     needs: [verify, e2e, infra-lint, images]
-  #     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #     uses: ./.github/workflows/cd.yml
-  #     permissions:
-  #       contents: read
-  #       id-token: write
-  #     with:
-  #       imageTag: ${{ github.sha }}
-  #       stackName: porto-hub-prod
-  #       environment: production
-  #     secrets: inherit
-  #
-  # Falta antes: a stack de producao (o template de hoje tem DeletionPolicy
-  # Delete no RDS, 1 dia de backup e sem Multi-AZ - escolhas de ambiente
-  # descartavel), o `images` publicando no ECR de producao quando a branch e
-  # `main`, e o secret AWS_DEPLOY_ROLE_ARN no escopo do ambiente `production`.
+  # A imagem de producao e reconstruida aqui, a partir do merge na `main`: mesmo
+  # fonte que passou por dev, SHA do merge. O job para no environment
+  # `production`, que exige revisor e so aceita a `main`.
+  deploy-prod:
+    name: Deploy prod
+    needs: [verify, e2e, infra-lint, images]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PRODUCTION_READY == 'true'
+    uses: ./.github/workflows/cd.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      imageTag: ${{ github.sha }}
+      stackName: porto-hub-prod
+      environment: production
+    secrets: inherit
