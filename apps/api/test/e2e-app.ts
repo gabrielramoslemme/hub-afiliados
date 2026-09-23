@@ -35,7 +35,9 @@ export interface E2eApp {
 /** A aplicação configurada como o `main.ts` configura, pronta para o `supertest`. */
 export async function createE2eApp(): Promise<E2eApp> {
   const moduleRef = await createE2eTestingModule().compile();
-  const app = moduleRef.createNestApplication();
+  // O mesmo `rawBody` do `main.ts`: sem ele o guard do webhook não enxerga os
+  // bytes assinados, e toda chamada assinada do teste voltaria 401.
+  const app = moduleRef.createNestApplication({ rawBody: true });
   configureApp(app);
   /*
     Escutando de verdade, e em 127.0.0.1. Sem isso o `supertest` sobe um servidor
@@ -57,6 +59,8 @@ export async function createE2eApp(): Promise<E2eApp> {
   para trás quando o cupom ganhou tabela, e só funcionava pelo `CASCADE`.
 */
 const TABLES = [
+  'porto_incentive_events',
+  'affiliate_sales',
   'affiliate_coupon_history',
   'affiliate_coupons',
   'affiliate_status_history',

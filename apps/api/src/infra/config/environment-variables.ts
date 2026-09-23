@@ -43,4 +43,14 @@ export interface EnvironmentVariables {
    * que segurar a tela.
    */
   PORTO_API_TIMEOUT_MS: number;
+  /**
+   * O segredo que a Porto usa para assinar o webhook de incentivos. Vazio, a
+   * rota recusa toda chamada — nunca aceita assinatura feita com segredo vazio.
+   */
+  PORTO_WEBHOOK_SECRET: string;
+  /**
+   * Quanto o instante assinado pode se afastar do nosso relógio, para os dois
+   * lados. É o que impede reenviar para sempre uma chamada capturada.
+   */
+  PORTO_WEBHOOK_TOLERANCE_SECONDS: number;
 }

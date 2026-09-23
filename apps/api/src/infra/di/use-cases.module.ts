@@ -15,6 +15,8 @@ import { SetPasswordUseCase } from '@Application/auth/set-password.use-case';
 import { ChangeAffiliateCouponUseCase } from '@Application/coupons/change-affiliate-coupon.use-case';
 import { CheckCouponAvailabilityUseCase } from '@Application/coupons/check-coupon-availability.use-case';
 import { ListCouponHistoryUseCase } from '@Application/coupons/list-coupon-history.use-case';
+import { ApplyIncentiveEventUseCase } from '@Application/sales/apply-incentive-event.use-case';
+import { RecordInvalidIncentiveNotificationUseCase } from '@Application/sales/record-invalid-incentive-notification.use-case';
 import { AFFILIATE_REPOSITORY } from '@Domain/affiliates/affiliate.repository';
 import { AFFILIATE_STATUS_HISTORY_REPOSITORY } from '@Domain/affiliates/affiliate-status-history.repository';
 import { ACCESS_TOKEN_ISSUER } from '@Domain/auth/access-token';
@@ -26,6 +28,8 @@ import { COUPON_GATEWAY } from '@Domain/coupons/coupon-gateway';
 import { COUPON_HISTORY_REPOSITORY } from '@Domain/coupons/coupon-history.repository';
 import { LINK_BUILDER } from '@Domain/notifications/link-builder';
 import { MAILER } from '@Domain/notifications/mailer';
+import { INCENTIVE_EVENT_REPOSITORY } from '@Domain/sales/incentive-event.repository';
+import { SALE_REPOSITORY } from '@Domain/sales/sale.repository';
 import { CLOCK } from '@Domain/shared/clock';
 import { Token } from '@Domain/shared/token';
 import { USER_REPOSITORY } from '@Domain/users/user.repository';
@@ -114,6 +118,13 @@ const USE_CASES = [
     PASSWORD_HASHER,
     MAILER,
   ]),
+  provideUseCase(ApplyIncentiveEventUseCase, [
+    COUPON_REPOSITORY,
+    SALE_REPOSITORY,
+    INCENTIVE_EVENT_REPOSITORY,
+    CLOCK,
+  ]),
+  provideUseCase(RecordInvalidIncentiveNotificationUseCase, [INCENTIVE_EVENT_REPOSITORY, CLOCK]),
 ];
 
 @Module({

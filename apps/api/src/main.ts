@@ -6,7 +6,9 @@ import { AppModule } from './app.module';
 import { configureApp } from './configure-app';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  // O corpo cru é o que a assinatura dos webhooks cobre: o JSON já lido não
+  // devolve os mesmos bytes.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const configService = app.get<ConfigService<EnvironmentVariables, true>>(ConfigService);
 
   configureApp(app);

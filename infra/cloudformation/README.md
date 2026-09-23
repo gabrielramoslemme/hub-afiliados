@@ -76,10 +76,11 @@ host, publica **só `/v1/webhooks` e `/v1/health`** e devolve 404 no resto. Os
 canais `/v1/admin` e `/v1/affiliate` seguem alcançáveis apenas pelo container da
 web, por `http://api:3000/v1` na rede interna do compose.
 
-**E por isso o hostname é opcional.** Enquanto `/v1/webhooks` não existir — hoje
-`apps/api/src/http/webhooks/` tem só o módulo, sem controller — esse host
-serviria apenas o health check, e o Caddy simplesmente não escreve o bloco.
-Deixe `ApiDomainName` vazio até a rota nascer: ninguém perde acesso a nada.
+**A rota já existe: `POST /v1/webhooks/porto/incentives`**, as notificações de
+incentivo da Porto (INT-03). O hostname continua opcional no template, mas é por
+ele que a Porto chama: sem `ApiDomainName` preenchido o Caddy não escreve o bloco,
+e a homologação integrada não tem para onde apontar. Contrato e autenticação em
+[`apps/api/docs/INT-03-incentivos.md`](../../apps/api/docs/INT-03-incentivos.md).
 
 É defesa em profundidade, não substituto de guard: os canais continuam
 protegidos por audiência de JWT. Ampliar é uma linha no `Caddyfile`, quando
@@ -328,12 +329,22 @@ PORTO_CLIENT_ID=<client_id>
 PORTO_CLIENT_SECRET=<client_secret>
 ```
 
-Sem as duas o deploy falha: linha ausente para o `install-release.sh` com
+O segredo do webhook de incentivos entra do mesmo jeito, numa terceira linha —
+combinado com a Porto, com no mínimo 32 caracteres:
+
+```
+PORTO_WEBHOOK_SECRET=<segredo>
+```
+
+Ele é opcional: sem a linha a API sobe, e `POST /v1/webhooks/porto/incentives`
+recusa toda chamada com 401. Gere com `openssl rand -hex 32`.
+
+Sem as duas credenciais o deploy falha: linha ausente para o `install-release.sh` com
 `unbound variable` antes de tocar nos containers; linha vazia chega à API, que
 recusa subir, e o deploy volta para a release anterior. Os endereços do gateway
 não entram no parâmetro: valem os padrões da API, que são os de homologação.
 
-⚠️ **Update de stack pode apagar as duas linhas.** O CloudFormation só regrava o
+⚠️ **Update de stack pode apagar as linhas escritas à mão.** O CloudFormation só regrava o
 parâmetro quando o valor dele no template muda — trocar `MailProvider`,
 `MailFromEmail`, `ApiMocking`, `DomainName`, `ApiDomainName`, ou um endpoint novo
 do RDS. Depois de um update desses, confira o parâmetro e escreva as linhas de
