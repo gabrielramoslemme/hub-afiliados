@@ -7,7 +7,7 @@ import { ChangePixKeyInput } from '@Application/affiliates/change-pix-key.use-ca
 /**
  * Espelha o `changePixKeySchema` de `@porto/contracts`. Só a chave e a senha que
  * a confirma: com o `forbidNonWhitelisted` do `ValidationPipe`, qualquer outro
- * dado do cadastro no corpo é 400 — a chave é o único que o afiliado altera.
+ * dado do cadastro no corpo é 400.
  */
 export class ChangePixKeyRequestDto implements Omit<ChangePixKeyInput, 'userPublicId'> {
   @ApiProperty({ enum: PixKeyTypeEnum, example: PixKeyTypeEnum.PHONE })

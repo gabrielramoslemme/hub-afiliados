@@ -5,8 +5,17 @@ import {
   AuthErrorCodeEnum,
   RegistrationErrorCodeEnum,
 } from '@porto/contracts';
+import { USER_REPOSITORY, UserRepository } from '../src/domain/users/user.repository';
 import { createE2eApp, type E2eApp, resetDatabase } from './e2e-app';
-import { approve, lastLinkTo, MARINA, register, signInOperator, tokenOf } from './e2e-fixtures';
+import {
+  approve,
+  CLEIDE,
+  lastLinkTo,
+  MARINA,
+  register,
+  signInOperator,
+  tokenOf,
+} from './e2e-fixtures';
 
 /**
  * O ciclo inteiro, ponta a ponta: a pessoa se cadastra, a analista aprova, o
@@ -306,7 +315,6 @@ describe('Affiliate account (e2e)', () => {
       expect(response.body.code).toBe(RegistrationErrorCodeEnum.PIX_KEY_MISMATCH);
     });
 
-    /* A chave é o único dado do cadastro que o afiliado altera sozinho. */
     it('refuses to change anything but the pix key', async () => {
       const { accessToken } = await signedIn();
 
@@ -320,6 +328,115 @@ describe('Affiliate account (e2e)', () => {
     it('refuses a token of the panel', async () => {
       await changePixKey(await signInOperator(e2e.app, e2e.dataSource))
         .send({ ...newKey, currentPassword: PASSWORD })
+        .expect(403);
+    });
+  });
+  describe('PATCH /v1/affiliate/me/email', () => {
+    const NEW_EMAIL = 'marina.nova@email.com';
+
+    function changeEmail(accessToken: string) {
+      return api().patch('/v1/affiliate/me/email').set('Authorization', `Bearer ${accessToken}`);
+    }
+
+    async function storedEmail(): Promise<string> {
+      const [row] = await e2e.dataSource.query(
+        `SELECT u.email FROM users u JOIN affiliates a ON a.user_id = u.id WHERE a.cpf = '52998224725'`,
+      );
+
+      return row.email;
+    }
+
+    it('makes the new email the login, keeping the open session', async () => {
+      const { accessToken } = await signedIn();
+
+      await changeEmail(accessToken)
+        .send({ email: '  Marina.Nova@Email.com ', currentPassword: PASSWORD })
+        .expect(204);
+
+      const response = await api()
+        .get('/v1/affiliate/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      expect(response.body.email).toBe(NEW_EMAIL);
+      await api()
+        .post('/v1/affiliate/auth/login')
+        .send({ email: NEW_EMAIL, password: PASSWORD })
+        .expect(200);
+      await signIn().expect(401);
+    });
+
+    it('warns the previous address, naming the new one', async () => {
+      const { accessToken } = await signedIn();
+
+      await changeEmail(accessToken)
+        .send({ email: NEW_EMAIL, currentPassword: PASSWORD })
+        .expect(204);
+
+      expect(e2e.mail.sentTo(MARINA.email).at(-1)?.text).toContain(NEW_EMAIL);
+    });
+
+    it('refuses a wrong password and keeps the email', async () => {
+      const { accessToken } = await signedIn();
+
+      const response = await changeEmail(accessToken)
+        .send({ email: NEW_EMAIL, currentPassword: 'SenhaErrada!2026' })
+        .expect(400);
+
+      expect(response.body.code).toBe(AuthErrorCodeEnum.WRONG_PASSWORD);
+      expect(await storedEmail()).toBe(MARINA.email);
+    });
+
+    it('refuses an email that already belongs to another account', async () => {
+      const { accessToken } = await signedIn();
+      await register(e2e.app, CLEIDE);
+
+      const response = await changeEmail(accessToken)
+        .send({ email: CLEIDE.email.toUpperCase(), currentPassword: PASSWORD })
+        .expect(409);
+
+      expect(response.body.code).toBe(RegistrationErrorCodeEnum.EMAIL_ALREADY_REGISTERED);
+      expect(await storedEmail()).toBe(MARINA.email);
+    });
+
+    it('lets the unique index refuse an email that slipped past the check', async () => {
+      const { accessToken } = await signedIn();
+      await register(e2e.app, CLEIDE);
+      jest
+        .spyOn(e2e.app.get<UserRepository>(USER_REPOSITORY), 'findByEmail')
+        .mockResolvedValueOnce(null);
+
+      const response = await changeEmail(accessToken)
+        .send({ email: CLEIDE.email, currentPassword: PASSWORD })
+        .expect(409);
+
+      expect(response.body.code).toBe(RegistrationErrorCodeEnum.EMAIL_ALREADY_REGISTERED);
+      expect(await storedEmail()).toBe(MARINA.email);
+    });
+
+    it('refuses something that is not an email', async () => {
+      const { accessToken } = await signedIn();
+
+      await changeEmail(accessToken)
+        .send({ email: 'marina', currentPassword: PASSWORD })
+        .expect(400);
+
+      expect(await storedEmail()).toBe(MARINA.email);
+    });
+
+    it('refuses to change anything but the email', async () => {
+      const { accessToken } = await signedIn();
+
+      await changeEmail(accessToken)
+        .send({ email: NEW_EMAIL, currentPassword: PASSWORD, name: 'Outra Pessoa' })
+        .expect(400);
+
+      expect(await storedEmail()).toBe(MARINA.email);
+    });
+
+    it('refuses a token of the panel', async () => {
+      await changeEmail(await signInOperator(e2e.app, e2e.dataSource))
+        .send({ email: NEW_EMAIL, currentPassword: PASSWORD })
         .expect(403);
     });
   });

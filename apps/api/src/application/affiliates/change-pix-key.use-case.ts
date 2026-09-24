@@ -17,10 +17,10 @@ export interface ChangePixKeyInput {
 }
 
 /**
- * O único dado do cadastro que o próprio afiliado altera. A chave é o destino
- * do pagamento, e por isso a troca pede a senha atual — uma sessão esquecida
- * aberta não basta para desviá-lo — e avisa o dono por e-mail, para que uma
- * troca que ele não fez não passe despercebida até o dinheiro cair em outra conta.
+ * A chave é o destino do pagamento, e por isso a troca pede a senha atual — uma
+ * sessão esquecida aberta não basta para desviá-lo — e avisa o dono por e-mail,
+ * para que uma troca que ele não fez não passe despercebida até o dinheiro cair
+ * em outra conta.
  */
 export class ChangePixKeyUseCase implements UseCase<ChangePixKeyInput, void> {
   constructor(

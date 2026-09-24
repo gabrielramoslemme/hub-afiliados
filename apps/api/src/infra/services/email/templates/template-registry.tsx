@@ -1,5 +1,6 @@
 import { ReactElement } from 'react';
 import { MailTemplateEnum, PixKeyTypeEnum } from '@porto/contracts';
+import { EmailChanged } from './email-changed';
 import { PasswordRecovery } from './password-recovery';
 import { PixKeyChanged } from './pix-key-changed';
 import { RegistrationApproved } from './registration-approved';
@@ -66,6 +67,13 @@ export const MAIL_TEMPLATES: Record<MailTemplateEnum, MailTemplateDefinition> = 
           maskedPixKey={variables.maskedPixKey}
         />
       );
+    },
+  },
+  [MailTemplateEnum.EMAIL_CHANGED]: {
+    subject: 'O e-mail da sua conta foi alterado',
+    requiredVariables: ['name', 'newEmail'],
+    build(variables) {
+      return <EmailChanged name={variables.name} newEmail={variables.newEmail} />;
     },
   },
 };

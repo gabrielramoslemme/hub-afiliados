@@ -10,6 +10,7 @@ Provider selecionado por `MAIL_PROVIDER`: `logger` em desenvolvimento e teste,
 | `REGISTRATION_REJECTED` | Operador reprova o cadastro | `name`, `reason` |
 | `PASSWORD_RECOVERY` | Pedido de recuperação | `name`, `link` (2h) |
 | `PIX_KEY_CHANGED` | Afiliado troca a chave PIX pelo perfil | `name`, `pixKeyType`, `maskedPixKey` |
+| `EMAIL_CHANGED` | Afiliado troca o e-mail pelo perfil | `name`, `newEmail` |
 
 `PASSWORD_RECOVERY` sai do `RequestPasswordResetUseCase`, que atende os dois
 canais. O `link` aponta para `/redefinir-senha` quando o pedido veio do portal e
@@ -25,6 +26,12 @@ e-mail — inclusive numa caixa invadida — reconhece a troca sem levar o desti
 pagamento. `pixKeyType` chega como o valor do enum (`'PHONE'`), e o template o
 escreve por extenso. O aviso existe para uma troca que o dono não fez não passar
 despercebida até o pagamento cair em outra conta.
+
+`EMAIL_CHANGED` sai do `ChangeEmailUseCase`, depois de a senha atual conferir e
+o e-mail novo estar gravado, e vai para o endereço **antigo**: é lá que o dono
+ainda está olhando, e quem trocou já sabe da troca. O novo aparece inteiro, para
+o dono citá-lo ao suporte se a troca não foi dele. Trocar pelo mesmo e-mail não
+grava nem envia nada.
 
 `REGISTRATION_APPROVED` só sai depois de o cupom estar emitido na Porto e
 gravado aqui, e mostra o código e o percentual acima do botão de criar a senha

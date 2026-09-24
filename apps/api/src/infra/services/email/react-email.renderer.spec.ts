@@ -102,6 +102,28 @@ describe('ReactEmailRenderer', () => {
     });
   });
 
+  describe('email change warning', () => {
+    let rendered: RenderedMail;
+
+    beforeAll(async () => {
+      rendered = await renderer.render(
+        inputFor(MailTemplateEnum.EMAIL_CHANGED, {
+          name: 'Marina',
+          newEmail: 'marina.nova@email.com',
+        }),
+      );
+    });
+
+    it('names the new address the account now answers to', () => {
+      expect(rendered.subject).toBe('O e-mail da sua conta foi alterado');
+      expect(rendered.text).toContain('marina.nova@email.com');
+    });
+
+    it('tells how to react to a change nobody asked for', () => {
+      expect(rendered.text).toContain('Se não foi você');
+    });
+  });
+
   it('escapes a reason that carries markup', async () => {
     const rendered = await renderer.render(
       inputFor(MailTemplateEnum.REGISTRATION_REJECTED, {

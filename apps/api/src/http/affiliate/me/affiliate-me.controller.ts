@@ -2,17 +2,20 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Patch, UseGuards } from '@
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiNoContentResponse,
   ApiOkResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { ChangeEmailUseCase } from '@Application/affiliates/change-email.use-case';
 import { ChangePixKeyUseCase } from '@Application/affiliates/change-pix-key.use-case';
 import { GetAffiliateAccountUseCase } from '@Application/affiliates/get-affiliate-account.use-case';
 import { ActorInfo } from '@Http/shared/authenticated-request';
 import { Actor } from '@Http/shared/decorators/actor.decorator';
 import { AffiliateGuard } from '@Http/shared/guards/affiliate.guard';
 import { AffiliateAccountResponseDto } from './dtos/affiliate-account.response.dto';
+import { ChangeEmailRequestDto } from './dtos/change-email.request.dto';
 import { ChangePixKeyRequestDto } from './dtos/change-pix-key.request.dto';
 
 @ApiTags('affiliate/me')
@@ -24,6 +27,7 @@ export class AffiliateMeController {
   constructor(
     private readonly getAffiliateAccountUseCase: GetAffiliateAccountUseCase,
     private readonly changePixKeyUseCase: ChangePixKeyUseCase,
+    private readonly changeEmailUseCase: ChangeEmailUseCase,
   ) {}
 
   @Get()
@@ -36,8 +40,8 @@ export class AffiliateMeController {
   }
 
   /**
-   * Troca a chave PIX, o único dado do cadastro que o próprio afiliado altera.
-   * A senha atual confirma a troca, e o dono recebe um aviso por e-mail.
+   * Troca a chave PIX. A senha atual confirma a troca, e o dono recebe um aviso
+   * por e-mail.
    */
   @Patch('pix-key')
   @HttpCode(HttpStatus.NO_CONTENT)
@@ -50,5 +54,18 @@ export class AffiliateMeController {
     @Actor() actor: ActorInfo,
   ): Promise<void> {
     await this.changePixKeyUseCase.execute({ ...body, userPublicId: actor.publicId });
+  }
+
+  /**
+   * Troca o e-mail, que também é o login. A senha atual confirma a troca, e o
+   * endereço antigo recebe um aviso. A sessão aberta continua valendo.
+   */
+  @Patch('email')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiNoContentResponse({ description: 'E-mail trocado' })
+  @ApiBadRequestResponse({ description: 'E-mail inválido ou senha incorreta' })
+  @ApiConflictResponse({ description: 'E-mail já cadastrado em outra conta' })
+  async changeEmail(@Body() body: ChangeEmailRequestDto, @Actor() actor: ActorInfo): Promise<void> {
+    await this.changeEmailUseCase.execute({ ...body, userPublicId: actor.publicId });
   }
 }
