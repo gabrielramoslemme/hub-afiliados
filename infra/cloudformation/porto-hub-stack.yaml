@@ -115,8 +115,10 @@ Parameters:
       Prefix list gerenciada pela AWS com as faixas de saida do CloudFront
       (com.amazonaws.global.cloudfront.origin-facing). E a unica origem que
       alcanca a instancia: sem CloudFront na frente, a maquina nao responde a
-      ninguem. O default e o id em us-east-1; conferir com
-      `aws ec2 describe-managed-prefix-lists --filters Name=prefix-list-name,Values=com.amazonaws.global.cloudfront.origin-facing`.
+      ninguem. O id muda por regiao, e o default e o de us-east-1, a regiao do
+      dev; fora dela e obrigatorio passar o da regiao (regra
+      PrefixListMatchesRegion). Conferir com
+      `aws ec2 describe-managed-prefix-lists --region <regiao> --filters Name=prefix-list-name,Values=com.amazonaws.global.cloudfront.origin-facing`.
 
   MailProvider:
     Type: String
@@ -251,16 +253,17 @@ Parameters:
       Quem recebe os alarmes de producao por e-mail. A assinatura so vale
       depois de confirmada no link que o SNS manda. Ignorado em dev.
 
-  # VPC origin nao funciona na zona use1-az3, e o nome `us-east-1x` mapeia para
-  # um id diferente em cada conta - `!GetAZs` pode cair justamente nela. Vazios,
-  # o template escolhe a primeira e a segunda da regiao, como sempre fez.
+  # VPC origin nao funciona em algumas zonas - use1-az3 em us-east-1, cac1-az3
+  # em ca-central-1, a regiao de prod -, e o nome da zona mapeia para um id
+  # diferente em cada conta: `!GetAZs` pode cair justamente nela. Vazios, o
+  # template escolhe a primeira e a segunda da regiao, como sempre fez.
   PrimaryAvailabilityZone:
     Type: String
     Default: ''
     AllowedPattern: '^$|^[a-z]{2}-[a-z]+-\d[a-z]$'
     Description: >
       Zona da instancia e das subnets A. Em prod, escolha uma cujo ZoneId nao
-      seja use1-az3: `aws ec2 describe-availability-zones --region us-east-1
+      seja cac1-az3: `aws ec2 describe-availability-zones --region ca-central-1
       --query 'AvailabilityZones[].[ZoneName,ZoneId]' --output text`.
 
   SecondaryAvailabilityZone:
@@ -311,6 +314,17 @@ Rules:
         AssertDescription: >
           Producao exige PortoOAuthUrl e PortoApiBaseUrl. Vazios, a API cai nos
           padroes, que sao os de homologacao.
+
+  # O default e o id de us-east-1. Em outra regiao ele nao existe, e o erro so
+  # apareceria no security group, com InvalidPrefixListID.NotFound.
+  PrefixListMatchesRegion:
+    RuleCondition: !Not [!Equals [!Ref 'AWS::Region', 'us-east-1']]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref CloudFrontPrefixListId, 'pl-3b927c52']]
+        AssertDescription: >
+          pl-3b927c52 e a prefix list do CloudFront em us-east-1. Fora dela,
+          passe CloudFrontPrefixListId com o id desta regiao - o comando esta
+          na descricao do parametro.
 
   ProdRequiresAlertEmail:
     RuleCondition: !Equals [!Ref EnvironmentName, 'prod']
@@ -1247,8 +1261,8 @@ Resources:
           - - Id: instance
               # CloudFront exige NOME para origin customizado - nao aceita IP.
               # Este e o DNS publico que a AWS da ao Elastic IP; o formato
-              # `compute-1` e o de us-east-1, que ja e obrigatoria por causa do
-              # ACM.
+              # `compute-1` e o de us-east-1, a regiao do dev. Prod nao passa
+              # por aqui: usa o VpcOrigin acima, e roda em ca-central-1.
               DomainName: !Sub
                 - 'ec2-${DashedIp}.compute-1.amazonaws.com'
                 - DashedIp: !Join ['-', !Split ['.', !Ref ElasticIp]]
@@ -1409,6 +1423,9 @@ Resources:
   # Em dev quem percebe que quebrou e quem esta usando. Em prod nao pode ser o
   # afiliado: tudo abaixo avisa por e-mail, e a assinatura so vale depois de
   # confirmada no link que o SNS manda para o AlertEmail.
+  #
+  # O 5xx do CloudFront nao esta aqui: a metrica so existe em us-east-1, e
+  # alarme nao le metrica de outra regiao. Mora na porto-hub-edge-alarms.yaml.
   AlertTopic:
     Type: AWS::SNS::Topic
     Condition: IsProd
@@ -1544,31 +1561,6 @@ Resources:
       AlarmActions: [!Ref AlertTopic]
       OKActions: [!Ref AlertTopic]
 
-  # O que o afiliado ve: 5xx na borda, venha da instancia fora do ar ou da
-  # aplicacao quebrando. Metrica padrao do CloudFront, publicada em us-east-1
-  # com Region=Global. Sem trafego nao ha dado, e sem dado nao ha problema.
-  CdnErrorRateAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Condition: IsProd
-    Properties:
-      AlarmName: !Sub 'porto-hub-${EnvironmentName}-cdn-5xx'
-      AlarmDescription: Mais de 5% das respostas do CloudFront em 5xx por 5 minutos
-      Namespace: AWS/CloudFront
-      MetricName: 5xxErrorRate
-      Dimensions:
-        - Name: DistributionId
-          Value: !Ref Distribution
-        - Name: Region
-          Value: Global
-      Statistic: Average
-      Period: 60
-      EvaluationPeriods: 5
-      Threshold: 5
-      ComparisonOperator: GreaterThanThreshold
-      TreatMissingData: notBreaching
-      AlarmActions: [!Ref AlertTopic]
-      OKActions: [!Ref AlertTopic]
-
 Outputs:
   # Sem dominio proprio os dois saem no nome do CloudFront - e continuam sendo
   # a URL de verdade do ambiente, com HTTPS pelo certificado padrao da AWS.
@@ -1594,6 +1586,12 @@ Outputs:
   CloudFrontDomainName:
     Description: Origin para a Imperva, e alvo dos CNAMEs de DomainName e ApiDomainName
     Value: !GetAtt Distribution.DomainName
+
+  # Entrada da porto-hub-edge-alarms.yaml: o alarme de 5xx do CloudFront so
+  # enxerga a metrica em us-east-1, e prod roda em ca-central-1.
+  DistributionId:
+    Description: Id da distribuicao, parametro da stack de alarmes de borda
+    Value: !Ref Distribution
 
   # Condicional porque sem ApiDomainName o Caddy nao escreve o bloco, e uma URL
   # que devolve 404 no output e pior que output nenhum. A API segue alcancavel

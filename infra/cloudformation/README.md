@@ -188,7 +188,9 @@ uma vez, tire a flag.
 Não há parâmetro de CIDR de entrada: a instância aceita **só a 80, e só das
 faixas do CloudFront**, pela prefix list gerenciada da AWS. O
 `CloudFrontPrefixListId` tem o id de `us-east-1` como padrão; se um dia a AWS
-mudá-lo, o comando para conferir está na descrição do parâmetro.
+mudá-lo, o comando para conferir está na descrição do parâmetro. Em qualquer
+outra região — a de prod é `ca-central-1` — o id é outro, e a regra
+`PrefixListMatchesRegion` recusa o padrão.
 
 Se a conta já tiver o provider OIDC do GitHub, acrescente
 `CreateGitHubOidcProvider=false` — o segundo faz a stack falhar com
@@ -260,7 +262,7 @@ coisas que não têm flag equivalente.
 
 | Console | Conferir | Se der ruim |
 |---|---|---|
-| Seletor de região | **N. Virginia (us-east-1)** | O ACM do CloudFront exige, e o origin é montado como `ec2-<ip>.compute-1.amazonaws.com`, que é o sufixo dessa região. Fora dela nada funciona |
+| Seletor de região | Dev: **N. Virginia (us-east-1)**. Prod: **Canada (Central) (ca-central-1)** | Em dev o origin é montado como `ec2-<ip>.compute-1.amazonaws.com`, que é o sufixo de us-east-1: fora dela o CloudFront não acha a instância. Prod usa VPC origin e não depende disso. O certificado do ACM fica em us-east-1 nos dois casos |
 | **IAM → Identity providers** | Existe `token.actions.githubusercontent.com`? Se sim, abra e confirme que *Audiences* contém `sts.amazonaws.com` | Existindo, use `CreateGitHubOidcProvider=false`: criar o segundo falha com `EntityAlreadyExists` e o rollback leva a stack inteira. Audience diferente faz o assume-role ser recusado sem dizer por quê |
 | Prefix list do CloudFront | O id de `com.amazonaws.global.cloudfront.origin-facing` **nesta** região | Prefix list gerenciada tem id diferente por região, e o console da VPC esconde as da AWS. O comando está na descrição do parâmetro `CloudFrontPrefixListId`. Errando, o security group não cria e a stack para em segundos com `InvalidPrefixListID.NotFound` — antes do RDS e do CloudFront |
 
@@ -421,6 +423,7 @@ docs (`specs/21-ambiente-de-producao.md`).
 
 | | dev | prod |
 |---|---|---|
+| Região | `us-east-1` | **`ca-central-1`** (Montreal) |
 | Instância | subnet pública, Elastic IP | **subnet privada, sem IP público** |
 | CloudFront → instância | HTTP pela internet, SG só aceita o CloudFront | **VPC origin**: rede interna da AWS, até o IP privado |
 | Saída para a internet | internet gateway, pelo Elastic IP | **NAT Gateway**; o IP de saída é o output `EgressIp` |
@@ -429,7 +432,7 @@ docs (`specs/21-ambiente-de-producao.md`).
 | Acesso direto ao banco | `DbAccessCidr` opcional | `DbAccessCidr` opcional, com **subnets próprias do banco**, senhas de **64** caracteres, TLS obrigatório no parameter group e **log de cada conexão** no CloudWatch |
 | Gateway da Porto | padrões da API (HML) | `PortoOAuthUrl` e `PortoApiBaseUrl` **obrigatórios** |
 | Seed de operadores | a cada deploy | **não roda**, e o `SeedSecret` não existe |
-| Alarmes | nenhum | SNS por e-mail: status check (recover e reboot), CPU, disco e conexões do RDS, 5xx do CloudFront |
+| Alarmes | nenhum | SNS por e-mail: status check (recover e reboot), CPU, disco e conexões do RDS; o 5xx do CloudFront numa stack à parte, em `us-east-1` |
 | Logs | 14 dias | 90 dias |
 | Deploy | push na `development` | push na `main` + **aprovação** no environment `production` |
 
@@ -476,15 +479,27 @@ esperado); grave as mesmas credenciais no `PortoSecret` pelo
 
 ### Subir pela primeira vez
 
-**1. Escolher as zonas.** VPC origin não funciona na `use1-az3`, e o nome
-`us-east-1x` aponta para um id diferente em cada conta:
+Produção roda em **`ca-central-1`**. Tudo abaixo leva `--region ca-central-1`,
+menos duas coisas que continuam em `us-east-1` porque o CloudFront é global e
+só olha para lá: o certificado do ACM e a stack do alarme de 5xx (passo 4).
+
+**1. Escolher as zonas e o prefix list.** VPC origin não funciona na
+`cac1-az3`, e o nome `ca-central-1x` aponta para um id diferente em cada conta:
 
 ```bash
-aws ec2 describe-availability-zones --region us-east-1 \
+aws ec2 describe-availability-zones --region ca-central-1 \
   --query 'AvailabilityZones[].[ZoneName,ZoneId]' --output text
 ```
 
-Escolha duas cujo id **não** seja `use1-az3`.
+Escolha duas cujo id **não** seja `cac1-az3`. O prefix list do CloudFront também
+tem id próprio na região — o padrão do template é o de `us-east-1`, e a stack
+recusa ele fora de lá:
+
+```bash
+aws ec2 describe-managed-prefix-lists --region ca-central-1 \
+  --filters Name=prefix-list-name,Values=com.amazonaws.global.cloudfront.origin-facing \
+  --query 'PrefixLists[0].PrefixListId' --output text
+```
 
 **2. Criar a stack.** Sem domínio, como o dev nasceu: ele entra depois, com o
 certificado.
@@ -493,7 +508,7 @@ certificado.
 aws cloudformation deploy \
   --template-file infra/cloudformation/porto-hub-stack.yaml \
   --stack-name porto-hub-prod \
-  --region us-east-1 \
+  --region ca-central-1 \
   --capabilities CAPABILITY_NAMED_IAM \
   --disable-rollback \
   --parameter-overrides \
@@ -505,6 +520,7 @@ aws cloudformation deploy \
     CreateGitHubOidcProvider=false \
     PrimaryAvailabilityZone=<zona-a> \
     SecondaryAvailabilityZone=<zona-b> \
+    CloudFrontPrefixListId=<id do passo 1> \
     PortoOAuthUrl=<endpoint de token de produção> \
     PortoApiBaseUrl=<base da API de produção> \
     AlertEmail=<quem recebe os alarmes> \
@@ -522,17 +538,34 @@ no Resend. Conte 30 a 40 minutos: Multi-AZ e VPC origin são os lentos.
 **3. Confirmar a assinatura do SNS** no e-mail que chega ao `AlertEmail`. Sem
 isso, alarme nenhum avisa ninguém.
 
-**4. Gravar as credenciais de produção** no `PortoSecret` (`SetPortoSecretCommand`)
+**4. Alarme de 5xx do CloudFront**, numa stack à parte e **em `us-east-1`**: o
+CloudFront só publica métrica lá, e alarme não lê métrica de outra região. A
+stack recusa subir fora de `us-east-1`.
+
+```bash
+aws cloudformation deploy \
+  --template-file infra/cloudformation/porto-hub-edge-alarms.yaml \
+  --stack-name porto-hub-prod-edge-alarms \
+  --region us-east-1 \
+  --parameter-overrides \
+    EnvironmentName=prod \
+    DistributionId=<output DistributionId da porto-hub-prod> \
+    AlertEmail=<quem recebe os alarmes>
+```
+
+O tópico é outro, e a assinatura também chega por e-mail para confirmar.
+
+**5. Gravar as credenciais de produção** no `PortoSecret` (`SetPortoSecretCommand`)
 e, quando houver, a chave do Resend no `AppSecret` (`SetResendKeyCommand`).
 
-**5. Ligar o GitHub.** Três coisas, todas obrigatórias:
+**6. Ligar o GitHub.** Três coisas, todas obrigatórias:
 
 - environment **`production`** com *Required reviewers* e *Deployment branches:
   Selected branches → `main`*;
 - secret **`AWS_PROD_DEPLOY_ROLE_ARN`** = output `GitHubOidcRoleArn` da stack de prod;
 - variável de repositório **`PRODUCTION_READY`** = `true`.
 
-**6. Publicar.** O próximo merge na `main` publica as imagens no ECR de prod e
+**7. Publicar.** O próximo merge na `main` publica as imagens no ECR de prod e
 para no deploy esperando aprovação. A instância está vazia até ele.
 
 ### Operadores do painel
@@ -549,7 +582,8 @@ INT-03). A ordem:
 
 1. **Certificado** da segurança da informação da Porto: `*.influencersportoservico.com.br`
    **com o apex como SAN** — o curinga não cobre o apex. PEM + chave, importados
-   no ACM de `us-east-1`.
+   no ACM de `us-east-1`, e não em `ca-central-1`: CloudFront só aceita
+   certificado de lá.
 2. **Update da stack** com `DomainName=influencersportoservico.com.br`,
    `ApiDomainName=api.influencersportoservico.com.br` e `CertificateArn`. É este
    passo que cadastra os dois nomes nos **Alternate Domain Names (CNAMEs)** da
@@ -591,7 +625,11 @@ O `DeletionProtection` do RDS faz o delete da stack parar. É de propósito:
 desligue-o num update (`modify-db-instance --no-deletion-protection`) só quando a
 decisão for tomada, e o snapshot final fica.
 
-### Custo aproximado de prod (us-east-1)
+### Custo aproximado de prod
+
+Valores de `us-east-1`. Em `ca-central-1` os mesmos itens saem um pouco mais
+caros; confira na calculadora da AWS antes de repassar o número.
+
 
 | Item | US$/mês |
 |---|---|

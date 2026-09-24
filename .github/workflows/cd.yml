@@ -46,8 +46,11 @@ permissions:
   contents: read
   id-token: write
 
+# Dev mora em us-east-1 e prod em ca-central-1. A regiao sai do environment,
+# que ja escolhe a role, para um rollback manual nao ter um terceiro campo a
+# errar.
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: ${{ inputs.environment == 'production' && 'ca-central-1' || 'us-east-1' }}
 
 jobs:
   deploy:

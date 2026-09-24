@@ -28,8 +28,10 @@ concurrency:
 permissions:
   contents: read
 
+# Dev mora em us-east-1 e prod em ca-central-1 - a regiao segue a branch, como
+# a stack e a role do job `images`.
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: ${{ github.ref == 'refs/heads/main' && 'ca-central-1' || 'us-east-1' }}
 
 jobs:
   # Os quatro primeiros jobs rodam em paralelo: o tempo de parede passa a ser o
