@@ -426,7 +426,7 @@ docs (`specs/21-ambiente-de-producao.md`).
 | Saída para a internet | internet gateway, pelo Elastic IP | **NAT Gateway**; o IP de saída é o output `EgressIp` |
 | VPC | `10.0.0.0/16` | `10.1.0.0/16` |
 | RDS | single-AZ, backup 1 dia | **Multi-AZ**, backup 14 dias, `DeletionProtection`, disco até 100 GB |
-| Banco aberto por CIDR | `DbAccessCidr` opcional | **proibido** (regra `ProdKeepsDatabaseClosed`) |
+| Acesso direto ao banco | `DbAccessCidr` opcional | `DbAccessCidr` opcional, com **subnets próprias do banco**, senhas de **64** caracteres, TLS obrigatório no parameter group e **log de cada conexão** no CloudWatch |
 | Gateway da Porto | padrões da API (HML) | `PortoOAuthUrl` e `PortoApiBaseUrl` **obrigatórios** |
 | Seed de operadores | a cada deploy | **não roda**, e o `SeedSecret` não existe |
 | Alarmes | nenhum | SNS por e-mail: status check (recover e reboot), CPU, disco e conexões do RDS, 5xx do CloudFront |
@@ -507,8 +507,13 @@ aws cloudformation deploy \
     SecondaryAvailabilityZone=<zona-b> \
     PortoOAuthUrl=<endpoint de token de produção> \
     PortoApiBaseUrl=<base da API de produção> \
-    AlertEmail=<quem recebe os alarmes>
+    AlertEmail=<quem recebe os alarmes> \
+    DbAccessCidr=<faixa de quem acessa o banco>
 ```
+
+`DbAccessCidr` abre o Postgres para conexão direta, sem túnel — ver *Acesso
+direto ao banco, sem túnel*. Para `0.0.0.0/0`, some
+`AcknowledgeDbOpenToInternet=true`.
 
 `CreateGitHubOidcProvider=false` porque o provider é da conta, e o dev já o
 criou. `MailProvider` fica `logger` até o domínio do remetente estar verificado
@@ -533,8 +538,7 @@ para no deploy esperando aprovação. A instância está vazia até ele.
 ### Operadores do painel
 
 Produção **não roda seed**. Até a gestão de usuários existir (SIS-519), operador
-de produção é criado à mão, pelo túnel (`RdsTunnelCommand`), quando for
-necessário. Um painel sem ninguém para entrar é o estado esperado de uma stack
+de produção é criado à mão, direto no banco, quando for necessário. Um painel sem ninguém para entrar é o estado esperado de uma stack
 recém-criada.
 
 ### Domínio
@@ -684,7 +688,21 @@ para listar, então a camada de rede não está disponível como restrição. Co
 só.
 
 Depois é conectar direto no `RdsEndpoint`, porta 5432, com **`hub_rw`** e a
-senha de `npm run db:password`.
+senha de `npm run db:password` (em prod, `STACK_NAME=porto-hub-prod npm run db:password`).
+
+**Em prod** o mesmo parâmetro vale, com três diferenças:
+
+- o banco mora em **subnets próprias** (`DbSubnetA` e `DbSubnetB`). A instância
+  fica na `PrivateSubnetA` e sai pelo NAT; como uma subnet só tem uma rota
+  default, abrir o banco não pode mexer na dela;
+- as senhas do master e do `hub_rw` têm **64 caracteres** alfanuméricos
+  (~380 bits; em dev são 32, ~190 bits). Com o banco na internet, a senha é o
+  único controle de quem entra;
+- um **parameter group** próprio fixa `rds.force_ssl=1` e liga
+  `log_connections` e `log_disconnections`, exportados para o CloudWatch no
+  grupo `/aws/rds/instance/porto-hub-prod-db/postgresql`. É a trilha de quem
+  entrou, de qual IP e com qual usuário — o que substitui o registro por pessoa
+  do `ssm:StartSession`.
 
 O usuário não é o master. O `hub_rw` tem `SELECT`, `INSERT`, `UPDATE` e `DELETE`
 no schema `public` e nada de DDL: o que vazar dele não cria papel, não dropa
@@ -708,10 +726,11 @@ para o endpoint do RDS e o cliente fala com `localhost`, então `verify-full`
 falharia por hostname.
 
 O servidor recusa conexão sem TLS porque o `rds.force_ssl` vem em `1` no
-parameter group padrão do PostgreSQL 16. **Isso é default da AWS, não garantia
-deste template** — a stack não define `DBParameterGroupName`, então quem trocar
-o `DBEngineVersion` para uma família mais antiga, ou apontar um parameter group
-próprio, perde a obrigatoriedade sem nenhum aviso.
+parameter group padrão do PostgreSQL 16. **Em dev isso é default da AWS, não
+garantia deste template** — a stack de dev não define `DBParameterGroupName`,
+então quem trocar o `DBEngineVersion` para uma família mais antiga perde a
+obrigatoriedade sem nenhum aviso. Em prod o parameter group a fixa, com a
+família `postgres16`: trocar a versão maior exige trocar a família junto.
 
 Para fechar de novo, `DbAccessCidr=''` no mesmo comando. Nenhum dos dois sentidos
 substitui a instância nem perde dado: é `modify-db-instance` mais rota e regra de

@@ -297,16 +297,6 @@ Rules:
           do master como unico controle. Passe AcknowledgeDbOpenToInternet=true
           para confirmar que a exposicao e intencional.
 
-  # Producao nao tem o modo de banco aberto: o acesso e so pelo tunel do SSM,
-  # que deixa no CloudTrail quem entrou. E a instancia de prod mora na subnet
-  # privada, que DbAccessCidr apontaria para o internet gateway.
-  ProdKeepsDatabaseClosed:
-    RuleCondition: !Equals [!Ref EnvironmentName, 'prod']
-    Assertions:
-      - Assert: !Equals [!Ref DbAccessCidr, '']
-        AssertDescription: >
-          DbAccessCidr nao existe em producao. Use o RdsTunnelCommand.
-
   ProdRequiresPortoGateway:
     RuleCondition: !Equals [!Ref EnvironmentName, 'prod']
     Assertions:
@@ -413,8 +403,11 @@ Resources:
         - Key: Name
           Value: !Sub 'porto-hub-${EnvironmentName}-private-a'
 
+  # So em dev. Em prod a segunda perna do banco e a DbSubnetB, e a instancia
+  # so precisa da PrivateSubnetA.
   PrivateSubnetB:
     Type: AWS::EC2::Subnet
+    Condition: IsDev
     Properties:
       VpcId: !Ref Vpc
       CidrBlock: !Sub
@@ -424,6 +417,40 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'porto-hub-${EnvironmentName}-private-b'
+
+  # Subnets proprias do banco em prod. Em dev o banco divide a PrivateSubnetA com
+  # nada que precise de saida, e abri-lo e apontar a subnet para o internet
+  # gateway. Em prod a PrivateSubnetA e da instancia, que sai pelo NAT - e uma
+  # subnet so tem uma rota default. Separadas, o banco pode ir para o internet
+  # gateway (DbAccessCidr) sem tirar a saida da instancia.
+  #
+  # Nascem sem route table: sem DbAccessCidr ficam na principal da VPC, so com a
+  # rota local, e o banco nao tem caminho de ida nem de volta para a internet.
+  DbSubnetA:
+    Type: AWS::EC2::Subnet
+    Condition: IsProd
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Sub
+        - '10.${Octet}.21.0/24'
+        - Octet: !FindInMap [Environment, !Ref EnvironmentName, VpcOctet]
+      AvailabilityZone: !If [HasPrimaryAz, !Ref PrimaryAvailabilityZone, !Select [0, !GetAZs '']]
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-db-a'
+
+  DbSubnetB:
+    Type: AWS::EC2::Subnet
+    Condition: IsProd
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Sub
+        - '10.${Octet}.22.0/24'
+        - Octet: !FindInMap [Environment, !Ref EnvironmentName, VpcOctet]
+      AvailabilityZone: !If [HasSecondaryAz, !Ref SecondaryAvailabilityZone, !Select [1, !GetAZs '']]
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-db-b'
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -455,14 +482,14 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Condition: DbIsPublic
     Properties:
-      SubnetId: !Ref PrivateSubnetA
+      SubnetId: !If [IsProd, !Ref DbSubnetA, !Ref PrivateSubnetA]
       RouteTableId: !Ref PublicRouteTable
 
   DbSubnetBRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Condition: DbIsPublic
     Properties:
-      SubnetId: !Ref PrivateSubnetB
+      SubnetId: !If [IsProd, !Ref DbSubnetB, !Ref PrivateSubnetB]
       RouteTableId: !Ref PublicRouteTable
 
   # Saida das subnets privadas em prod: a instancia precisa de ECR, SSM,
@@ -509,20 +536,13 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGateway
 
-  # Em prod a regra ProdKeepsDatabaseClosed garante que as DbSubnet*
-  # acima nao existem - uma subnet so tem uma route table.
+  # Em prod a PrivateSubnetA e so da instancia; o banco mora nas DbSubnet*, e
+  # por isso as duas rotas nunca disputam a mesma subnet.
   PrivateSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Condition: IsProd
     Properties:
       SubnetId: !Ref PrivateSubnetA
-      RouteTableId: !Ref PrivateRouteTable
-
-  PrivateSubnetBRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: IsProd
-    Properties:
-      SubnetId: !Ref PrivateSubnetB
       RouteTableId: !Ref PrivateRouteTable
 
   # =========================================================== Security groups
@@ -612,7 +632,10 @@ Resources:
       GenerateSecretString:
         SecretStringTemplate: '{"username":"porto"}'
         GenerateStringKey: password
-        PasswordLength: 32
+        # 32 alfanumericos ja sao ~190 bits. Em prod, onde o banco pode atender
+        # pela internet e a senha vira o unico controle, 64 (~380 bits). O
+        # !If resolve para 32 em dev, e o segredo de la nao e regenerado.
+        PasswordLength: !If [IsProd, 64, 32]
         # Sem pontuacao para nao quebrar a connection string montada no deploy.
         ExcludePunctuation: true
 
@@ -646,7 +669,7 @@ Resources:
       GenerateSecretString:
         SecretStringTemplate: '{"username":"hub_rw"}'
         GenerateStringKey: password
-        PasswordLength: 32
+        PasswordLength: !If [IsProd, 64, 32]
         ExcludePunctuation: true
 
   # Secret proprio - e nao um campo do anterior - porque GenerateSecretString
@@ -654,7 +677,7 @@ Resources:
   # publicada no README (MudarAgora!2026) valendo num painel exposto a internet.
   #
   # So em dev. Producao nao roda seed: os operadores dele sao contas ficticias
-  # com senha compartilhada, e operador de verdade nasce a mao, pelo tunel.
+  # com senha compartilhada, e operador de verdade nasce a mao, no banco.
   SeedSecret:
     Type: AWS::SecretsManager::Secret
     Condition: IsDev
@@ -689,12 +712,36 @@ Resources:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: Subnets privadas do Hub de Afiliados
-      SubnetIds:
-        - !Ref PrivateSubnetA
-        - !Ref PrivateSubnetB
+      SubnetIds: !If
+        - IsProd
+        - [!Ref DbSubnetA, !Ref DbSubnetB]
+        - [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
       Tags:
         - Key: Name
           Value: !Sub 'porto-hub-${EnvironmentName}-db-subnets'
+
+  # So em prod. Duas coisas que o parameter group padrao nao garante:
+  #  - rds.force_ssl explicito. Hoje ele ja vem 1 no padrao do PostgreSQL 16,
+  #    mas isso e default da AWS, nao deste template - e com o banco atendendo
+  #    pela internet, conexao em claro levaria a senha junto.
+  #  - log de cada conexao, com IP e usuario, exportado para o CloudWatch. E a
+  #    trilha que sobra de quem entrou: com acesso direto, o registro por pessoa
+  #    do ssm:StartSession no CloudTrail deixa de existir.
+  # A familia e fixa em postgres16: trocar a versao maior do DBEngineVersion
+  # exige trocar a familia aqui junto.
+  DbParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Condition: IsProd
+    Properties:
+      Description: Hub de Afiliados - TLS obrigatorio e log de conexoes
+      Family: postgres16
+      Parameters:
+        rds.force_ssl: '1'
+        log_connections: '1'
+        log_disconnections: '1'
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-db-params'
 
   Database:
     Type: AWS::RDS::DBInstance
@@ -734,6 +781,8 @@ Resources:
       MasterUsername: !Sub '{{resolve:secretsmanager:${DbSecret}:SecretString:username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbSecret}:SecretString:password}}'
       DBSubnetGroupName: !Ref DbSubnetGroup
+      DBParameterGroupName: !If [IsProd, !Ref DbParameterGroup, !Ref 'AWS::NoValue']
+      EnableCloudwatchLogsExports: !If [IsProd, [postgresql], !Ref 'AWS::NoValue']
       # Mesma AZ da instancia. Sem isto o single-AZ cai onde o RDS quiser, e
       # metade das vezes e a outra AZ: todo o trafego do banco vira cross-AZ,
       # cobrado nos dois sentidos e com mais latencia, sem nada em troca.
