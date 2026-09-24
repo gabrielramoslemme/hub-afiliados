@@ -40,8 +40,7 @@ const KEY_HINT = 'A chave precisa estar no seu nome.';
 const CPF_KEY_HINT = 'Use o CPF do seu cadastro.';
 
 /**
- * A troca da chave PIX, o único dado do perfil que o afiliado altera sozinho.
- * O campo da chave nasce vazio: a tela só conhece a chave mascarada, e partir
+ * A troca da chave PIX. O campo da chave nasce vazio: a tela só conhece a chave mascarada, e partir
  * dela obrigaria a pessoa a apagar asteriscos antes de digitar.
  */
 export function ChangePixKeyDialog({ pixKeyType, maskedPixKey }: ChangePixKeyDialogProps) {
@@ -106,9 +105,9 @@ export function ChangePixKeyDialog({ pixKeyType, maskedPixKey }: ChangePixKeyDia
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/*
-        Só o ícone, mas com fundo da marca: é a única ação da lista de dados, e
-        um lápis neutro se confundiria com o texto ao lado. O nome acessível e o
-        `title` dizem o que ele faz, já que não há rótulo visível.
+        Só o ícone, mas com fundo da marca: um lápis neutro se confundiria com o
+        texto ao lado. O nome acessível e o `title` dizem o que ele faz, já que
+        não há rótulo visível.
       */}
       <DialogTrigger asChild>
         <Button

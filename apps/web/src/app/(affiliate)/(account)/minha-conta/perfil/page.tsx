@@ -1,6 +1,6 @@
 import { Lock } from 'lucide-react';
 import type { Metadata } from 'next';
-import { ChangePixKeyDialog, PageHeading } from '@/affiliate/features/area';
+import { ChangeEmailDialog, ChangePixKeyDialog, PageHeading } from '@/affiliate/features/area';
 import { fetchAccount } from '@/affiliate/features/area/data';
 import { site } from '@/affiliate/shared/content';
 import { Badge } from '@/shared/components/ui/badge';
@@ -21,15 +21,19 @@ export default async function ProfilePage() {
   const social = formatSocialProfile(account.socialNetwork, account.socialHandle);
   const rows = [
     { label: 'Nome', value: account.name },
-    { label: 'E-mail', value: account.email },
+    {
+      label: 'E-mail',
+      value: account.email,
+      // E-mail e chave são os dados que o próprio afiliado troca: os demais
+      // passaram pela análise da Porto, e por isso só essas linhas têm ação.
+      action: <ChangeEmailDialog email={account.email} />,
+    },
     { label: 'CPF', value: account.maskedCpf },
     { label: 'RG', value: account.maskedRg },
     ...(social ? [{ label: 'Rede social', value: social }] : []),
     {
       label: 'Chave PIX',
       value: `${account.maskedPixKey} (${pixKeyTypeName(account.pixKeyType)})`,
-      // A chave é o único dado que o próprio afiliado troca: os demais passam
-      // pela análise da Porto, e por isso só esta linha tem ação.
       action: (
         <ChangePixKeyDialog pixKeyType={account.pixKeyType} maskedPixKey={account.maskedPixKey} />
       ),
@@ -72,8 +76,8 @@ export default async function ProfilePage() {
 
         <p className="mt-6 flex items-start gap-2.5 text-[0.8125rem] leading-relaxed text-ink-500">
           <Lock className="mt-0.5 size-3.5 shrink-0 text-ink-400" aria-hidden />
-          CPF, RG e chave PIX aparecem mascarados aqui de propósito. A chave PIX você troca aqui
-          mesmo; para corrigir qualquer outro dado, escreva para{' '}
+          CPF, RG e chave PIX aparecem mascarados aqui de propósito. O e-mail e a chave PIX você
+          troca aqui mesmo; para corrigir qualquer outro dado, escreva para{' '}
           <a
             href={`mailto:${site.contactEmail}`}
             className="font-medium text-blue-600 hover:underline"

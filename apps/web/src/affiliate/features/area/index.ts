@@ -1,5 +1,6 @@
 export { AccountNav } from './components/account-nav';
 export { AccountTopbar } from './components/account-topbar';
+export { ChangeEmailDialog } from './components/email-dialog';
 export { HomeScreen } from './components/home-screen';
 export { MaterialsScreen } from './components/materials-screen';
 export { PageHeading } from './components/page-heading';
