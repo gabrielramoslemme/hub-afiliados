@@ -340,3 +340,23 @@ export const changePixKeySchema = z
   });
 
 export type ChangePixKeyRequest = z.infer<typeof changePixKeySchema>;
+
+/**
+ * A troca do e-mail pelo perfil, espelhando `ChangeEmailRequestDto` da API. O
+ * e-mail é o login e o endereço de todo aviso — inclusive o da troca da chave
+ * PIX —, e por isso a senha atual confirma a troca como confirma a da chave.
+ */
+export const changeEmailSchema = z.object({
+  // Normaliza como o cadastro e o login: quem digitar com maiúscula entra depois.
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(1, 'Informe um e-mail válido.')
+    .max(255, 'O e-mail deve ter no máximo 255 caracteres.')
+    .refine((value) => z.email().safeParse(value).success, 'Informe um e-mail válido.'),
+  // Sem `trim`, pelo mesmo motivo da troca da chave PIX.
+  currentPassword: z.string().min(1, 'Informe sua senha atual.'),
+});
+
+export type ChangeEmailRequest = z.infer<typeof changeEmailSchema>;
