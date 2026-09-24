@@ -69,4 +69,15 @@ describe('envValidationSchema', () => {
       expect(validate({ NODE_ENV: 'test' }).error).toBeUndefined();
     });
   });
+
+  /*
+    O ambiente da AWS não passa endereço do gateway para a API: vale o padrão. O
+    host de OAuth da doc da Porto (`hml.api.portoseguro.com.br`) não resolve em
+    DNS público, e todo token morria em `fetch failed` antes de sair da máquina.
+  */
+  it('defaults the OAuth address to the host that issues tokens in homologation', () => {
+    expect(validate({ NODE_ENV: 'production', ...credentials }).value.PORTO_OAUTH_URL).toBe(
+      'https://portoapicloud-hml.portoseguro.com.br/oauth/v2/access-token',
+    );
+  });
 });

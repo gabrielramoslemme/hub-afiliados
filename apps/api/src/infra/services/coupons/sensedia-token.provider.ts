@@ -130,7 +130,14 @@ export class SensediaTokenProvider implements AccessTokenProvider {
         signal: AbortSignal.timeout(this.config.timeoutMs),
       });
     } catch (error) {
-      this.logger.error(`Falha ao obter o token do OAuth da Porto`, (error as Error)?.stack);
+      // O `fetch` do Node falha com um "fetch failed" genérico; o motivo — DNS,
+      // conexão recusada, certificado — mora no `cause`.
+      const cause = (error as Error)?.cause;
+      const reason = cause instanceof Error ? `: ${cause.message}` : '';
+      this.logger.error(
+        `Falha ao obter o token do OAuth da Porto${reason}`,
+        (error as Error)?.stack,
+      );
       throw new CouponProviderUnavailableError();
     }
   }

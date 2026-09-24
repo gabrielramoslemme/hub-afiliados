@@ -6,7 +6,7 @@ import {
 import { clockMock } from '@Testing/mocks/services/clock.mock';
 import { SensediaTokenProvider } from './sensedia-token.provider';
 
-const OAUTH_URL = 'https://hml.api.portoseguro.com.br/oauth/v2/access-token';
+const OAUTH_URL = 'https://portoapicloud-hml.portoseguro.com.br/oauth/v2/access-token';
 
 function tokenResponse(accessToken: string, expiresIn = 3600): Response {
   return new Response(
@@ -149,6 +149,26 @@ describe('SensediaTokenProvider', () => {
     fetchMock.mockRejectedValue(new Error('ECONNREFUSED'));
 
     await expect(buildProvider().getAccessToken()).rejects.toThrow(CouponProviderUnavailableError);
+  });
+
+  /*
+    O `fetch` do Node falha com um `TypeError: fetch failed` genérico e guarda o
+    motivo — DNS, conexão recusada, certificado — no `cause`. Sem ele no log, a
+    falha de rede não diz qual foi.
+  */
+  it('logs the cause of a network failure', async () => {
+    const logError = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    fetchMock.mockRejectedValue(
+      new TypeError('fetch failed', {
+        cause: new Error('getaddrinfo ENOTFOUND hml.api.portoseguro.com.br'),
+      }),
+    );
+
+    await expect(buildProvider().getAccessToken()).rejects.toThrow(CouponProviderUnavailableError);
+    expect(logError).toHaveBeenCalledWith(
+      expect.stringContaining('getaddrinfo ENOTFOUND hml.api.portoseguro.com.br'),
+      expect.anything(),
+    );
   });
 
   /* Falha não fica em cache: a tentativa seguinte tem que poder dar certo. */

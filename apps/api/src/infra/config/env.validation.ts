@@ -35,9 +35,11 @@ export const envValidationSchema = Joi.object({
     .default('nao-responda@afiliados.porto.example'),
   MAIL_FROM_NAME: Joi.string().default('Hub de Afiliados'),
 
+  // Não é o host de OAuth da doc da Porto (`hml.api.portoseguro.com.br`): esse
+  // não resolve em DNS público. O token sai do próprio host da API, e é aceito.
   PORTO_OAUTH_URL: Joi.string()
     .uri()
-    .default('https://hml.api.portoseguro.com.br/oauth/v2/access-token'),
+    .default('https://portoapicloud-hml.portoseguro.com.br/oauth/v2/access-token'),
   PORTO_API_BASE_URL: Joi.string().uri().default('https://portoapicloud-hml.portoseguro.com.br'),
   PORTO_API_BASE_PATH: Joi.string().default('/porto-assistencia/campanhasneo'),
   PORTO_CLIENT_ID: Joi.string().when('NODE_ENV', REQUIRED_OUTSIDE_TEST),
