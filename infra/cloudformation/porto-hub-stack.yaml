@@ -226,16 +226,21 @@ Parameters:
   # obrigatorios (regra ProdRequiresPortoGateway): credencial de producao
   # falando com HML falharia sem dizer por que. A trava fica aqui, e nao na
   # API, porque os dois ambientes rodam com NODE_ENV=production.
+  #
+  # O padrao e lista branca, e nao `\S+`: o valor cai sem aspas no
+  # ConfigParameter, que o install-release.sh le com `source`. Um `&` ou `;`
+  # partiria a URL em dois comandos, e aspas nao resolvem - a mesma linha vai
+  # para o env_file do compose, que as trataria como parte do valor.
   PortoOAuthUrl:
     Type: String
     Default: ''
-    AllowedPattern: '^$|^https://\S+$'
+    AllowedPattern: '^$|^https://[A-Za-z0-9._~:/?%=+-]+$'
     Description: Endpoint de token do gateway Sensedia da Porto. Obrigatorio em prod.
 
   PortoApiBaseUrl:
     Type: String
     Default: ''
-    AllowedPattern: '^$|^https://\S+$'
+    AllowedPattern: '^$|^https://[A-Za-z0-9._~:/?%=+-]+$'
     Description: Base da API do gateway Sensedia da Porto. Obrigatorio em prod.
 
   AlertEmail:
