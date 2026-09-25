@@ -59,6 +59,8 @@ export async function createE2eApp(): Promise<E2eApp> {
   para trás quando o cupom ganhou tabela, e só funcionava pelo `CASCADE`.
 */
 const TABLES = [
+  'payout_events',
+  'affiliate_withdrawals',
   'audit_logs',
   'porto_incentive_events',
   'affiliate_sales',

@@ -13,9 +13,11 @@ import {
 import { IncentiveStatusEnum } from '@porto/contracts';
 import { SaleEntity } from '@Domain/sales/sale.entity';
 import { CouponTypeormEntity } from './coupon.typeorm-entity';
+import { WithdrawalTypeormEntity } from './withdrawal.typeorm-entity';
 
 @Entity('affiliate_sales')
 @Index('ix_affiliate_sales_coupon', ['couponId', 'soldAt'])
+@Index('ix_affiliate_sales_withdrawal', ['withdrawalId'])
 @Check('ck_affiliate_sales_amount_cents', '"amount_cents" >= 0')
 @Check('ck_affiliate_sales_incentive_cents', '"incentive_cents" >= 0')
 @Check('ck_affiliate_sales_settled_at', `("incentive_status" = 'PENDING') = ("settled_at" IS NULL)`)
@@ -57,6 +59,13 @@ export class SaleTypeormEntity implements SaleEntity {
 
   @Column({ name: 'withdrawal_id', type: 'int', nullable: true })
   withdrawalId: number | null;
+
+  @ManyToOne(() => WithdrawalTypeormEntity, { nullable: true, onDelete: 'RESTRICT' })
+  @JoinColumn({
+    name: 'withdrawal_id',
+    foreignKeyConstraintName: 'affiliate_sales_withdrawal_id_fkey',
+  })
+  withdrawal: WithdrawalTypeormEntity | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
