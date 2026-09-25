@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsEnum, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
-import { AffiliateStatusEnum } from '@porto/contracts';
+import { AffiliateStatusEnum, OccupationEnum } from '@porto/contracts';
 import { AffiliateSortBy, AffiliateSortOrder } from '@Domain/affiliates/affiliate.repository';
 
 const SORTABLE: AffiliateSortBy[] = ['createdAt', 'name'];
@@ -28,6 +28,11 @@ export class ListAffiliatesQueryDto {
   @IsEnum(AffiliateStatusEnum, { message: 'Status inválido.' })
   @IsOptional()
   status?: AffiliateStatusEnum;
+
+  @ApiPropertyOptional({ enum: OccupationEnum })
+  @IsEnum(OccupationEnum, { message: 'Ocupação inválida.' })
+  @IsOptional()
+  occupation?: OccupationEnum;
 
   @ApiPropertyOptional({ maxLength: 120, description: 'Nome, e-mail ou CPF' })
   @IsString()

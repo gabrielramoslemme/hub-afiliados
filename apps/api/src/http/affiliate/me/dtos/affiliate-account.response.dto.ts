@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   AffiliateMeResponse,
   AffiliateStatusEnum,
+  OccupationEnum,
   PixKeyTypeEnum,
   SocialNetworkEnum,
 } from '@porto/contracts';
@@ -22,6 +23,9 @@ export class AffiliateAccountResponseDto implements AffiliateMeResponse {
 
   @ApiProperty({ example: '*****678X' })
   maskedRg: string;
+
+  @ApiProperty({ enum: OccupationEnum })
+  occupation: OccupationEnum;
 
   @ApiProperty({ enum: SocialNetworkEnum, nullable: true })
   socialNetwork: SocialNetworkEnum | null;

@@ -1,4 +1,4 @@
-import { AffiliateStatusEnum } from '@porto/contracts';
+import { AffiliateStatusEnum, OccupationEnum } from '@porto/contracts';
 import {
   AffiliateRepository,
   AffiliateSortBy,
@@ -11,6 +11,7 @@ export interface ListAffiliatesInput {
   page: number;
   limit: number;
   status: AffiliateStatusEnum | null;
+  occupation: OccupationEnum | null;
   search: string | null;
   sortBy: AffiliateSortBy;
   sortOrder: AffiliateSortOrder;
@@ -26,6 +27,7 @@ export interface AffiliateListItemOutput {
   name: string;
   email: string;
   maskedCpf: string;
+  occupation: OccupationEnum;
   status: AffiliateStatusEnum;
   createdAt: Date;
 }
@@ -49,6 +51,7 @@ export class ListAffiliatesUseCase implements UseCase<ListAffiliatesInput, ListA
         name: affiliate.user.name,
         email: affiliate.user.email,
         maskedCpf: maskCpf(affiliate.cpf),
+        occupation: affiliate.occupation,
         status: affiliate.status,
         createdAt: affiliate.createdAt,
       })),

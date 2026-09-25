@@ -9,6 +9,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { ChangeEmailUseCase } from '@Application/affiliates/change-email.use-case';
+import { ChangeOccupationUseCase } from '@Application/affiliates/change-occupation.use-case';
 import { ChangePixKeyUseCase } from '@Application/affiliates/change-pix-key.use-case';
 import { GetAffiliateAccountUseCase } from '@Application/affiliates/get-affiliate-account.use-case';
 import { ActorInfo } from '@Http/shared/authenticated-request';
@@ -16,6 +17,7 @@ import { Actor } from '@Http/shared/decorators/actor.decorator';
 import { AffiliateGuard } from '@Http/shared/guards/affiliate.guard';
 import { AffiliateAccountResponseDto } from './dtos/affiliate-account.response.dto';
 import { ChangeEmailRequestDto } from './dtos/change-email.request.dto';
+import { ChangeOccupationRequestDto } from './dtos/change-occupation.request.dto';
 import { ChangePixKeyRequestDto } from './dtos/change-pix-key.request.dto';
 
 @ApiTags('affiliate/me')
@@ -28,6 +30,7 @@ export class AffiliateMeController {
     private readonly getAffiliateAccountUseCase: GetAffiliateAccountUseCase,
     private readonly changePixKeyUseCase: ChangePixKeyUseCase,
     private readonly changeEmailUseCase: ChangeEmailUseCase,
+    private readonly changeOccupationUseCase: ChangeOccupationUseCase,
   ) {}
 
   @Get()
@@ -67,5 +70,17 @@ export class AffiliateMeController {
   @ApiConflictResponse({ description: 'E-mail já cadastrado em outra conta' })
   async changeEmail(@Body() body: ChangeEmailRequestDto, @Actor() actor: ActorInfo): Promise<void> {
     await this.changeEmailUseCase.execute({ ...body, userPublicId: actor.publicId });
+  }
+
+  /** Troca a ocupação. Sem senha: ela não desvia pagamento nem toma a conta. */
+  @Patch('occupation')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiNoContentResponse({ description: 'Ocupação trocada' })
+  @ApiBadRequestResponse({ description: 'Ocupação fora da lista' })
+  async changeOccupation(
+    @Body() body: ChangeOccupationRequestDto,
+    @Actor() actor: ActorInfo,
+  ): Promise<void> {
+    await this.changeOccupationUseCase.execute({ ...body, userPublicId: actor.publicId });
   }
 }

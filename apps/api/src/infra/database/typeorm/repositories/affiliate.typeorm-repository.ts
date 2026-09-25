@@ -111,6 +111,10 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
 
     if (input.status) query.andWhere('affiliate.status = :status', { status: input.status });
 
+    if (input.occupation) {
+      query.andWhere('affiliate.occupation = :occupation', { occupation: input.occupation });
+    }
+
     if (input.search) query.andWhere(...criteriaFor(input.search));
 
     const [rows, total] = await query
@@ -244,6 +248,7 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
             pixKey: input.pixKey,
             socialNetwork: input.socialNetwork,
             socialHandle: input.socialHandle,
+            occupation: input.occupation,
             termsAcceptedAt: input.termsAcceptedAt,
             status: AffiliateStatusEnum.PENDING_APPROVAL,
           }),

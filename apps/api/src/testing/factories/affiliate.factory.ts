@@ -1,4 +1,4 @@
-import { AffiliateStatusEnum, PixKeyTypeEnum } from '@porto/contracts';
+import { AffiliateStatusEnum, OccupationEnum, PixKeyTypeEnum } from '@porto/contracts';
 import { AffiliateWithCoupon, AffiliateWithUser } from '@Domain/affiliates/affiliate.entity';
 import { buildUser } from './user.factory';
 
@@ -20,6 +20,7 @@ export function buildAffiliate(overrides: Partial<BuiltAffiliate> = {}): BuiltAf
     pixKey: user.email,
     socialNetwork: null,
     socialHandle: null,
+    occupation: OccupationEnum.INFLUENCER,
     status: AffiliateStatusEnum.PENDING_APPROVAL,
     termsAcceptedAt: new Date('2026-08-17T12:00:00Z'),
     approvedAt: null,

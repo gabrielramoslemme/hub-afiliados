@@ -67,6 +67,7 @@ export class AdminAffiliatesController {
       page: query.page,
       limit: query.limit,
       status: query.status ?? null,
+      occupation: query.occupation ?? null,
       search: query.search?.trim() || null,
       sortBy: query.sortBy,
       sortOrder: query.sortOrder,

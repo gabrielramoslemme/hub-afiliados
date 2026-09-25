@@ -84,7 +84,7 @@ describe('Admin affiliates (e2e)', () => {
       expect(response.body).toMatchObject({ total: 2, page: 1, limit: 10 });
       for (const row of response.body.data) {
         expect(Object.keys(row).sort()).toEqual(
-          ['createdAt', 'email', 'maskedCpf', 'name', 'publicId', 'status'].sort(),
+          ['createdAt', 'email', 'maskedCpf', 'name', 'occupation', 'publicId', 'status'].sort(),
         );
       }
       expect(JSON.stringify(response.body)).not.toContain('52998224725');
@@ -120,6 +120,31 @@ describe('Admin affiliates (e2e)', () => {
 
       expect(response.body.total).toBe(1);
       expect(response.body.data[0].name).toBe('Marina Ferraz');
+    });
+
+    it('filters by occupation, answering it on each row', async () => {
+      await register(e2e.app, MARINA);
+      await register(e2e.app, CLEIDE);
+
+      const response = await api()
+        .get('/v1/admin/affiliates')
+        .query({ occupation: 'REAL_ESTATE_PROFESSIONAL' })
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(response.body.total).toBe(1);
+      expect(response.body.data[0]).toMatchObject({
+        name: 'Cleide Nakamura',
+        occupation: 'REAL_ESTATE_PROFESSIONAL',
+      });
+    });
+
+    it('refuses an occupation out of the list as a filter', async () => {
+      await api()
+        .get('/v1/admin/affiliates')
+        .query({ occupation: 'MEDICO' })
+        .set('Authorization', `Bearer ${token}`)
+        .expect(400);
     });
 
     /*
@@ -167,6 +192,7 @@ describe('Admin affiliates (e2e)', () => {
         rg: '12345678X',
         socialNetwork: SocialNetworkEnum.INSTAGRAM,
         socialHandle: 'marina.ferraz',
+        occupation: 'INFLUENCER',
         status: AffiliateStatusEnum.PENDING_APPROVAL,
         coupon: null,
       });

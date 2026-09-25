@@ -1,6 +1,7 @@
 import {
   AffiliateStatusEnum,
   MailTemplateEnum,
+  OccupationEnum,
   PixKeyTypeEnum,
   SocialNetworkEnum,
 } from '@porto/contracts';
@@ -33,6 +34,7 @@ export interface CreateAffiliateInput {
   pixKey: string;
   socialNetwork?: SocialNetworkEnum | null;
   socialHandle?: string | null;
+  occupation: OccupationEnum;
   /** Aceite do Regulamento, marcado no envio do formulário. */
   termsAccepted: boolean;
 }
@@ -93,6 +95,7 @@ export class CreateAffiliateUseCase
       pixKey,
       socialNetwork,
       socialHandle,
+      occupation: input.occupation,
       termsAcceptedAt: this.clock.now(),
     });
 

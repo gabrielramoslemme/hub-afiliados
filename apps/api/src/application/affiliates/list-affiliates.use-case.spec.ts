@@ -1,4 +1,4 @@
-import { AffiliateStatusEnum } from '@porto/contracts';
+import { AffiliateStatusEnum, OccupationEnum } from '@porto/contracts';
 import { buildAffiliate } from '@Testing/factories/affiliate.factory';
 import { buildUser } from '@Testing/factories/user.factory';
 import { affiliateRepositoryMock } from '@Testing/mocks/repositories/affiliate.repository.mock';
@@ -12,6 +12,7 @@ describe('ListAffiliatesUseCase', () => {
     page: 1,
     limit: 10,
     status: null,
+    occupation: null,
     search: null,
     sortBy: 'createdAt',
     sortOrder: 'desc',
@@ -36,6 +37,7 @@ describe('ListAffiliatesUseCase', () => {
       name: 'Marina Ferraz',
       email: 'marina@email.com',
       maskedCpf: '***.***.247-25',
+      occupation: OccupationEnum.INFLUENCER,
       status: AffiliateStatusEnum.PENDING_APPROVAL,
       createdAt: new Date('2026-08-17T12:00:00Z'),
     });

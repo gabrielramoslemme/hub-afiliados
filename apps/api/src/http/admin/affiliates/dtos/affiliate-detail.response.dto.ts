@@ -4,6 +4,7 @@ import {
   AffiliateStatusEnum,
   CouponStatusEnum,
   CouponSummary,
+  OccupationEnum,
   PixKeyTypeEnum,
   SocialNetworkEnum,
 } from '@porto/contracts';
@@ -38,6 +39,9 @@ export class AffiliateDetailResponseDto implements AffiliateDetail {
 
   @ApiProperty({ example: '12345678X', description: 'Completo: só o detalhe o expõe' })
   rg: string;
+
+  @ApiProperty({ enum: OccupationEnum })
+  occupation: OccupationEnum;
 
   @ApiProperty({ enum: SocialNetworkEnum, nullable: true })
   socialNetwork: SocialNetworkEnum | null;

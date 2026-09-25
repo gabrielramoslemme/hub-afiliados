@@ -246,6 +246,7 @@ describe('Affiliate account (e2e)', () => {
 
       expect(response.body).toMatchObject({
         name: MARINA.fullName,
+        occupation: 'INFLUENCER',
         status: AffiliateStatusEnum.APPROVED,
         coupon: couponCode,
         couponDiscountPercent: 10,
@@ -375,6 +376,58 @@ describe('Affiliate account (e2e)', () => {
         .expect(403);
     });
   });
+  describe('PATCH /v1/affiliate/me/occupation', () => {
+    function changeOccupation(accessToken: string) {
+      return api()
+        .patch('/v1/affiliate/me/occupation')
+        .set('Authorization', `Bearer ${accessToken}`);
+    }
+
+    it('replaces the occupation without asking for the password', async () => {
+      const { accessToken } = await signedIn();
+
+      await changeOccupation(accessToken).send({ occupation: 'CONTENT_CREATOR' }).expect(204);
+
+      const response = await api()
+        .get('/v1/affiliate/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      expect(response.body.occupation).toBe('CONTENT_CREATOR');
+    });
+
+    it('records the previous and the new occupation in the audit trail', async () => {
+      const { accessToken } = await signedIn();
+
+      await changeOccupation(accessToken).send({ occupation: 'CONTENT_CREATOR' }).expect(204);
+
+      expect(await auditTrail()).toEqual([
+        {
+          entity: 'AFFILIATE',
+          change_type: 'UPDATE',
+          actor_email: MARINA.email,
+          diff: { occupation: { from: 'INFLUENCER', to: 'CONTENT_CREATOR' } },
+        },
+      ]);
+    });
+
+    it('refuses an occupation out of the list and keeps the one there', async () => {
+      const { accessToken } = await signedIn();
+
+      await changeOccupation(accessToken).send({ occupation: 'MEDICO' }).expect(400);
+
+      const [row] = await e2e.dataSource.query('SELECT occupation FROM affiliates');
+      expect(row.occupation).toBe('INFLUENCER');
+      expect(await auditTrail()).toEqual([]);
+    });
+
+    it('refuses a token of the panel', async () => {
+      await changeOccupation(await signInOperator(e2e.app, e2e.dataSource))
+        .send({ occupation: 'CONTENT_CREATOR' })
+        .expect(403);
+    });
+  });
+
   describe('PATCH /v1/affiliate/me/email', () => {
     const NEW_EMAIL = 'marina.nova@email.com';
 

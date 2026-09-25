@@ -1,6 +1,7 @@
 import { FactoryProvider, Module } from '@nestjs/common';
 import { ApproveAffiliateUseCase } from '@Application/affiliates/approve-affiliate.use-case';
 import { ChangeEmailUseCase } from '@Application/affiliates/change-email.use-case';
+import { ChangeOccupationUseCase } from '@Application/affiliates/change-occupation.use-case';
 import { ChangePixKeyUseCase } from '@Application/affiliates/change-pix-key.use-case';
 import { CreateAffiliateUseCase } from '@Application/affiliates/create-affiliate.use-case';
 import { GetAffiliateUseCase } from '@Application/affiliates/get-affiliate.use-case';
@@ -120,6 +121,7 @@ const USE_CASES = [
     MAILER,
   ]),
   provideUseCase(ChangeEmailUseCase, [USER_REPOSITORY, PASSWORD_HASHER, MAILER]),
+  provideUseCase(ChangeOccupationUseCase, [USER_REPOSITORY, AFFILIATE_REPOSITORY]),
   provideUseCase(ApplyIncentiveEventUseCase, [
     COUPON_REPOSITORY,
     SALE_REPOSITORY,

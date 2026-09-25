@@ -1,5 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { AffiliateListItem, AffiliateStatusEnum, PaginatedResult } from '@porto/contracts';
+import {
+  AffiliateListItem,
+  AffiliateStatusEnum,
+  OccupationEnum,
+  PaginatedResult,
+} from '@porto/contracts';
 import {
   AffiliateListItemOutput,
   ListAffiliatesOutput,
@@ -17,6 +22,9 @@ export class AffiliateListItemResponseDto implements AffiliateListItem {
 
   @ApiProperty({ example: '***.***.247-25' })
   maskedCpf: string;
+
+  @ApiProperty({ enum: OccupationEnum })
+  occupation: OccupationEnum;
 
   @ApiProperty({ enum: AffiliateStatusEnum })
   status: AffiliateStatusEnum;
