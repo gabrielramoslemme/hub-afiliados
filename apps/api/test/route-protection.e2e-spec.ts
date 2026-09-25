@@ -3,6 +3,7 @@ import { DiscoveryModule, DiscoveryService, MetadataScanner } from '@nestjs/core
 import { IS_PUBLIC } from '../src/http/shared/decorators/public.decorator';
 import { AdminGuard } from '../src/http/shared/guards/admin.guard';
 import { AffiliateGuard } from '../src/http/shared/guards/affiliate.guard';
+import { PayoutWebhookSignatureGuard } from '../src/http/shared/guards/payout-webhook-signature.guard';
 import { WebhookSignatureGuard } from '../src/http/shared/guards/webhook-signature.guard';
 import { createE2eTestingModule } from './e2e-app';
 
@@ -28,7 +29,8 @@ const CHANNEL_GUARDS = [AdminGuard, AffiliateGuard];
  * quem autentica a redefinição é o token de uso único que chegou no e-mail.
  *
  * As de `webhooks/` são públicas só para o JWT: quem as chama é um sistema de
- * fora, que se autentica pela assinatura — e o teste abaixo cobra o guard dela.
+ * fora, que se autentica pela assinatura — a da Porto e a da Transfeera, cada
+ * uma com o guard do seu fornecedor, e o teste abaixo cobra os dois.
  */
 const PUBLIC_ROUTES = [
   'GET /health',
@@ -41,6 +43,7 @@ const PUBLIC_ROUTES = [
   'POST /affiliate/auth/forgot-password',
   'POST /affiliate/auth/reset-password',
   'POST /webhooks/porto/incentives',
+  'POST /webhooks/transfeera',
 ];
 
 const METHOD_NAMES = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'ALL', 'OPTIONS', 'HEAD', 'SEARCH'];
@@ -142,12 +145,24 @@ describe('Route protection (e2e)', () => {
 
   /*
     Público para o guard global não é aberto: sem o guard de assinatura, a rota
-    de webhook aceitaria de qualquer um uma venda inventada.
+    de webhook aceitaria de qualquer um uma venda inventada ou um saque "pago".
+    E o guard do fornecedor certo — o da Porto numa rota da Transfeera
+    conferiria outro header com outro segredo.
   */
-  it('guards every webhook route with the signature guard', () => {
+  it('guards every webhook route with the signature guard of its provider', () => {
+    const WEBHOOK_GUARD_BY_PREFIX = [
+      { prefix: '/webhooks/porto/', guard: WebhookSignatureGuard },
+      { prefix: '/webhooks/transfeera', guard: PayoutWebhookSignatureGuard },
+    ];
+
     const unsigned = routes
       .filter((route) => route.signature.split(' ')[1].startsWith('/webhooks/'))
-      .filter((route) => !route.guards.includes(WebhookSignatureGuard))
+      .filter((route) => {
+        const path = route.signature.split(' ')[1];
+        const provider = WEBHOOK_GUARD_BY_PREFIX.find(({ prefix }) => path.startsWith(prefix));
+
+        return !provider || !route.guards.includes(provider.guard);
+      })
       .map((route) => route.signature);
 
     expect(unsigned).toEqual([]);

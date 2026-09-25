@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { ACCESS_TOKEN_ISSUER, ACCESS_TOKEN_VERIFIER } from '@Domain/auth/access-token';
 import { PASSWORD_HASHER } from '@Domain/auth/password-hasher';
+import { PAYOUT_WEBHOOK_SIGNATURE_VERIFIER } from '@Domain/auth/payout-webhook-signature-verifier';
 import { TOKEN_GENERATOR } from '@Domain/auth/token-generator';
 import { WEBHOOK_SIGNATURE_VERIFIER } from '@Domain/auth/webhook-signature-verifier';
 import { EnvironmentVariables } from '@Infra/config/environment-variables';
@@ -10,6 +11,7 @@ import { BcryptPasswordHasher } from './bcrypt-password-hasher';
 import { CryptoTokenGenerator } from './crypto-token-generator';
 import { HmacWebhookSignatureVerifier } from './hmac-webhook-signature.verifier';
 import { JwtAccessTokenService } from './jwt-access-token.service';
+import { TransfeeraWebhookSignatureVerifier } from './transfeera-webhook-signature.verifier';
 
 /**
  * A biblioteca de assinatura entra aqui e em nenhum outro lugar. Emitir e
@@ -35,6 +37,7 @@ import { JwtAccessTokenService } from './jwt-access-token.service';
     { provide: ACCESS_TOKEN_ISSUER, useExisting: JwtAccessTokenService },
     { provide: ACCESS_TOKEN_VERIFIER, useExisting: JwtAccessTokenService },
     { provide: WEBHOOK_SIGNATURE_VERIFIER, useClass: HmacWebhookSignatureVerifier },
+    { provide: PAYOUT_WEBHOOK_SIGNATURE_VERIFIER, useClass: TransfeeraWebhookSignatureVerifier },
   ],
   exports: [
     PASSWORD_HASHER,
@@ -42,6 +45,7 @@ import { JwtAccessTokenService } from './jwt-access-token.service';
     ACCESS_TOKEN_ISSUER,
     ACCESS_TOKEN_VERIFIER,
     WEBHOOK_SIGNATURE_VERIFIER,
+    PAYOUT_WEBHOOK_SIGNATURE_VERIFIER,
   ],
 })
 export class AuthServicesModule {}
