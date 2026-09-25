@@ -55,4 +55,6 @@ export interface SaleRepository {
    * Nulo quando outra chamada a encerrou primeiro.
    */
   settle(input: SettleSaleInput): Promise<SaleEntity | null>;
+  /** As vendas cujo incentivo o saque reservou, da mais antiga liberação para a mais recente. */
+  listByWithdrawal(withdrawalId: number): Promise<SaleEntity[]>;
 }

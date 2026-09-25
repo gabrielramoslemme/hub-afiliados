@@ -55,6 +55,9 @@ export class SaleTypeormEntity implements SaleEntity {
   @Column({ name: 'settled_at', type: 'timestamptz', nullable: true })
   settledAt: Date | null;
 
+  @Column({ name: 'withdrawal_id', type: 'int', nullable: true })
+  withdrawalId: number | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

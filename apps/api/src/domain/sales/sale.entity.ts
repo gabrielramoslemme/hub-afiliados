@@ -29,6 +29,11 @@ export interface SaleEntity {
   soldAt: Date;
   /** Quando a venda foi concluída ou cancelada; nulo enquanto pendente. */
   settledAt: Date | null;
+  /**
+   * O saque que reservou este incentivo; nulo enquanto ele está no saldo. Volta
+   * a nulo quando o saque falha ou é devolvido.
+   */
+  withdrawalId: number | null;
   createdAt: Date;
   updatedAt: Date;
 }

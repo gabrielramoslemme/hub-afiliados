@@ -16,6 +16,7 @@ export function buildSale(overrides: Partial<SaleEntity> = {}): SaleEntity {
     incentiveStatus: IncentiveStatusEnum.PENDING,
     soldAt: new Date('2026-09-11T12:17:08Z'),
     settledAt: null,
+    withdrawalId: null,
     createdAt: new Date('2026-09-11T12:17:09Z'),
     updatedAt: new Date('2026-09-11T12:17:09Z'),
     ...overrides,

@@ -5,4 +5,5 @@ export const saleRepositoryMock = (): jest.Mocked<SaleRepository> => ({
   listByCoupon: jest.fn().mockResolvedValue([]),
   register: jest.fn().mockResolvedValue(null),
   settle: jest.fn().mockResolvedValue(null),
+  listByWithdrawal: jest.fn().mockResolvedValue([]),
 });

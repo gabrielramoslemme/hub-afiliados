@@ -88,4 +88,11 @@ export class SaleTypeormRepository implements SaleRepository {
       return saved;
     });
   }
+
+  listByWithdrawal(withdrawalId: number): Promise<SaleEntity[]> {
+    return this.repository.find({
+      where: { withdrawalId },
+      order: { settledAt: 'ASC', id: 'ASC' },
+    });
+  }
 }
