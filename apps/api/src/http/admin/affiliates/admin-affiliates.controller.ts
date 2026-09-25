@@ -26,6 +26,7 @@ import { ApproveAffiliateUseCase } from '@Application/affiliates/approve-affilia
 import { GetAffiliateUseCase } from '@Application/affiliates/get-affiliate.use-case';
 import { ListAffiliateAuditLogsUseCase } from '@Application/affiliates/list-affiliate-audit-logs.use-case';
 import { ListAffiliatesUseCase } from '@Application/affiliates/list-affiliates.use-case';
+import { ListAffiliatesReportUseCase } from '@Application/affiliates/list-affiliates-report.use-case';
 import { RejectAffiliateUseCase } from '@Application/affiliates/reject-affiliate.use-case';
 import { ChangeAffiliateCouponUseCase } from '@Application/coupons/change-affiliate-coupon.use-case';
 import { ActorInfo } from '@Http/shared/authenticated-request';
@@ -37,6 +38,7 @@ import {
   CouponSummaryResponseDto,
 } from './dtos/affiliate-detail.response.dto';
 import { PaginatedAffiliatesResponseDto } from './dtos/affiliate-list-item.response.dto';
+import { AffiliateReportRowResponseDto } from './dtos/affiliate-report-row.response.dto';
 import { ApproveAffiliateRequestDto } from './dtos/approve-affiliate.request.dto';
 import { ChangeCouponRequestDto } from './dtos/change-coupon.request.dto';
 import { ListAffiliatesQueryDto } from './dtos/list-affiliates.query.dto';
@@ -55,6 +57,7 @@ export class AdminAffiliatesController {
     private readonly approveAffiliateUseCase: ApproveAffiliateUseCase,
     private readonly rejectAffiliateUseCase: RejectAffiliateUseCase,
     private readonly changeAffiliateCouponUseCase: ChangeAffiliateCouponUseCase,
+    private readonly listAffiliatesReportUseCase: ListAffiliatesReportUseCase,
   ) {}
 
   @Get()
@@ -71,6 +74,19 @@ export class AdminAffiliatesController {
     });
 
     return PaginatedAffiliatesResponseDto.from(result);
+  }
+
+  /**
+   * A planilha do painel: todos os afiliados, com o cadastro completo, o cupom
+   * e a soma das vendas concluídas. Declarada antes de `:publicId`, que casaria
+   * `report` e o recusaria como uuid inválido.
+   */
+  @Get('report')
+  @ApiOkResponse({ type: [AffiliateReportRowResponseDto] })
+  async report(): Promise<AffiliateReportRowResponseDto[]> {
+    const rows = await this.listAffiliatesReportUseCase.execute();
+
+    return rows.map(AffiliateReportRowResponseDto.from);
   }
 
   @Get(':publicId')

@@ -6,7 +6,12 @@ import {
 } from '@porto/contracts';
 import { CouponEntity } from '@Domain/coupons/coupon.entity';
 import { createToken } from '@Domain/shared/token';
-import { AffiliateDetail, AffiliateEntity, AffiliateWithUser } from './affiliate.entity';
+import {
+  AffiliateDetail,
+  AffiliateEntity,
+  AffiliateWithCoupon,
+  AffiliateWithUser,
+} from './affiliate.entity';
 
 export const AFFILIATE_REPOSITORY = createToken<AffiliateRepository>('AFFILIATE_REPOSITORY');
 
@@ -81,6 +86,18 @@ export interface UpdateAffiliateWithAuditInput {
   actorUserId: number | null;
 }
 
+/** O que as vendas concluídas de um cupom somam. Centavos. */
+export interface CompletedSalesTotals {
+  count: number;
+  amountCents: number;
+  incentiveCents: number;
+}
+
+export interface AffiliateReportRecord extends AffiliateWithUser, AffiliateWithCoupon {
+  /** Nulo quando o afiliado não tem venda concluída — ou nem cupom. */
+  completedSales: CompletedSalesTotals | null;
+}
+
 export interface AffiliateRepository {
   findByCpf(cpf: string): Promise<AffiliateEntity | null>;
   findByRg(rg: string): Promise<AffiliateEntity | null>;
@@ -88,6 +105,12 @@ export interface AffiliateRepository {
   findByUserId(userId: number): Promise<AffiliateWithUser | null>;
   /** A fila do painel: filtra, busca, ordena e pagina numa consulta só. */
   search(input: SearchAffiliatesInput): Promise<SearchAffiliatesResult>;
+  /**
+   * Todos os afiliados, do cadastro mais recente para o mais antigo, com o
+   * cupom e a soma das vendas concluídas — a planilha do painel. Concluída é a
+   * venda que a Porto liberou, a mesma regra do resumo de indicações.
+   */
+  listForReport(): Promise<AffiliateReportRecord[]>;
   save(affiliate: Partial<AffiliateEntity>): Promise<AffiliateEntity>;
   /**
    * Grava a edição e a linha de `audit_logs` na mesma transação. O "antes" sai
