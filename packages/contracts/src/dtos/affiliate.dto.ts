@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import type { AffiliateStatusEnum, ReferralStatusEnum, StatementEntryKindEnum } from '../enums';
+import type {
+  AffiliateStatusEnum,
+  AuditChangeTypeEnum,
+  AuditEntityEnum,
+  ReferralStatusEnum,
+  StatementEntryKindEnum,
+  UserTypeEnum,
+} from '../enums';
 import { OccupationEnum, PixKeyTypeEnum, SocialNetworkEnum } from '../enums';
 import type { CouponSummary } from './coupon.dto';
 
@@ -28,11 +35,21 @@ export interface AffiliateDetail extends AffiliateListItem {
   coupon: CouponSummary | null;
 }
 
-export interface AffiliateStatusHistoryItem {
-  fromStatus: AffiliateStatusEnum | null;
-  toStatus: AffiliateStatusEnum;
-  reason: string | null;
+/**
+ * Uma linha da trilha de auditoria do afiliado: o cadastro, cada mudança de
+ * status, as edições do perfil e o cupom dele, tudo de `audit_logs`. O `diff`
+ * traz o antes e o depois de cada campo que mudou, pelo nome da propriedade —
+ * `status`, `email`, `pixKey`, `occupation`, `discountPercent`…
+ */
+export interface AffiliateAuditLogItem {
+  entity: AuditEntityEnum;
+  changeType: AuditChangeTypeEnum;
+  diff: Record<string, { from: unknown; to: unknown }>;
+  /** O motivo, quando a mudança pede um — a reprovação, por exemplo. */
+  justification: string | null;
+  /** Nulo quando ninguém agiu pela sessão: o cadastro público, por exemplo. */
   actorName: string | null;
+  actorType: UserTypeEnum | null;
   createdAt: string;
 }
 
