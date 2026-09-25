@@ -1,8 +1,11 @@
+import { createHmac, randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import request from 'supertest';
 import type { DataSource } from 'typeorm';
 import type { FakeMailProvider } from '../src/testing/fakes/fake-mail.provider';
+import type { E2eApp } from './e2e-app';
+import { E2E_WEBHOOK_SECRET } from './e2e-env';
 
 export const OPERATOR = {
   name: 'Analista Porto',
@@ -128,4 +131,78 @@ export function lastLinkTo(mail: FakeMailProvider, email: string): URL {
 
 export function tokenOf(link: URL): string {
   return link.searchParams.get('token') ?? '';
+}
+
+export const AFFILIATE_PASSWORD = 'MinhaSenha!2026';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Uma notificação de incentivo assinada como a Porto assina. */
+export function notifyIncentive(app: INestApplication, body: object) {
+  const raw = JSON.stringify(body);
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const signature = createHmac('sha256', E2E_WEBHOOK_SECRET)
+    .update(`${timestamp}.${raw}`)
+    .digest('hex');
+
+  return request(app.getHttpServer())
+    .post('/v1/webhooks/porto/incentives')
+    .set('Content-Type', 'application/json')
+    .set('X-Timestamp', timestamp)
+    .set('X-Signature', `sha256=${signature}`)
+    .send(raw)
+    .expect(200);
+}
+
+export type SaleOutcome = 'LIBERADO' | 'CANCELADO' | null;
+
+/**
+ * Registra a venda pelo webhook e, se houver desfecho, encerra. `valor` é o
+ * incentivo em reais; a venda vale dez vezes isso.
+ */
+export async function settleSale(
+  app: INestApplication,
+  cupom: string,
+  item: string,
+  outcome: SaleOutcome,
+  { daysAgo = 1, valor = 27 }: { daysAgo?: number; valor?: number } = {},
+): Promise<void> {
+  const venda = {
+    id: randomUUID(),
+    cupom,
+    valorVenda: valor * 10,
+    item,
+    dataVenda: new Date(Date.now() - daysAgo * DAY_MS).toISOString(),
+  };
+  const event = (tipoEvento: string, status: string) => ({
+    idEvento: randomUUID(),
+    dataHoraEvento: new Date().toISOString(),
+    evento: { tipoEvento },
+    incentivo: { status, valor },
+    venda,
+  });
+
+  await notifyIncentive(app, event('VENDA_REGISTRADA', 'PENDENTE'));
+  if (outcome === 'LIBERADO') await notifyIncentive(app, event('VENDA_CONCLUIDA', 'LIBERADO'));
+  if (outcome === 'CANCELADO')
+    await notifyIncentive(app, event('VENDA_NAO_CONCLUIDA', 'CANCELADO'));
+}
+
+/** Aprova, cria a senha pelo link do e-mail e entra. Devolve o token e o cupom. */
+export async function signInAffiliate(
+  e2e: E2eApp,
+  operatorToken: string,
+  affiliate: { email: string },
+): Promise<{ token: string; coupon: string }> {
+  const coupon = await approve(e2e.app, operatorToken, await register(e2e.app, affiliate));
+  await request(e2e.app.getHttpServer())
+    .post('/v1/affiliate/auth/set-password')
+    .send({ token: tokenOf(lastLinkTo(e2e.mail, affiliate.email)), password: AFFILIATE_PASSWORD })
+    .expect(204);
+  const login = await request(e2e.app.getHttpServer())
+    .post('/v1/affiliate/auth/login')
+    .send({ email: affiliate.email, password: AFFILIATE_PASSWORD })
+    .expect(200);
+
+  return { token: login.body.accessToken, coupon };
 }

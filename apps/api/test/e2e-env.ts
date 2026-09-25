@@ -37,3 +37,8 @@ process.env.DATABASE_URL = e2eDatabaseUrl();
 export const E2E_WEBHOOK_SECRET = 'e2e-webhook-secret-with-at-least-32-chars';
 
 process.env.PORTO_WEBHOOK_SECRET = E2E_WEBHOOK_SECRET;
+
+/** O segredo do webhook da Transfeera no e2e, pela mesma razão do da Porto. */
+export const E2E_TRANSFEERA_WEBHOOK_SECRET = 'e2e-transfeera-webhook-secret';
+
+process.env.TRANSFEERA_WEBHOOK_SECRET = E2E_TRANSFEERA_WEBHOOK_SECRET;
