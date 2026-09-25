@@ -3,6 +3,7 @@ export { AccountTopbar } from './components/account-topbar';
 export { ChangeEmailDialog } from './components/email-dialog';
 export { HomeScreen } from './components/home-screen';
 export { MaterialsScreen } from './components/materials-screen';
+export { ChangeOccupationDialog } from './components/occupation-dialog';
 export { PageHeading } from './components/page-heading';
 export { ChangePixKeyDialog } from './components/pix-key-dialog';
 export { StatementList } from './components/statement-list';

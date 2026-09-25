@@ -5,6 +5,7 @@ import { QUEUE_PATH } from '@/backoffice/shared/routes';
 import { Input } from '@/shared/components/ui/input';
 import { cn } from '@/shared/lib/cn';
 import { type QueueParams, queueHref } from '../lib/queue-params';
+import { OccupationFilter } from './occupation-filter';
 
 const TABS: Array<{ label: string; status: AffiliateStatusEnum | null }> = [
   { label: 'Em análise', status: AffiliateStatusEnum.PENDING_APPROVAL },
@@ -74,6 +75,8 @@ export function QueueFilters({ params, total }: QueueFiltersProps) {
           {params.sortOrder !== 'desc' && (
             <input type="hidden" name="sortOrder" value={params.sortOrder} />
           )}
+
+          <OccupationFilter value={params.occupation} />
 
           <div className="relative">
             <Search

@@ -46,6 +46,7 @@ export function fetchAffiliates(params: QueueParams): Promise<PaginatedResult<Af
   });
 
   if (params.status) query.set('status', params.status);
+  if (params.occupation) query.set('occupation', params.occupation);
   if (params.search) query.set('search', params.search);
 
   return readOrSignIn(() =>

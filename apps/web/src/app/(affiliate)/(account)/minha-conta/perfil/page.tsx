@@ -1,11 +1,21 @@
 import { Lock } from 'lucide-react';
 import type { Metadata } from 'next';
-import { ChangeEmailDialog, ChangePixKeyDialog, PageHeading } from '@/affiliate/features/area';
+import {
+  ChangeEmailDialog,
+  ChangeOccupationDialog,
+  ChangePixKeyDialog,
+  PageHeading,
+} from '@/affiliate/features/area';
 import { fetchAccount } from '@/affiliate/features/area/data';
 import { site } from '@/affiliate/shared/content';
 import { Badge } from '@/shared/components/ui/badge';
 import { statusLabel, statusTone } from '@/shared/lib/affiliate-status';
-import { formatDate, formatSocialProfile, pixKeyTypeName } from '@/shared/lib/format';
+import {
+  formatDate,
+  formatSocialProfile,
+  occupationName,
+  pixKeyTypeName,
+} from '@/shared/lib/format';
 
 export const metadata: Metadata = { title: 'Seu perfil' };
 
@@ -24,12 +34,17 @@ export default async function ProfilePage() {
     {
       label: 'E-mail',
       value: account.email,
-      // E-mail e chave são os dados que o próprio afiliado troca: os demais
-      // passaram pela análise da Porto, e por isso só essas linhas têm ação.
+      // E-mail, ocupação e chave são os dados que o próprio afiliado troca: os
+      // demais passaram pela análise da Porto, e por isso só essas linhas têm ação.
       action: <ChangeEmailDialog email={account.email} />,
     },
     { label: 'CPF', value: account.maskedCpf },
     { label: 'RG', value: account.maskedRg },
+    {
+      label: 'Ocupação',
+      value: occupationName(account.occupation),
+      action: <ChangeOccupationDialog occupation={account.occupation} />,
+    },
     ...(social ? [{ label: 'Rede social', value: social }] : []),
     {
       label: 'Chave PIX',
@@ -76,8 +91,8 @@ export default async function ProfilePage() {
 
         <p className="mt-6 flex items-start gap-2.5 text-[0.8125rem] leading-relaxed text-ink-500">
           <Lock className="mt-0.5 size-3.5 shrink-0 text-ink-400" aria-hidden />
-          CPF, RG e chave PIX aparecem mascarados aqui de propósito. O e-mail e a chave PIX você
-          troca aqui mesmo; para corrigir qualquer outro dado, escreva para{' '}
+          CPF, RG e chave PIX aparecem mascarados aqui de propósito. O e-mail, a ocupação e a chave
+          PIX você troca aqui mesmo; para corrigir qualquer outro dado, escreva para{' '}
           <a
             href={`mailto:${site.contactEmail}`}
             className="font-medium text-blue-600 hover:underline"

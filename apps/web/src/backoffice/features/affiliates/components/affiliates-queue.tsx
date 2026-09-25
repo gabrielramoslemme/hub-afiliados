@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/components/ui/table';
-import { formatDate, formatTime } from '@/shared/lib/format';
+import { formatDate, formatTime, occupationName } from '@/shared/lib/format';
 import { fetchAffiliates } from '../data';
 import { type QueueParams, type QueueSortBy, queueHref } from '../lib/queue-params';
 import { AffiliateStatusBadge } from './affiliate-status';
@@ -77,7 +77,7 @@ export async function AffiliatesQueue({ params }: { params: QueueParams }) {
               ? `Nada encontrado para “${params.search}”. Revise o termo ou limpe a busca.`
               : 'Assim que um cadastro chegar por este filtro, ele aparece aqui.'}
           </p>
-          {(params.search || params.status) && (
+          {(params.search || params.status || params.occupation) && (
             <Link href={QUEUE_PATH} className="mt-2 text-sm font-semibold text-blue-600">
               Limpar filtros
             </Link>
@@ -93,6 +93,7 @@ export async function AffiliatesQueue({ params }: { params: QueueParams }) {
                 </SortableHead>
                 <TableHead>E-mail</TableHead>
                 <TableHead>CPF</TableHead>
+                <TableHead>Ocupação</TableHead>
                 <TableHead>Situação</TableHead>
                 <SortableHead params={params} column="createdAt">
                   Enviado em
@@ -117,6 +118,9 @@ export async function AffiliatesQueue({ params }: { params: QueueParams }) {
                   {/* Listagem mostra CPF mascarado; completo só no detalhe. */}
                   <TableCell className="whitespace-nowrap text-ink-500" data-tabular>
                     {affiliate.maskedCpf}
+                  </TableCell>
+                  <TableCell className="text-ink-500">
+                    {occupationName(affiliate.occupation)}
                   </TableCell>
                   <TableCell>
                     <AffiliateStatusBadge status={affiliate.status} />

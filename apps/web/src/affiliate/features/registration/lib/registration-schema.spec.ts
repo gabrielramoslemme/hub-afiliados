@@ -1,4 +1,9 @@
-import { createAffiliateSchema, PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
+import {
+  createAffiliateSchema,
+  OccupationEnum,
+  PixKeyTypeEnum,
+  SocialNetworkEnum,
+} from '@porto/contracts';
 
 /**
  * O DTO da API é a autoridade sobre o que entra. Este arquivo guarda a promessa
@@ -14,6 +19,7 @@ const validInput = {
   pixKey: 'marina@email.com',
   socialNetwork: '' as SocialNetworkEnum | '',
   socialHandle: '',
+  occupation: OccupationEnum.INFLUENCER as OccupationEnum | '',
   termsAccepted: true,
 };
 
@@ -196,5 +202,17 @@ describe('createAffiliateSchema', () => {
     const result = createAffiliateSchema.safeParse({ ...validInput, socialNetwork: 'ORKUT' });
 
     expect(result.success).toBe(false);
+  });
+
+  // O `select` abre sem escolha de propósito: a ocupação é obrigatória, e um
+  // valor já marcado passaria como resposta de quem nem olhou o campo.
+  it('rejects a registration without the occupation', () => {
+    expect(firstErrorOn(parse({ occupation: '' }), 'occupation')).toBe('Escolha sua ocupação.');
+  });
+
+  it('rejects an occupation out of the list', () => {
+    const result = createAffiliateSchema.safeParse({ ...validInput, occupation: 'MEDICO' });
+
+    expect(firstErrorOn(result, 'occupation')).toBe('Escolha sua ocupação.');
   });
 });

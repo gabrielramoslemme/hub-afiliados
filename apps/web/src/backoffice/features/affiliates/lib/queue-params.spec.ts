@@ -1,4 +1,4 @@
-import { AffiliateStatusEnum } from '@porto/contracts';
+import { AffiliateStatusEnum, OccupationEnum } from '@porto/contracts';
 import { parseQueueParams, queueHref } from './queue-params';
 
 describe('parseQueueParams', () => {
@@ -6,6 +6,7 @@ describe('parseQueueParams', () => {
     expect(parseQueueParams({})).toEqual({
       page: 1,
       status: null,
+      occupation: null,
       search: '',
       sortBy: 'createdAt',
       sortOrder: 'desc',
@@ -30,6 +31,16 @@ describe('parseQueueParams', () => {
 
   it('drops a status the api does not know', () => {
     expect(parseQueueParams({ status: 'ALMOST' }).status).toBeNull();
+  });
+
+  it('keeps an occupation the api knows', () => {
+    expect(parseQueueParams({ occupation: 'INFLUENCER' }).occupation).toBe(
+      OccupationEnum.INFLUENCER,
+    );
+  });
+
+  it('drops an occupation the api does not know', () => {
+    expect(parseQueueParams({ occupation: 'MEDICO' }).occupation).toBeNull();
   });
 
   it('drops a sort column that is not sortable', () => {
@@ -63,6 +74,14 @@ describe('queueHref', () => {
 
     expect(queueHref(onPageFour, { status: AffiliateStatusEnum.APPROVED })).toBe(
       '/admin/afiliados?status=APPROVED',
+    );
+  });
+
+  it('carries the occupation and goes back to the first page when it changes', () => {
+    const onPageFour = parseQueueParams({ page: '4', status: 'APPROVED' });
+
+    expect(queueHref(onPageFour, { occupation: OccupationEnum.CONTENT_CREATOR })).toBe(
+      '/admin/afiliados?status=APPROVED&occupation=CONTENT_CREATOR',
     );
   });
 
