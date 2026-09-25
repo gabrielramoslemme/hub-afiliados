@@ -3,7 +3,7 @@ import { type AffiliateStatementEntry, StatementEntryKindEnum } from '@porto/con
 import { cn } from '@/shared/lib/cn';
 import { formatBRL, formatDate } from '@/shared/lib/format';
 
-/** Diz o que a linha é antes de dizer de onde ela veio: "Incentivo · Guincho 24h". */
+/** O que a linha é, embaixo do serviço que a gerou: "Conserto de fogão" · "Incentivo". */
 const KIND_LABELS: Record<StatementEntryKindEnum, string> = {
   [StatementEntryKindEnum.INCENTIVE]: 'Incentivo',
   [StatementEntryKindEnum.PAYOUT]: 'Pagamento',
@@ -73,9 +73,7 @@ export function StatementList({ entries }: { entries: AffiliateStatementEntry[] 
               </div>
 
               <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 text-[0.8125rem] text-ink-500">
-                <span>
-                  {KIND_LABELS[entry.kind]} · {entry.detail}
-                </span>
+                <span>{KIND_LABELS[entry.kind]}</span>
                 <span className="whitespace-nowrap" data-tabular>
                   {formatDate(entry.occurredAt)}
                 </span>

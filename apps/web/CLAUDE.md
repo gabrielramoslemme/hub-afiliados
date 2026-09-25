@@ -164,17 +164,13 @@ Cookie `httpOnly`, `sameSite=lax`, `secure` fora de dev, oito horas. Nomes em `s
 
 **E vira login pela sessão expirada, nunca direto.** Com o cookie do token ainda no navegador, mandar para o login faz o `middleware` devolver a pessoa para a área logada, e o layout de volta para o login, em laço até o navegador desistir com `ERR_TOO_MANY_REDIRECTS`. `/admin/sessao-expirada` e `/minha-conta/sessao-expirada` apagam os cookies antes de redirecionar — é o mesmo caminho que o `data.ts` usa quando a API responde 401.
 
-## Só a carteira e as indicações rodam contra dublê
+## A área do afiliado fala com a API inteira
 
-**Painel, login do afiliado e a conta dele falam com a API.** Entrar em qualquer um dos dois logins exige a API no ar (`npm run dev`), as migrations aplicadas e `npm run seed --workspace apps/api`, que cria os três operadores com a senha `MudarAgora!2026`. O afiliado nasce sem senha: ele recebe o link de `/definir-senha` no e-mail de aprovação, que vale 48 horas e só funciona uma vez. Quem deixa esse link vencer, ou esquece a senha depois, pede outro em `/esqueci-senha` — o link de recuperação vale 2 horas —, e o painel tem o par equivalente em `/admin/esqueci-senha`. Com `MAIL_PROVIDER=logger`, que é o padrão em desenvolvimento, o link sai no log da API em vez de por e-mail.
+**Painel, login do afiliado, a conta dele, a carteira e as indicações falam com a API.** Não há mais dublê. Entrar em qualquer um dos dois logins exige a API no ar (`npm run dev`), as migrations aplicadas e `npm run seed --workspace apps/api`, que cria os três operadores com a senha `MudarAgora!2026`. O afiliado nasce sem senha: ele recebe o link de `/definir-senha` no e-mail de aprovação, que vale 48 horas e só funciona uma vez. Quem deixa esse link vencer, ou esquece a senha depois, pede outro em `/esqueci-senha` — o link de recuperação vale 2 horas —, e o painel tem o par equivalente em `/admin/esqueci-senha`. Com `MAIL_PROVIDER=logger`, que é o padrão em desenvolvimento, o link sai no log da API em vez de por e-mail.
 
-O que sobrou por nascer é `GET /v1/affiliate/me/wallet` e `GET /v1/affiliate/me/referrals?period=` — saldo, extrato e as vendas feitas com o cupom dependem de tabelas que a Onda 1 não tem. Com `API_MOCKING=enabled`, o `api-client` troca o **transporte** por `src/shared/http/mocks/mock-api.ts`, que devolve `Response` a partir das fixtures.
+**A carteira e as indicações nascem das vendas que a Porto notifica** pelo webhook de incentivos (INT-03). Sem venda, as duas telas mostram o estado vazio. Para ver dado local, mande uma notificação assinada para `POST /v1/webhooks/porto/incentives` — a receita está em `apps/api/docs/INT-03-incentivos.md`.
 
-**O dublê responde por prefixo, não por canal inteiro.** Hoje `DUBBED` é `/affiliate/me/wallet` e `/affiliate/me/referrals`. Caminho fora dele devolve `null` e o `api-client` cai no `fetch` de verdade — é isso que mantém tudo o mais indo para o Postgres com a flag ligada. Caminho *dentro* de um prefixo dublado e fora da tabela devolve 404, não `null`: escapar para a API trocaria um erro claro por um `ECONNREFUSED`.
-
-Saldo e total pago são **somados a partir do extrato** em `fixtures.ts`, nunca escritos à mão: é a conta que impede o topo da carteira de divergir das linhas de baixo. E cada incentivo do extrato **nasce de uma indicação concluída** — a tela Início e a Carteira mostram o mesmo dinheiro por dois caminhos, e `mock-api.spec.ts` trava que os dois fecham. O recorte por período conta a partir do `updatedAt` fixo das fixtures, não do relógio, pelo mesmo motivo das datas fixas.
-
-A resposta volta pelo mesmo `request()`, então cabeçalho montado, 204 sem corpo e tradução do corpo de erro em `ApiError` continuam exercitados. Quando as rotas nascerem, tire a flag e nenhuma tela muda.
+**A carteira não tem saldo nem "já pago".** Os pagamentos da Porto na chave do afiliado ainda não chegam à Mesa, e um saldo que ignora o que foi pago mentiria no primeiro pagamento. O cartão mostra o incentivo liberado, o extrato só tem entradas, e o terceiro número da tela inicial é o incentivo das vendas pendentes. Quando os pagamentos chegarem, o saldo volta — e ele sai da soma das linhas, nunca de um número à parte, para o topo não divergir do extrato.
 
 **O dashboard não passa por aqui.** Os números da tela inicial do painel são constantes em `backoffice/features/dashboard/lib/mock-data.ts`: faturamento, comissão e venda dependem de tabelas que a Onda 1 não tem, então não há rota para dublar. `mock-data.spec.ts` trava as somas que a tela mostra lado a lado — segmento que fecha o total, fatia que fecha 100%, comissão que sai da mesma taxa. Quando as leituras nascerem, o arquivo vira `data.ts` e a montagem não muda.
 
@@ -252,4 +248,4 @@ npm run type-check --workspace apps/web
 npm run test --workspace apps/web         # Jest via next/jest: lógica, sem componente
 ```
 
-`API_BASE_URL` e `API_MOCKING` vivem em `.env.local` (modelo em `.env.example`).
+`API_BASE_URL` vive em `.env.local` (modelo em `.env.example`).

@@ -67,15 +67,13 @@ Para ver o fluxo inteiro rodando contra a API:
    funciona uma vez só.
 4. Crie a senha e entre em http://localhost:3005/entrar.
 
-### A carteira e as indicações ainda rodam contra dublê
+### A carteira e as indicações vêm das vendas da Porto
 
-`GET /v1/affiliate/me/wallet` e `GET /v1/affiliate/me/referrals` não existem na
-API — saldo, extrato e vendas pelo cupom dependem de tabelas que a Onda 1 não
-tem. Com `API_MOCKING=enabled` no `apps/web/.env.local`, um dublê em memória
-responde no lugar delas.
-
-O dublê cobre apenas esses dois prefixos; todo o resto vai para a API de verdade
-com a mesma flag ligada. Quando as rotas nascerem, tire a flag.
+A área do afiliado não tem dublê: a carteira e as indicações leem as vendas que
+a Porto notifica pelo webhook de incentivos. Sem venda, as telas mostram o
+estado vazio. Para gerar uma localmente, mande uma notificação assinada para
+`POST /v1/webhooks/porto/incentives` — a receita está em
+[`apps/api/docs/INT-03-incentivos.md`](apps/api/docs/INT-03-incentivos.md).
 
 ### Operadores criados pelo seed
 

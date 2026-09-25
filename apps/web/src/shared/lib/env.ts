@@ -20,8 +20,4 @@ export const env = {
   get apiBaseUrl(): string {
     return required('API_BASE_URL');
   },
-
-  get isMockingApi(): boolean {
-    return process.env.API_MOCKING === 'enabled';
-  },
 };
