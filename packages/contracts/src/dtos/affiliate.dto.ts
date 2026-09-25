@@ -36,6 +36,39 @@ export interface AffiliateDetail extends AffiliateListItem {
 }
 
 /**
+ * Uma linha da planilha de afiliados do painel: o cadastro inteiro, o cupom e o
+ * que as vendas concluídas somam. CPF, RG e chave PIX saem completos, como no
+ * detalhe — a planilha é a ferramenta de conferência da Porto.
+ */
+export interface AffiliateReportRow {
+  name: string;
+  email: string;
+  cpf: string;
+  rg: string;
+  occupation: OccupationEnum;
+  socialNetwork: SocialNetworkEnum | null;
+  socialHandle: string | null;
+  pixKeyType: PixKeyTypeEnum;
+  pixKey: string;
+  status: AffiliateStatusEnum;
+  createdAt: string;
+  approvedAt: string | null;
+  /** Nulo em cadastro ainda não aprovado ou reprovado. */
+  coupon: CouponSummary | null;
+  /** Vendas concluídas com o cupom: as que a Porto liberou. */
+  completedSalesCount: number;
+  /** Centavos. Valor das vendas concluídas. */
+  completedSalesCents: number;
+  /** Centavos. Incentivos das vendas concluídas — o que a Porto vai pagar. */
+  releasedIncentiveCents: number;
+  /**
+   * Centavos. Sempre nulo por ora: a Porto não informa o que pagou, e um
+   * número aqui seria inventado.
+   */
+  paidCommissionCents: number | null;
+}
+
+/**
  * Uma linha da trilha de auditoria do afiliado: o cadastro, cada mudança de
  * status, as edições do perfil e o cupom dele, tudo de `audit_logs`. O `diff`
  * traz o antes e o depois de cada campo que mudou, pelo nome da propriedade —
