@@ -762,21 +762,28 @@ Resources:
         - Key: Name
           Value: !Sub 'porto-hub-${EnvironmentName}-db-params'
 
+  # DependsOn direto para recurso condicional nao serve: com a condicao falsa o
+  # CloudFormation recusa o template inteiro ("Unresolved resource
+  # dependencies"). O handle nao tem condicao e referencia os condicionais por
+  # `!If` - o `Ref` so e resolvido no ramo verdadeiro, entao a dependencia so
+  # existe quando o recurso existe. Nao cria nada nem custa nada.
+  #
+  # Um handle por dependente, e nao um so: o da Distribution chega na Instance
+  # pela ElasticIpAssociation, e a Instance dependendo dele fecharia um ciclo.
+  DatabaseRoutesReady:
+    Type: AWS::CloudFormation::WaitConditionHandle
+    Metadata:
+      DbSubnetARoute: !If [DbIsPublic, !Ref DbSubnetARouteTableAssociation, !Ref 'AWS::NoValue']
+      DbSubnetBRoute: !If [DbIsPublic, !Ref DbSubnetBRouteTableAssociation, !Ref 'AWS::NoValue']
+
   Database:
     Type: AWS::RDS::DBInstance
     # As associacoes de rota primeiro. Sem isto o CloudFormation nao ve
     # dependencia entre elas e o modify do RDS, e pode dar o deploy por
     # concluido com a instancia ja publica e a subnet ainda sem rota default:
     # o passo de verificacao do README daria timeout num deploy correto.
-    # Ignorado sozinho quando DbIsPublic e falsa.
-    DependsOn: [DbSubnetARouteTableAssociation, DbSubnetBRouteTableAssociation]
-    # E3005 reclama de DependsOn para recurso condicional. A AWS documenta que
-    # ignora a dependencia quando a condition e falsa, que e exatamente o que
-    # se quer aqui; a regra e conservadora porque o padrao costuma ser engano.
-    Metadata:
-      cfn-lint:
-        config:
-          ignore_checks: [E3005]
+    # As associacoes so existem com DbIsPublic - dai o handle.
+    DependsOn: DatabaseRoutesReady
     # Snapshot nos dois ambientes. Em prod e o que impede que deletar a stack,
     # ou uma propriedade que exija substituicao, leve o banco sem volta. Em dev
     # custa um snapshot orfao ao deletar a stack, que o README ensina a apagar.
@@ -1209,21 +1216,23 @@ Resources:
         - Key: Name
           Value: !Sub 'porto-hub-${EnvironmentName}-vpc-origin'
 
+  # A ElasticIpAssociation so existe em dev; em prod a dependencia com a
+  # instancia vem do VpcOrigin. Handle pelo motivo do DatabaseRoutesReady.
+  OriginAddressReady:
+    Type: AWS::CloudFormation::WaitConditionHandle
+    Metadata:
+      ElasticIpAssociation: !If [IsDev, !Ref ElasticIpAssociation, !Ref 'AWS::NoValue']
+
   Distribution:
     Type: AWS::CloudFront::Distribution
-    # So existe em dev; em prod a dependencia com a instancia vem do VpcOrigin.
-    DependsOn: ElasticIpAssociation
+    DependsOn: OriginAddressReady
     # W1030 avisa que `CertificateArn` pode nao ser um ARN de certificado -
     # verdade, ele aceita vazio. Quem garante que nao esta vazio no ramo que o
     # usa e a regra DomainRequiresCertificate, que o cfn-lint nao le.
-    # E3005: DependsOn de recurso condicional, ignorado quando a condicao e
-    # falsa - que e o que se quer em prod.
     Metadata:
       cfn-lint:
         config:
-          ignore_checks:
-            - W1030
-            - E3005
+          ignore_checks: [W1030]
     Properties:
       DistributionConfig:
         Enabled: true
@@ -1304,25 +1313,25 @@ Resources:
         - Key: Name
           Value: !Sub 'porto-hub-${EnvironmentName}-cdn'
 
+  # Em prod a instancia boota na subnet privada, e sem a rota do NAT nao sai
+  # para lugar nenhum. As duas so existem em prod - handle pelo motivo do
+  # DatabaseRoutesReady.
+  PrivateRoutesReady:
+    Type: AWS::CloudFormation::WaitConditionHandle
+    Metadata:
+      PrivateRoute: !If [IsProd, !Ref PrivateRoute, !Ref 'AWS::NoValue']
+      PrivateSubnetARoute: !If [IsProd, !Ref PrivateSubnetARouteTableAssociation, !Ref 'AWS::NoValue']
+
   Instance:
     Type: AWS::EC2::Instance
     # A associacao entra junto: ate ela existir a subnet cai na route table
     # principal da VPC, que so tem a rota local. Instancia que boota nessa
     # janela nao alcanca o dnf, nem o GitHub, nem o proprio signal-resource - e
     # sem o sinal a stack espera os PT15M inteiros antes de dizer que falhou.
-    #
-    # Em prod a mesma coisa vale para a rota do NAT: sem ela o boot na subnet
-    # privada nao sai para lugar nenhum. As duas de prod sao condicionais, e a
-    # AWS ignora DependsOn de recurso que nao existe - dai o E3005 abaixo.
     DependsOn:
       - VpcGatewayAttachment
       - PublicSubnetARouteTableAssociation
-      - PrivateRoute
-      - PrivateSubnetARouteTableAssociation
-    Metadata:
-      cfn-lint:
-        config:
-          ignore_checks: [E3005]
+      - PrivateRoutesReady
     # Sem isto o CREATE_COMPLETE chega assim que a instancia fica `running`, e
     # um UserData que falhou vira falso positivo silencioso - o erro so
     # apareceria no primeiro deploy, com "docker: command not found".

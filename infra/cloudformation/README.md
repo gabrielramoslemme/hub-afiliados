@@ -466,7 +466,9 @@ aws cloudformation describe-change-set --stack-name porto-hub-dev --change-set-n
 
 Pelo console é **Update → Replace current template**, mantendo os parâmetros.
 
-O change set esperado tem `Add PortoSecret` e `Modify` em `ConfigParameter`,
+O change set esperado tem `Add` em `PortoSecret` e nos três handles de
+dependência (`DatabaseRoutesReady`, `OriginAddressReady`, `PrivateRoutesReady`
+— não criam nada na conta), e `Modify` em `ConfigParameter`,
 `InstanceRole` e `Database` (só o atributo de exclusão), mais `Distribution` e
 `Instance` por metadado. **`Replacement: True` em qualquer coisa que não seja a
 `Instance`, pare** — o template deveria resolver para o mesmo recurso em dev. Na
