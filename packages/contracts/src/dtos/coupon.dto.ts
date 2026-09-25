@@ -18,20 +18,6 @@ export interface CouponAvailabilityResponse {
   reason: string | null;
 }
 
-/**
- * Um registro da trilha do cupom. O painel o mostra junto da trilha do
- * cadastro, porque para quem audita a aprovação e o cupom são a mesma história.
- */
-export interface CouponHistoryItem {
-  /** Nulo na emissão, que é o primeiro registro. */
-  fromStatus: CouponStatusEnum | null;
-  toStatus: CouponStatusEnum;
-  fromDiscountPercent: number | null;
-  toDiscountPercent: number;
-  actorName: string | null;
-  createdAt: string;
-}
-
 /*
   Alterar o cupom é operação do painel, e o INT-01 aceita os dois campos soltos:
   o corpo precisa trazer ao menos um. O `refine` é o que impede um PATCH vazio

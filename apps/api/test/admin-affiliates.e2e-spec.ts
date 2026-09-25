@@ -41,6 +41,13 @@ describe('Admin affiliates (e2e)', () => {
     return api().get(`/v1/admin/affiliates/${publicId}`).set('Authorization', `Bearer ${token}`);
   }
 
+  function auditTrail(publicId: string) {
+    return api()
+      .get(`/v1/admin/affiliates/${publicId}/audit-logs`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+  }
+
   beforeAll(async () => {
     e2e = await createE2eApp();
   });
@@ -232,32 +239,35 @@ describe('Admin affiliates (e2e)', () => {
         coupon: { code: 'MARINA25', discountPercent: 15, status: CouponStatusEnum.ACTIVE },
       });
 
-      const trail = await api()
-        .get(`/v1/admin/affiliates/${publicId}/history`)
-        .set('Authorization', `Bearer ${token}`)
-        .expect(200);
-      expect(trail.body).toEqual([
+      // Cupom acima da aprovação: os dois têm o mesmo instante, e o `id` conta a ordem.
+      expect((await auditTrail(publicId)).body).toEqual([
         expect.objectContaining({
-          fromStatus: AffiliateStatusEnum.PENDING_APPROVAL,
-          toStatus: AffiliateStatusEnum.APPROVED,
+          entity: 'COUPON',
+          changeType: 'CREATE',
+          diff: {
+            code: { from: null, to: 'MARINA25' },
+            status: { from: null, to: CouponStatusEnum.ACTIVE },
+            discountPercent: { from: null, to: 15 },
+          },
+          actorName: 'Analista Porto',
+          actorType: 'ADMIN',
+        }),
+        expect.objectContaining({
+          entity: 'AFFILIATE',
+          changeType: 'UPDATE',
+          diff: {
+            status: {
+              from: AffiliateStatusEnum.PENDING_APPROVAL,
+              to: AffiliateStatusEnum.APPROVED,
+            },
+          },
           actorName: 'Analista Porto',
         }),
         expect.objectContaining({
-          fromStatus: null,
-          toStatus: AffiliateStatusEnum.PENDING_APPROVAL,
-        }),
-      ]);
-
-      const couponTrail = await api()
-        .get(`/v1/admin/affiliates/${publicId}/coupon/history`)
-        .set('Authorization', `Bearer ${token}`)
-        .expect(200);
-      expect(couponTrail.body).toEqual([
-        expect.objectContaining({
-          fromStatus: null,
-          toStatus: CouponStatusEnum.ACTIVE,
-          toDiscountPercent: 15,
-          actorName: 'Analista Porto',
+          entity: 'AFFILIATE',
+          changeType: 'CREATE',
+          actorName: null,
+          actorType: null,
         }),
       ]);
     });
@@ -344,11 +354,7 @@ describe('Admin affiliates (e2e)', () => {
         approvedAt: null,
         coupon: null,
       });
-      const trail = await api()
-        .get(`/v1/admin/affiliates/${loser}/history`)
-        .set('Authorization', `Bearer ${token}`)
-        .expect(200);
-      expect(trail.body).toHaveLength(1);
+      expect((await auditTrail(loser)).body).toHaveLength(1);
       expect(change).not.toHaveBeenCalled();
     });
   });
@@ -370,6 +376,10 @@ describe('Admin affiliates (e2e)', () => {
         rejectionReason: reason,
       });
       expect(e2e.mail.sentTo(MARINA.email).at(-1)?.text).toContain(reason);
+      expect((await auditTrail(publicId)).body[0]).toMatchObject({
+        diff: { status: { from: 'PENDING_APPROVAL', to: 'REJECTED' } },
+        justification: reason,
+      });
     });
 
     it('refuses a reason that is too short', async () => {
@@ -414,20 +424,31 @@ describe('Admin affiliates (e2e)', () => {
       await change(publicId).send({ status: CouponStatusEnum.INACTIVE }).expect(200);
       await change(publicId).send({ discountPercent: 15 }).expect(200);
 
-      const trail = await api()
-        .get(`/v1/admin/affiliates/${publicId}/coupon/history`)
-        .set('Authorization', `Bearer ${token}`)
-        .expect(200);
+      const couponRows = (await auditTrail(publicId)).body.filter(
+        (row: { entity: string }) => row.entity === 'COUPON',
+      );
 
-      expect(trail.body).toMatchObject([
-        { fromDiscountPercent: 10, toDiscountPercent: 15, actorName: 'Analista Porto' },
+      expect(couponRows).toMatchObject([
+        { diff: { discountPercent: { from: 10, to: 15 } }, actorName: 'Analista Porto' },
         {
-          fromStatus: CouponStatusEnum.ACTIVE,
-          toStatus: CouponStatusEnum.INACTIVE,
+          diff: { status: { from: CouponStatusEnum.ACTIVE, to: CouponStatusEnum.INACTIVE } },
           actorName: 'Analista Porto',
         },
-        { fromStatus: null, toStatus: CouponStatusEnum.ACTIVE },
+        { changeType: 'CREATE' },
       ]);
+      // Só o campo que mudou: desativar não mexe no percentual.
+      expect(couponRows[1].diff).not.toHaveProperty('discountPercent');
+    });
+
+    it('keeps the coupon of another affiliate out of the trail', async () => {
+      const marina = await register(e2e.app, MARINA);
+      const rogerio = await register(e2e.app, ROGERIO);
+      await approve(e2e.app, token, marina);
+      await approve(e2e.app, token, rogerio);
+
+      const entities = (await auditTrail(marina)).body.map((row: { entity: string }) => row.entity);
+
+      expect(entities).toEqual(['COUPON', 'AFFILIATE', 'AFFILIATE']);
     });
 
     it('refuses a discount above the ceiling the provider accepts', async () => {

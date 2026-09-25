@@ -83,7 +83,7 @@ describe('TypeORM DataSource', () => {
     expect(globbedFiles(pattern)).toEqual(
       expect.arrayContaining([
         'affiliate.typeorm-entity.ts',
-        'affiliate-status-history.typeorm-entity.ts',
+        'audit-log.typeorm-entity.ts',
         'password-reset-token.typeorm-entity.ts',
         'user.typeorm-entity.ts',
       ]),

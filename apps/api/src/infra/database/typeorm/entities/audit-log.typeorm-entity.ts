@@ -39,6 +39,9 @@ export class AuditLogTypeormEntity implements AuditLogEntity {
   @Column({ type: 'jsonb' })
   diff: AuditDiff;
 
+  @Column({ type: 'text', nullable: true })
+  justification: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }

@@ -333,7 +333,9 @@ Dentro de infra o trabalho se parte em dois contratos: `MailRenderer` monta o co
 
 ## Auditoria
 
-Edição de registro entra em `audit_logs`: `entity` + `entity_id` dizem de quem é a linha, `diff` guarda `{ campo: { from, to } }` e `actor_user_id` diz quem editou. Hoje passam por ela a troca de chave PIX, a de e-mail e a de ocupação. As trilhas de status e de cupom ainda moram nas tabelas delas.
+Toda mudança de registro entra em `audit_logs`: `entity` + `entity_id` dizem de quem é a linha, `change_type` diz se o registro nasceu (`CREATE`) ou mudou (`UPDATE`), `diff` guarda `{ campo: { from, to } }`, `justification` guarda o motivo quando há um, e `actor_user_id` diz quem agiu. Passam por ela o cadastro e cada mudança de status (`diff.status`, com o motivo da reprovação), a emissão e as alterações do cupom (`entity = COUPON`) e as edições do perfil: chave PIX, e-mail e ocupação. As antigas `affiliate_status_history` e `affiliate_coupon_history` foram migradas para cá e apagadas.
+
+O painel lê tudo numa rota só, `GET /v1/admin/affiliates/:publicId/audit-logs`: as linhas do afiliado e as do cupom dele, da mais recente para a mais antiga. Quando duas têm o mesmo instante, o `id` desempata, e é por isso que a ordem de gravação dentro da transação importa.
 
 - **Na mesma transação da escrita, nunca depois.** Edição auditada vira método do repositório (`updateWithAudit`), que trava a linha, grava e chama `recordAuditLog` (`src/infra/database/typeorm/repositories/record-audit-log.ts`) com o mesmo `manager`. Se a escrita volta, a trilha volta junto. Um `try/catch` que só avisa, como em outros projetos, deixaria uma troca de PIX sem registro.
 - **O "antes" sai da linha travada**, não do use case: lido antes do lock, ele pode ser o de uma escrita que outra já envelheceu. O use case manda só a mudança e o autor.
@@ -376,7 +378,7 @@ O que sobra é o registro **e** a consulta ficarem sem resposta seguidas: o cupo
 
 **Divergência consciente da aprovação: a alteração não se desfaz na Porto se a gravação daqui falhar.** A aprovação desativa o cupom órfão porque perder a corrida é caminho normal; na alteração, falhar depois de a Porto aceitar exigiria o banco cair entre as duas chamadas ou o cupom sumir no meio — e não há fluxo que exclua cupom. Se acontecer, o painel mostra o valor anterior até alguém repetir a alteração — foi a escolha, no lugar de uma compensação que também pode falhar.
 
-**Toda mudança de cupom vai para `affiliate_coupon_history`**, na mesma transação da mudança: a criação dentro do `changeStatus`, cada alteração dentro do `CouponRepository.change`. Tabela própria, e não a trilha do cadastro, porque o antes e o depois são outros; o painel junta as duas numa linha do tempo só, lendo `GET .../coupon/history`.
+**Toda mudança de cupom vai para `audit_logs`**, com `entity = COUPON`, na mesma transação da mudança: a emissão dentro do `changeStatus`, cada alteração dentro do `CouponRepository.change`. O painel lê o cupom junto com o resto da trilha do afiliado, em `GET .../audit-logs`.
 
 **O registro nunca esquece um código, nem o falso.** Teste e2e que aprova duas vezes precisa de dois códigos: o `TRUNCATE` entre os testes limpa a nossa tabela, não a memória de quem registrou.
 

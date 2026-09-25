@@ -61,7 +61,10 @@ describe('Affiliate account (e2e)', () => {
     return { accessToken: (await signIn().expect(200)).body.accessToken, couponCode };
   }
 
-  /** A trilha de edições da Marina, com o autor já resolvido para o e-mail dele. */
+  /**
+   * As edições de perfil da Marina, com o autor já resolvido para o e-mail dele.
+   * O cadastro e a aprovação também estão na trilha, e ficam de fora aqui.
+   */
   async function auditTrail(): Promise<
     { entity: string; change_type: string; actor_email: string; diff: unknown }[]
   > {
@@ -70,7 +73,7 @@ describe('Affiliate account (e2e)', () => {
         FROM audit_logs l
         JOIN affiliates a ON a.id = l.entity_id AND l.entity = 'AFFILIATE'
         LEFT JOIN users actor ON actor.id = l.actor_user_id
-       WHERE a.cpf = '52998224725'
+       WHERE a.cpf = '52998224725' AND NOT l.diff ? 'status'
        ORDER BY l.id`);
   }
 
@@ -409,6 +412,27 @@ describe('Affiliate account (e2e)', () => {
           diff: { occupation: { from: 'INFLUENCER', to: 'CONTENT_CREATOR' } },
         },
       ]);
+    });
+
+    it('shows the change on the panel trail as made by the affiliate', async () => {
+      const { accessToken } = await signedIn();
+      const publicId = (
+        await api().get('/v1/affiliate/me').set('Authorization', `Bearer ${accessToken}`)
+      ).body.publicId;
+
+      await changeOccupation(accessToken).send({ occupation: 'CONTENT_CREATOR' }).expect(204);
+
+      const trail = await api()
+        .get(`/v1/admin/affiliates/${publicId}/audit-logs`)
+        .set('Authorization', `Bearer ${await signInOperator(e2e.app, e2e.dataSource)}`)
+        .expect(200);
+
+      expect(trail.body[0]).toMatchObject({
+        entity: 'AFFILIATE',
+        diff: { occupation: { from: 'INFLUENCER', to: 'CONTENT_CREATOR' } },
+        actorName: MARINA.fullName,
+        actorType: 'AFFILIATE',
+      });
     });
 
     it('refuses an occupation out of the list and keeps the one there', async () => {

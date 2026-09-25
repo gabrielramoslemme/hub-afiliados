@@ -117,10 +117,12 @@ export enum ReferralPeriodEnum {
  */
 export enum AuditEntityEnum {
   AFFILIATE = 'AFFILIATE',
+  COUPON = 'COUPON',
 }
 
 /** O que aconteceu com o registro auditado. */
 export enum AuditChangeTypeEnum {
+  CREATE = 'CREATE',
   UPDATE = 'UPDATE',
 }
 

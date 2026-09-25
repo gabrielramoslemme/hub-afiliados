@@ -6,7 +6,7 @@ import { ChangePixKeyUseCase } from '@Application/affiliates/change-pix-key.use-
 import { CreateAffiliateUseCase } from '@Application/affiliates/create-affiliate.use-case';
 import { GetAffiliateUseCase } from '@Application/affiliates/get-affiliate.use-case';
 import { GetAffiliateAccountUseCase } from '@Application/affiliates/get-affiliate-account.use-case';
-import { ListAffiliateStatusHistoryUseCase } from '@Application/affiliates/list-affiliate-status-history.use-case';
+import { ListAffiliateAuditLogsUseCase } from '@Application/affiliates/list-affiliate-audit-logs.use-case';
 import { ListAffiliatesUseCase } from '@Application/affiliates/list-affiliates.use-case';
 import { RejectAffiliateUseCase } from '@Application/affiliates/reject-affiliate.use-case';
 import { AdminLoginUseCase } from '@Application/auth/admin-login.use-case';
@@ -16,18 +16,16 @@ import { ResetPasswordUseCase } from '@Application/auth/reset-password.use-case'
 import { SetPasswordUseCase } from '@Application/auth/set-password.use-case';
 import { ChangeAffiliateCouponUseCase } from '@Application/coupons/change-affiliate-coupon.use-case';
 import { CheckCouponAvailabilityUseCase } from '@Application/coupons/check-coupon-availability.use-case';
-import { ListCouponHistoryUseCase } from '@Application/coupons/list-coupon-history.use-case';
 import { ApplyIncentiveEventUseCase } from '@Application/sales/apply-incentive-event.use-case';
 import { RecordInvalidIncentiveNotificationUseCase } from '@Application/sales/record-invalid-incentive-notification.use-case';
 import { AFFILIATE_REPOSITORY } from '@Domain/affiliates/affiliate.repository';
-import { AFFILIATE_STATUS_HISTORY_REPOSITORY } from '@Domain/affiliates/affiliate-status-history.repository';
+import { AUDIT_LOG_REPOSITORY } from '@Domain/audit/audit-log.repository';
 import { ACCESS_TOKEN_ISSUER } from '@Domain/auth/access-token';
 import { PASSWORD_HASHER } from '@Domain/auth/password-hasher';
 import { PASSWORD_RESET_TOKEN_REPOSITORY } from '@Domain/auth/password-reset-token.repository';
 import { TOKEN_GENERATOR } from '@Domain/auth/token-generator';
 import { COUPON_REPOSITORY } from '@Domain/coupons/coupon.repository';
 import { COUPON_GATEWAY } from '@Domain/coupons/coupon-gateway';
-import { COUPON_HISTORY_REPOSITORY } from '@Domain/coupons/coupon-history.repository';
 import { LINK_BUILDER } from '@Domain/notifications/link-builder';
 import { MAILER } from '@Domain/notifications/mailer';
 import { INCENTIVE_EVENT_REPOSITORY } from '@Domain/sales/incentive-event.repository';
@@ -61,10 +59,7 @@ const USE_CASES = [
   provideUseCase(AdminLoginUseCase, [USER_REPOSITORY, PASSWORD_HASHER, ACCESS_TOKEN_ISSUER, CLOCK]),
   provideUseCase(ListAffiliatesUseCase, [AFFILIATE_REPOSITORY]),
   provideUseCase(GetAffiliateUseCase, [AFFILIATE_REPOSITORY]),
-  provideUseCase(ListAffiliateStatusHistoryUseCase, [
-    AFFILIATE_REPOSITORY,
-    AFFILIATE_STATUS_HISTORY_REPOSITORY,
-  ]),
+  provideUseCase(ListAffiliateAuditLogsUseCase, [AFFILIATE_REPOSITORY, AUDIT_LOG_REPOSITORY]),
   provideUseCase(ApproveAffiliateUseCase, [
     AFFILIATE_REPOSITORY,
     USER_REPOSITORY,
@@ -83,7 +78,6 @@ const USE_CASES = [
     COUPON_REPOSITORY,
     COUPON_GATEWAY,
   ]),
-  provideUseCase(ListCouponHistoryUseCase, [AFFILIATE_REPOSITORY, COUPON_HISTORY_REPOSITORY]),
   provideUseCase(RejectAffiliateUseCase, [AFFILIATE_REPOSITORY, USER_REPOSITORY, MAILER]),
   provideUseCase(AffiliateLoginUseCase, [
     USER_REPOSITORY,

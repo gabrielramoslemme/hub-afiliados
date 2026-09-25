@@ -4,8 +4,14 @@ import { buildAuditDiff } from '@Domain/audit/audit-diff.util';
 import { AuditTarget } from '@Domain/audit/audit-log.entity';
 import { AuditLogTypeormEntity } from '@Infra/database/typeorm/entities/audit-log.typeorm-entity';
 
+interface RecordAuditLogOptions {
+  /** `CREATE` quando o registro nasce: aí o `before` é vazio e todo campo vai do nulo ao valor. */
+  changeType?: AuditChangeTypeEnum;
+  justification?: string | null;
+}
+
 /**
- * Registra uma edição em `audit_logs`, na transação de quem chama. Recebe o
+ * Registra uma mudança em `audit_logs`, na transação de quem chama. Recebe o
  * `manager` porque a linha da trilha tem que voltar junto com a mudança que ela
  * descreve — é o que o repositório de cada entidade garante, e por isso isto
  * mora em infra e nunca atravessa o contrato.
@@ -19,6 +25,7 @@ export async function recordAuditLog(
   target: AuditTarget,
   before: Readonly<Record<string, unknown>>,
   after: Readonly<Record<string, unknown>>,
+  options: RecordAuditLogOptions = {},
 ): Promise<void> {
   const diff = buildAuditDiff(before, after);
   if (Object.keys(diff).length === 0) return;
@@ -26,11 +33,11 @@ export async function recordAuditLog(
   // `save`, e não `insert`: o tipo do `insert` trata o objeto da coluna `jsonb`
   // como entidade aninhada e recusa o `diff`.
   await manager.save(
-    AuditLogTypeormEntity,
     manager.create(AuditLogTypeormEntity, {
       ...target,
-      changeType: AuditChangeTypeEnum.UPDATE,
+      changeType: options.changeType ?? AuditChangeTypeEnum.UPDATE,
       diff,
+      justification: options.justification ?? null,
     }),
   );
 }

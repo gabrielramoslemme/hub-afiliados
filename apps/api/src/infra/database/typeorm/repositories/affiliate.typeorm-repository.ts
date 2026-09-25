@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { AffiliateStatusEnum, AuditEntityEnum, UserTypeEnum } from '@porto/contracts';
+import {
+  AffiliateStatusEnum,
+  AuditChangeTypeEnum,
+  AuditEntityEnum,
+  UserTypeEnum,
+} from '@porto/contracts';
 import {
   AffiliateDetail,
   AffiliateEntity,
@@ -24,9 +29,7 @@ import {
 import { sanitizeCpf } from '@Domain/affiliates/cpf.util';
 import { CouponCodeUnavailableError } from '@Domain/coupons/coupons.errors';
 import { AffiliateTypeormEntity } from '@Infra/database/typeorm/entities/affiliate.typeorm-entity';
-import { AffiliateStatusHistoryTypeormEntity } from '@Infra/database/typeorm/entities/affiliate-status-history.typeorm-entity';
 import { CouponTypeormEntity } from '@Infra/database/typeorm/entities/coupon.typeorm-entity';
-import { CouponHistoryTypeormEntity } from '@Infra/database/typeorm/entities/coupon-history.typeorm-entity';
 import { UserTypeormEntity } from '@Infra/database/typeorm/entities/user.typeorm-entity';
 import { recordAuditLog } from './record-audit-log';
 
@@ -183,13 +186,17 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
         Object.assign(affiliate, { status: input.toStatus }, input.changes ?? {});
         const updated = await manager.save(affiliate);
 
-        await manager.insert(AffiliateStatusHistoryTypeormEntity, {
-          affiliateId: affiliate.id,
-          fromStatus,
-          toStatus: input.toStatus,
-          reason: input.reason ?? null,
-          actorUserId: input.actorUserId ?? null,
-        });
+        await recordAuditLog(
+          manager,
+          {
+            entity: AuditEntityEnum.AFFILIATE,
+            entityId: affiliate.id,
+            actorUserId: input.actorUserId ?? null,
+          },
+          { status: fromStatus },
+          { status: input.toStatus },
+          { justification: input.reason ?? null },
+        );
 
         /*
           O cupom entra na mesma transação do status e da trilha porque o código
@@ -206,14 +213,17 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
           });
 
           // A emissão é o primeiro registro da trilha do cupom, e sai com quem aprovou.
-          await manager.insert(CouponHistoryTypeormEntity, {
-            couponId: inserted.identifiers[0].id,
-            fromStatus: null,
-            toStatus: input.coupon.status,
-            fromDiscountPercent: null,
-            toDiscountPercent: input.coupon.discountPercent,
-            actorUserId: input.actorUserId ?? null,
-          });
+          await recordAuditLog(
+            manager,
+            {
+              entity: AuditEntityEnum.COUPON,
+              entityId: inserted.identifiers[0].id,
+              actorUserId: input.actorUserId ?? null,
+            },
+            {},
+            input.coupon,
+            { changeType: AuditChangeTypeEnum.CREATE },
+          );
         }
 
         return updated;
@@ -254,13 +264,14 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
           }),
         );
 
-        await manager.insert(AffiliateStatusHistoryTypeormEntity, {
-          affiliateId: affiliate.id,
-          fromStatus: null,
-          toStatus: AffiliateStatusEnum.PENDING_APPROVAL,
-          reason: null,
-          actorUserId: null,
-        });
+        // Sem autor: o cadastro público não tem sessão.
+        await recordAuditLog(
+          manager,
+          { entity: AuditEntityEnum.AFFILIATE, entityId: affiliate.id, actorUserId: null },
+          {},
+          { status: affiliate.status },
+          { changeType: AuditChangeTypeEnum.CREATE },
+        );
 
         return { ...affiliate, user };
       });
