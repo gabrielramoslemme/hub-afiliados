@@ -53,10 +53,10 @@ export class ChangePixKeyUseCase implements UseCase<ChangePixKeyInput, void> {
       throw new PixKeyMismatchError();
     }
 
-    await this.affiliateRepository.save({
-      id: affiliate.id,
-      pixKeyType: input.pixKeyType,
-      pixKey,
+    await this.affiliateRepository.updateWithAudit({
+      affiliateId: affiliate.id,
+      changes: { pixKeyType: input.pixKeyType, pixKey },
+      actorUserId: user.id,
     });
 
     await this.mailer.send({

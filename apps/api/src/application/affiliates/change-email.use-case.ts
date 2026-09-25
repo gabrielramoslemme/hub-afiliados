@@ -1,4 +1,4 @@
-import { MailTemplateEnum } from '@porto/contracts';
+import { AuditEntityEnum, MailTemplateEnum } from '@porto/contracts';
 import { EmailAlreadyRegisteredError } from '@Domain/affiliates/affiliates.errors';
 import { UnknownAffiliateError, WrongPasswordError } from '@Domain/auth/auth.errors';
 import { PasswordHasher } from '@Domain/auth/password-hasher';
@@ -45,7 +45,15 @@ export class ChangeEmailUseCase implements UseCase<ChangeEmailInput, void> {
     const owner = await this.userRepository.findByEmail(email);
     if (owner) throw new EmailAlreadyRegisteredError();
 
-    await this.userRepository.save({ id: user.id, email });
+    await this.userRepository.updateWithAudit({
+      userId: user.id,
+      changes: { email },
+      audit: {
+        entity: AuditEntityEnum.AFFILIATE,
+        entityId: user.affiliate.id,
+        actorUserId: user.id,
+      },
+    });
 
     await this.mailer.send({
       template: MailTemplateEnum.EMAIL_CHANGED,

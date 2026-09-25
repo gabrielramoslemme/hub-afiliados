@@ -331,6 +331,16 @@ O log da falha leva o template e o stack, **sem o endereço de quem receberia**:
 
 Dentro de infra o trabalho se parte em dois contratos: `MailRenderer` monta o conteúdo e `MailProvider` despacha. `MAIL_PROVIDER` escolhe o fornecedor concreto (`logger` em dev e teste, `resend` fora) — três ports em camadas diferentes, de propósito: o domínio quer enviar, infra sabe o que escrever e por onde mandar. **O template mora em código**, como componente React Email em `services/email/templates/`, nunca no painel do fornecedor: o registry é um `Record<MailTemplateEnum, …>`, então template novo sem entrada ali é erro de type-check. Templates, gatilhos e variáveis em [`docs/EMAILS.md`](docs/EMAILS.md).
 
+## Auditoria
+
+Edição de registro entra em `audit_logs`: `entity` + `entity_id` dizem de quem é a linha, `diff` guarda `{ campo: { from, to } }` e `actor_user_id` diz quem editou. Hoje passam por ela a troca de chave PIX e a de e-mail. As trilhas de status e de cupom ainda moram nas tabelas delas.
+
+- **Na mesma transação da escrita, nunca depois.** Edição auditada vira método do repositório (`updateWithAudit`), que trava a linha, grava e chama `recordAuditLog` (`src/infra/database/typeorm/repositories/record-audit-log.ts`) com o mesmo `manager`. Se a escrita volta, a trilha volta junto. Um `try/catch` que só avisa, como em outros projetos, deixaria uma troca de PIX sem registro.
+- **O "antes" sai da linha travada**, não do use case: lido antes do lock, ele pode ser o de uma escrita que outra já envelheceu. O use case manda só a mudança e o autor.
+- **Campo novo editável:** entra na união de `changes` do `Update...WithAuditInput`, e com isso já passa pela trilha. Edição que não muda nada não grava linha.
+- **A trilha é do dono do dado, não da tabela.** O e-mail mora em `users`, mas vai para a trilha do afiliado (`AuditTarget`), que é onde quem investiga procura.
+- **Os valores ficam completos, chave PIX inclusive.** É dado, não log: responde para onde o pagamento ia antes de um desvio. Nada daqui vai para o `Logger`, e mascarar na leitura é da rota que expuser a trilha.
+
 ## Cupons
 
 **O cupom é nosso: nasce e é gerenciado aqui, e a Porto Serviços só o registra**, pelo INT-01, para ele valer no checkout. `affiliate_coupons` é a fonte da verdade — código, percentual e situação são o que a analista escolheu, nunca o eco que a Porto devolve. O use case recebe o port `CouponGateway` (`src/domain/coupons/coupon-gateway.ts`) e não conhece fornecedor nenhum: `codigoCupom`, `percentualDesconto` e `flagCupomCumulativo` vivem inteiros em `services/coupons/`, e é isso que permite trocar quem registra sem tocar um arquivo de regra.

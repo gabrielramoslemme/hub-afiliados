@@ -61,6 +61,19 @@ describe('Affiliate account (e2e)', () => {
     return { accessToken: (await signIn().expect(200)).body.accessToken, couponCode };
   }
 
+  /** A trilha de edições da Marina, com o autor já resolvido para o e-mail dele. */
+  async function auditTrail(): Promise<
+    { entity: string; change_type: string; actor_email: string; diff: unknown }[]
+  > {
+    return e2e.dataSource.query(`
+      SELECT l.entity, l.change_type, actor.email AS actor_email, l.diff
+        FROM audit_logs l
+        JOIN affiliates a ON a.id = l.entity_id AND l.entity = 'AFFILIATE'
+        LEFT JOIN users actor ON actor.id = l.actor_user_id
+       WHERE a.cpf = '52998224725'
+       ORDER BY l.id`);
+  }
+
   /** Pede a recuperação e devolve o token em claro que foi para o e-mail. */
   async function recoveryToken(): Promise<string> {
     await api()
@@ -294,6 +307,36 @@ describe('Affiliate account (e2e)', () => {
       expect(e2e.mail.sentTo(MARINA.email).at(-1)?.text).toContain('(11) *****-4321');
     });
 
+    it('records the previous and the new key in the audit trail, authored by the affiliate', async () => {
+      const { accessToken } = await signedIn();
+
+      await changePixKey(accessToken)
+        .send({ ...newKey, currentPassword: PASSWORD })
+        .expect(204);
+
+      expect(await auditTrail()).toEqual([
+        {
+          entity: 'AFFILIATE',
+          change_type: 'UPDATE',
+          actor_email: MARINA.email,
+          diff: {
+            pixKeyType: { from: 'EMAIL', to: 'PHONE' },
+            pixKey: { from: MARINA.pixKey, to: '11987654321' },
+          },
+        },
+      ]);
+    });
+
+    it('leaves the audit trail alone when the key sent is the one already there', async () => {
+      const { accessToken } = await signedIn();
+
+      await changePixKey(accessToken)
+        .send({ pixKeyType: 'EMAIL', pixKey: MARINA.pixKey, currentPassword: PASSWORD })
+        .expect(204);
+
+      expect(await auditTrail()).toEqual([]);
+    });
+
     it('refuses a wrong password and keeps the key', async () => {
       const { accessToken } = await signedIn();
 
@@ -303,6 +346,7 @@ describe('Affiliate account (e2e)', () => {
 
       expect(response.body.code).toBe(AuthErrorCodeEnum.WRONG_PASSWORD);
       expect(await storedPixKey()).toEqual({ pix_key_type: 'EMAIL', pix_key: MARINA.pixKey });
+      expect(await auditTrail()).toEqual([]);
     });
 
     it('refuses a cpf key that is not the cpf of the registration', async () => {
@@ -376,6 +420,23 @@ describe('Affiliate account (e2e)', () => {
       expect(e2e.mail.sentTo(MARINA.email).at(-1)?.text).toContain(NEW_EMAIL);
     });
 
+    it('records the previous and the new email in the audit trail of the affiliate', async () => {
+      const { accessToken } = await signedIn();
+
+      await changeEmail(accessToken)
+        .send({ email: NEW_EMAIL, currentPassword: PASSWORD })
+        .expect(204);
+
+      expect(await auditTrail()).toEqual([
+        {
+          entity: 'AFFILIATE',
+          change_type: 'UPDATE',
+          actor_email: NEW_EMAIL,
+          diff: { email: { from: MARINA.email, to: NEW_EMAIL } },
+        },
+      ]);
+    });
+
     it('refuses a wrong password and keeps the email', async () => {
       const { accessToken } = await signedIn();
 
@@ -412,6 +473,8 @@ describe('Affiliate account (e2e)', () => {
 
       expect(response.body.code).toBe(RegistrationErrorCodeEnum.EMAIL_ALREADY_REGISTERED);
       expect(await storedEmail()).toBe(MARINA.email);
+      // A trilha volta junto com a escrita que o índice recusou.
+      expect(await auditTrail()).toEqual([]);
     });
 
     it('refuses something that is not an email', async () => {

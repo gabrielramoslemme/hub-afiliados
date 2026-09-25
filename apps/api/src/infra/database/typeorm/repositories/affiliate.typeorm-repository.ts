@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { AffiliateStatusEnum, UserTypeEnum } from '@porto/contracts';
+import { AffiliateStatusEnum, AuditEntityEnum, UserTypeEnum } from '@porto/contracts';
 import {
   AffiliateDetail,
   AffiliateEntity,
@@ -14,6 +14,7 @@ import {
   CreateAffiliateWithUserInput,
   SearchAffiliatesInput,
   SearchAffiliatesResult,
+  UpdateAffiliateWithAuditInput,
 } from '@Domain/affiliates/affiliate.repository';
 import {
   CpfAlreadyRegisteredError,
@@ -27,6 +28,7 @@ import { AffiliateStatusHistoryTypeormEntity } from '@Infra/database/typeorm/ent
 import { CouponTypeormEntity } from '@Infra/database/typeorm/entities/coupon.typeorm-entity';
 import { CouponHistoryTypeormEntity } from '@Infra/database/typeorm/entities/coupon-history.typeorm-entity';
 import { UserTypeormEntity } from '@Infra/database/typeorm/entities/user.typeorm-entity';
+import { recordAuditLog } from './record-audit-log';
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -125,6 +127,36 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
 
   save(affiliate: Partial<AffiliateEntity>): Promise<AffiliateEntity> {
     return this.repository.save(this.repository.create(affiliate));
+  }
+
+  updateWithAudit(input: UpdateAffiliateWithAuditInput): Promise<AffiliateEntity | null> {
+    return this.dataSource.transaction(async (manager) => {
+      // O lock garante que o "antes" gravado na trilha é o que valia quando a
+      // edição entrou, e não o de uma leitura que outra escrita já envelheceu.
+      const affiliate = await manager.findOne(AffiliateTypeormEntity, {
+        where: { id: input.affiliateId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!affiliate) return null;
+
+      const before = { ...affiliate };
+      Object.assign(affiliate, input.changes);
+      const updated = await manager.save(affiliate);
+
+      await recordAuditLog(
+        manager,
+        {
+          entity: AuditEntityEnum.AFFILIATE,
+          entityId: affiliate.id,
+          actorUserId: input.actorUserId,
+        },
+        before,
+        input.changes,
+      );
+
+      return updated;
+    });
   }
 
   async changeStatus(input: ChangeAffiliateStatusInput): Promise<AffiliateEntity | null> {
