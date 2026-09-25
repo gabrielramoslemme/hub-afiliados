@@ -5,4 +5,5 @@ export const userRepositoryMock = (): jest.Mocked<UserRepository> => ({
   findByPublicId: jest.fn().mockResolvedValue(null),
   findById: jest.fn().mockResolvedValue(null),
   save: jest.fn(),
+  updateWithAudit: jest.fn(),
 });

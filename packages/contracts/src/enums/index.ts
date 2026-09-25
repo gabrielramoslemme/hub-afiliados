@@ -99,6 +99,19 @@ export enum ReferralPeriodEnum {
   ALL = 'ALL',
 }
 
+/**
+ * De que registro é uma linha de `audit_logs`. A tabela é global, e o par
+ * `entity` + `entity_id` é o que diz a quem a alteração pertence.
+ */
+export enum AuditEntityEnum {
+  AFFILIATE = 'AFFILIATE',
+}
+
+/** O que aconteceu com o registro auditado. */
+export enum AuditChangeTypeEnum {
+  UPDATE = 'UPDATE',
+}
+
 export enum MailTemplateEnum {
   REGISTRATION_RECEIVED = 'REGISTRATION_RECEIVED',
   REGISTRATION_APPROVED = 'REGISTRATION_APPROVED',

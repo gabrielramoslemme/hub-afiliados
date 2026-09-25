@@ -52,11 +52,21 @@ describe('ChangePixKeyUseCase', () => {
   it('stores the new key, normalized, on the affiliate behind the token', async () => {
     await useCase.execute(input());
 
-    expect(affiliateRepository.save).toHaveBeenCalledWith({
-      id: affiliate.id,
-      pixKeyType: PixKeyTypeEnum.PHONE,
-      pixKey: '11999998888',
-    });
+    expect(affiliateRepository.updateWithAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        affiliateId: affiliate.id,
+        changes: { pixKeyType: PixKeyTypeEnum.PHONE, pixKey: '11999998888' },
+      }),
+    );
+  });
+
+  // A trilha responde quem desviou o pagamento: aqui é sempre o dono da sessão.
+  it('records the affiliate as the author of the change in the audit trail', async () => {
+    await useCase.execute(input());
+
+    expect(affiliateRepository.updateWithAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ actorUserId: user.id }),
+    );
   });
 
   it('checks the typed password against the stored hash', async () => {
@@ -69,7 +79,7 @@ describe('ChangePixKeyUseCase', () => {
     passwordHasher.compare.mockResolvedValue(false);
 
     await expect(useCase.execute(input())).rejects.toThrow(WrongPasswordError);
-    expect(affiliateRepository.save).not.toHaveBeenCalled();
+    expect(affiliateRepository.updateWithAudit).not.toHaveBeenCalled();
     expect(mailer.send).not.toHaveBeenCalled();
   });
 
@@ -77,21 +87,21 @@ describe('ChangePixKeyUseCase', () => {
     userRepository.findByPublicId.mockResolvedValue({ ...user, password: null, affiliate });
 
     await expect(useCase.execute(input())).rejects.toThrow(WrongPasswordError);
-    expect(affiliateRepository.save).not.toHaveBeenCalled();
+    expect(affiliateRepository.updateWithAudit).not.toHaveBeenCalled();
   });
 
   it('refuses a key that does not fit its type', async () => {
     await expect(
       useCase.execute(input({ pixKeyType: PixKeyTypeEnum.EMAIL, pixKey: 'marina' })),
     ).rejects.toThrow(InvalidPixKeyError);
-    expect(affiliateRepository.save).not.toHaveBeenCalled();
+    expect(affiliateRepository.updateWithAudit).not.toHaveBeenCalled();
   });
 
   it('refuses a cpf key that is not the cpf of the registration', async () => {
     await expect(
       useCase.execute(input({ pixKeyType: PixKeyTypeEnum.CPF, pixKey: '111.444.777-35' })),
     ).rejects.toThrow(PixKeyMismatchError);
-    expect(affiliateRepository.save).not.toHaveBeenCalled();
+    expect(affiliateRepository.updateWithAudit).not.toHaveBeenCalled();
   });
 
   /*
@@ -110,11 +120,11 @@ describe('ChangePixKeyUseCase', () => {
   it('accepts the cpf of the registration as the key', async () => {
     await useCase.execute(input({ pixKeyType: PixKeyTypeEnum.CPF, pixKey: '529.982.247-25' }));
 
-    expect(affiliateRepository.save).toHaveBeenCalledWith({
-      id: affiliate.id,
-      pixKeyType: PixKeyTypeEnum.CPF,
-      pixKey: '52998224725',
-    });
+    expect(affiliateRepository.updateWithAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changes: { pixKeyType: PixKeyTypeEnum.CPF, pixKey: '52998224725' },
+      }),
+    );
   });
 
   it('warns the owner by email, showing the new key masked', async () => {

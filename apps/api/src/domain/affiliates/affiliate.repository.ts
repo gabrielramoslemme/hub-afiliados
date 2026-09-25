@@ -64,6 +64,16 @@ export interface CreateAffiliateWithUserInput {
   termsAcceptedAt: Date;
 }
 
+/**
+ * Uma edição do cadastro que a trilha de auditoria registra. A união fecha quais
+ * colunas passam por aqui: campo novo editável entra nela, e com isso na trilha.
+ */
+export interface UpdateAffiliateWithAuditInput {
+  affiliateId: number;
+  changes: Partial<Pick<AffiliateEntity, 'pixKeyType' | 'pixKey'>>;
+  actorUserId: number | null;
+}
+
 export interface AffiliateRepository {
   findByCpf(cpf: string): Promise<AffiliateEntity | null>;
   findByRg(rg: string): Promise<AffiliateEntity | null>;
@@ -72,6 +82,14 @@ export interface AffiliateRepository {
   /** A fila do painel: filtra, busca, ordena e pagina numa consulta só. */
   search(input: SearchAffiliatesInput): Promise<SearchAffiliatesResult>;
   save(affiliate: Partial<AffiliateEntity>): Promise<AffiliateEntity>;
+  /**
+   * Grava a edição e a linha de `audit_logs` na mesma transação. O "antes" sai
+   * da linha travada dentro dela, e sem campo que de fato mudou nada entra na
+   * trilha.
+   *
+   * Nulo quando o afiliado não existe, e aí nada é gravado.
+   */
+  updateWithAudit(input: UpdateAffiliateWithAuditInput): Promise<AffiliateEntity | null>;
   /**
    * Muda o status e grava o histórico na mesma transação. O status anterior sai
    * da linha travada dentro dela — recebê-lo de fora permitiria registrar uma

@@ -1,4 +1,4 @@
-import { MailTemplateEnum } from '@porto/contracts';
+import { AuditEntityEnum, MailTemplateEnum } from '@porto/contracts';
 import { EmailAlreadyRegisteredError } from '@Domain/affiliates/affiliates.errors';
 import { UnknownAffiliateError, WrongPasswordError } from '@Domain/auth/auth.errors';
 import { buildAffiliate } from '@Testing/factories/affiliate.factory';
@@ -43,10 +43,23 @@ describe('ChangeEmailUseCase', () => {
   it('stores the new email on the user behind the token', async () => {
     await useCase.execute(input());
 
-    expect(userRepository.save).toHaveBeenCalledWith({
-      id: user.id,
-      email: 'marina.nova@email.com',
-    });
+    expect(userRepository.updateWithAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: user.id, changes: { email: 'marina.nova@email.com' } }),
+    );
+  });
+
+  /*
+    O e-mail mora em `users`, mas a trilha é a do afiliado: é lá que a analista
+    procura, junto com a troca de PIX, quando investiga uma conta tomada.
+  */
+  it('records the change in the audit trail of the affiliate, authored by its owner', async () => {
+    await useCase.execute(input());
+
+    expect(userRepository.updateWithAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        audit: { entity: AuditEntityEnum.AFFILIATE, entityId: affiliate.id, actorUserId: user.id },
+      }),
+    );
   });
 
   it('checks the typed password against the stored hash', async () => {
@@ -59,7 +72,7 @@ describe('ChangeEmailUseCase', () => {
     passwordHasher.compare.mockResolvedValue(false);
 
     await expect(useCase.execute(input())).rejects.toThrow(WrongPasswordError);
-    expect(userRepository.save).not.toHaveBeenCalled();
+    expect(userRepository.updateWithAudit).not.toHaveBeenCalled();
     expect(mailer.send).not.toHaveBeenCalled();
   });
 
@@ -67,7 +80,7 @@ describe('ChangeEmailUseCase', () => {
     userRepository.findByPublicId.mockResolvedValue({ ...user, password: null, affiliate });
 
     await expect(useCase.execute(input())).rejects.toThrow(WrongPasswordError);
-    expect(userRepository.save).not.toHaveBeenCalled();
+    expect(userRepository.updateWithAudit).not.toHaveBeenCalled();
   });
 
   it('refuses an email that already belongs to another account', async () => {
@@ -77,7 +90,7 @@ describe('ChangeEmailUseCase', () => {
     });
 
     await expect(useCase.execute(input())).rejects.toThrow(EmailAlreadyRegisteredError);
-    expect(userRepository.save).not.toHaveBeenCalled();
+    expect(userRepository.updateWithAudit).not.toHaveBeenCalled();
     expect(mailer.send).not.toHaveBeenCalled();
   });
 
@@ -95,7 +108,7 @@ describe('ChangeEmailUseCase', () => {
   it('neither saves nor warns when the email is the one already there', async () => {
     await useCase.execute(input({ email: 'marina@email.com' }));
 
-    expect(userRepository.save).not.toHaveBeenCalled();
+    expect(userRepository.updateWithAudit).not.toHaveBeenCalled();
     expect(mailer.send).not.toHaveBeenCalled();
   });
 
@@ -115,6 +128,6 @@ describe('ChangeEmailUseCase', () => {
     userRepository.findByPublicId.mockResolvedValue({ ...user, affiliate: null });
 
     await expect(useCase.execute(input())).rejects.toThrow(UnknownAffiliateError);
-    expect(userRepository.save).not.toHaveBeenCalled();
+    expect(userRepository.updateWithAudit).not.toHaveBeenCalled();
   });
 });
