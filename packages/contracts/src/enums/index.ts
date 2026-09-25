@@ -184,9 +184,44 @@ export enum IncentiveErrorCodeEnum {
   INVALID_PAYLOAD = 'INC-006',
 }
 
+/** Onde está um saque via PIX. `FAILED` e `RETURNED` devolvem o valor ao saldo. */
+export enum WithdrawalStatusEnum {
+  /** Gravado aqui; ainda não se sabe se o fornecedor de pagamento recebeu. */
+  REQUESTED = 'REQUESTED',
+  /** Aceito pelo fornecedor, esperando o PIX cair. */
+  PROCESSING = 'PROCESSING',
+  PAID = 'PAID',
+  FAILED = 'FAILED',
+  /** O banco de destino devolveu o PIX — inclusive depois de pago. */
+  RETURNED = 'RETURNED',
+}
+
+export enum WithdrawalErrorCodeEnum {
+  NO_BALANCE = 'WDR-001',
+  /** O fornecedor recusou o PIX, em geral pela chave. O valor já voltou ao saldo. */
+  REFUSED = 'WDR-002',
+  /** O saque está desligado neste ambiente: a integração não tem credencial. */
+  UNAVAILABLE = 'WDR-003',
+}
+
+/** O que uma notificação ou consulta do fornecedor fez com o saque. */
+export enum PayoutEventOutcomeEnum {
+  APPLIED = 'APPLIED',
+  DUPLICATE = 'DUPLICATE',
+  IGNORED = 'IGNORED',
+  UNKNOWN_WITHDRAWAL = 'UNKNOWN_WITHDRAWAL',
+}
+
+/** De onde veio a mudança: o webhook do fornecedor ou a reconciliação agendada. */
+export enum PayoutEventSourceEnum {
+  WEBHOOK = 'WEBHOOK',
+  RECONCILIATION = 'RECONCILIATION',
+}
+
 /** Todo `code` que o corpo de erro da API pode carregar. */
 export type ApiErrorCode =
   | AuthErrorCodeEnum
   | RegistrationErrorCodeEnum
   | CouponErrorCodeEnum
-  | IncentiveErrorCodeEnum;
+  | IncentiveErrorCodeEnum
+  | WithdrawalErrorCodeEnum;
