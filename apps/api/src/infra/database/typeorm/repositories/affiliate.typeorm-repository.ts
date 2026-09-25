@@ -5,6 +5,7 @@ import {
   AffiliateStatusEnum,
   AuditChangeTypeEnum,
   AuditEntityEnum,
+  IncentiveStatusEnum,
   UserTypeEnum,
 } from '@porto/contracts';
 import {
@@ -13,6 +14,7 @@ import {
   AffiliateWithUser,
 } from '@Domain/affiliates/affiliate.entity';
 import {
+  AffiliateReportRecord,
   AffiliateRepository,
   AffiliateSortBy,
   ChangeAffiliateStatusInput,
@@ -30,6 +32,7 @@ import { sanitizeCpf } from '@Domain/affiliates/cpf.util';
 import { CouponCodeUnavailableError } from '@Domain/coupons/coupons.errors';
 import { AffiliateTypeormEntity } from '@Infra/database/typeorm/entities/affiliate.typeorm-entity';
 import { CouponTypeormEntity } from '@Infra/database/typeorm/entities/coupon.typeorm-entity';
+import { SaleTypeormEntity } from '@Infra/database/typeorm/entities/sale.typeorm-entity';
 import { UserTypeormEntity } from '@Infra/database/typeorm/entities/user.typeorm-entity';
 import { recordAuditLog } from './record-audit-log';
 
@@ -130,6 +133,50 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
       .getManyAndCount();
 
     return { rows, total };
+  }
+
+  async listForReport(): Promise<AffiliateReportRecord[]> {
+    const affiliates = await this.repository.find({
+      relations: { user: true, coupon: true },
+      order: { createdAt: 'DESC', id: 'DESC' },
+    });
+
+    /*
+      A soma sai do banco, agrupada por cupom, em vez de carregar venda por venda:
+      a planilha lê a base inteira de uma vez. `bigint` porque a soma de muitos
+      `int` em centavos passa do teto de 32 bits, e o driver o devolve como texto.
+    */
+    const totals: Array<{
+      couponId: number;
+      count: string;
+      amountCents: string;
+      incentiveCents: string;
+    }> = await this.dataSource
+      .getRepository(SaleTypeormEntity)
+      .createQueryBuilder('sale')
+      .select('sale.couponId', 'couponId')
+      .addSelect('COUNT(*)', 'count')
+      .addSelect('SUM(sale.amountCents)', 'amountCents')
+      .addSelect('SUM(sale.incentiveCents)', 'incentiveCents')
+      .where('sale.incentiveStatus = :released', { released: IncentiveStatusEnum.RELEASED })
+      .groupBy('sale.couponId')
+      .getRawMany();
+
+    const byCoupon = new Map(
+      totals.map((row) => [
+        row.couponId,
+        {
+          count: Number(row.count),
+          amountCents: Number(row.amountCents),
+          incentiveCents: Number(row.incentiveCents),
+        },
+      ]),
+    );
+
+    return affiliates.map((affiliate) => ({
+      ...affiliate,
+      completedSales: affiliate.coupon ? (byCoupon.get(affiliate.coupon.id) ?? null) : null,
+    }));
   }
 
   save(affiliate: Partial<AffiliateEntity>): Promise<AffiliateEntity> {

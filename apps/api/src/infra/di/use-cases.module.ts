@@ -8,6 +8,7 @@ import { GetAffiliateUseCase } from '@Application/affiliates/get-affiliate.use-c
 import { GetAffiliateAccountUseCase } from '@Application/affiliates/get-affiliate-account.use-case';
 import { ListAffiliateAuditLogsUseCase } from '@Application/affiliates/list-affiliate-audit-logs.use-case';
 import { ListAffiliatesUseCase } from '@Application/affiliates/list-affiliates.use-case';
+import { ListAffiliatesReportUseCase } from '@Application/affiliates/list-affiliates-report.use-case';
 import { RejectAffiliateUseCase } from '@Application/affiliates/reject-affiliate.use-case';
 import { AdminLoginUseCase } from '@Application/auth/admin-login.use-case';
 import { AffiliateLoginUseCase } from '@Application/auth/affiliate-login.use-case';
@@ -60,6 +61,7 @@ const USE_CASES = [
   provideUseCase(CreateAffiliateUseCase, [USER_REPOSITORY, AFFILIATE_REPOSITORY, MAILER, CLOCK]),
   provideUseCase(AdminLoginUseCase, [USER_REPOSITORY, PASSWORD_HASHER, ACCESS_TOKEN_ISSUER, CLOCK]),
   provideUseCase(ListAffiliatesUseCase, [AFFILIATE_REPOSITORY]),
+  provideUseCase(ListAffiliatesReportUseCase, [AFFILIATE_REPOSITORY]),
   provideUseCase(GetAffiliateUseCase, [AFFILIATE_REPOSITORY]),
   provideUseCase(ListAffiliateAuditLogsUseCase, [AFFILIATE_REPOSITORY, AUDIT_LOG_REPOSITORY]),
   provideUseCase(ApproveAffiliateUseCase, [

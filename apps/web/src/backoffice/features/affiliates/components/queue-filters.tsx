@@ -1,7 +1,8 @@
-import { Search } from 'lucide-react';
+import { Download, Search } from 'lucide-react';
 import Link from 'next/link';
 import { AffiliateStatusEnum } from '@porto/contracts';
-import { QUEUE_PATH } from '@/backoffice/shared/routes';
+import { QUEUE_PATH, QUEUE_SHEET_PATH } from '@/backoffice/shared/routes';
+import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { cn } from '@/shared/lib/cn';
 import { type QueueParams, queueHref } from '../lib/queue-params';
@@ -98,6 +99,16 @@ export function QueueFilters({ params, total }: QueueFiltersProps) {
             Buscar
           </button>
         </form>
+
+        {/* Link e não ação: o arquivo sai de um route handler, e o navegador
+            cuida do download sem uma linha de JavaScript. A planilha leva a
+            base inteira, e não o recorte da fila. */}
+        <Button asChild variant="outline" size="sm">
+          <a href={QUEUE_SHEET_PATH} download>
+            <Download aria-hidden />
+            Baixar planilha
+          </a>
+        </Button>
       </div>
     </div>
   );

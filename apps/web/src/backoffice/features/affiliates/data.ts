@@ -5,11 +5,14 @@ import type {
   AffiliateAuditLogItem,
   AffiliateDetail,
   AffiliateListItem,
+  AffiliateReportRow,
   PaginatedResult,
 } from '@porto/contracts';
 import { SESSION_EXPIRED_PATH } from '@/backoffice/shared/routes';
 import { authedApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
+import { affiliatesSheetFileName, buildAffiliatesSheet } from './lib/affiliates-sheet';
+import { writeAffiliatesWorkbook } from './lib/affiliates-workbook';
 import { PAGE_SIZE, type QueueParams } from './lib/queue-params';
 
 /**
@@ -63,4 +66,21 @@ export function fetchAuditLogs(publicId: string): Promise<AffiliateAuditLogItem[
   return readOrSignIn(() =>
     authedApiFetch<AffiliateAuditLogItem[]>(`/admin/affiliates/${publicId}/audit-logs`, FRESH),
   );
+}
+
+export interface AffiliatesSheetFile {
+  fileName: string;
+  content: ArrayBuffer;
+}
+
+/** A planilha com todos os afiliados, já como arquivo — ignora os filtros da fila. */
+export async function fetchAffiliatesSheetFile(): Promise<AffiliatesSheetFile> {
+  const report = await readOrSignIn(() =>
+    authedApiFetch<AffiliateReportRow[]>('/admin/affiliates/report', FRESH),
+  );
+
+  return {
+    fileName: affiliatesSheetFileName(new Date()),
+    content: await writeAffiliatesWorkbook(buildAffiliatesSheet(report)),
+  };
 }

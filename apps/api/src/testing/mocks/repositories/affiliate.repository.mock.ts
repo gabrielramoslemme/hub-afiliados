@@ -6,6 +6,7 @@ export const affiliateRepositoryMock = (): jest.Mocked<AffiliateRepository> => (
   findByPublicId: jest.fn().mockResolvedValue(null),
   findByUserId: jest.fn().mockResolvedValue(null),
   search: jest.fn().mockResolvedValue({ rows: [], total: 0 }),
+  listForReport: jest.fn().mockResolvedValue([]),
   save: jest.fn(),
   updateWithAudit: jest.fn(),
   changeStatus: jest.fn().mockResolvedValue(null),
