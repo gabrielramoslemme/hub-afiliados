@@ -127,6 +127,37 @@ describe('TransfeeraPayoutGateway', () => {
       expect(JSON.stringify(logged.mock.calls)).not.toContain('52998224725');
     });
 
+    // A Transfeera pode devolver o CPF formatado mesmo quando mandamos só
+    // dígitos; a redação não pode depender de bater byte a byte com o que
+    // enviamos.
+    it('reads a 400 as a refusal, without the formatted cpf in the reason or the log', async () => {
+      fetchMock.mockResolvedValue(
+        json({ message: 'Chave não pertence ao titular do CPF 529.982.247-25' }, 400),
+      );
+
+      const error = (await gateway
+        .requestPayout(input)
+        .catch((thrown: unknown) => thrown)) as PayoutRefusedError;
+
+      expect(error).toBeInstanceOf(PayoutRefusedError);
+      expect(error.reason).not.toContain('529.982.247-25');
+      expect(JSON.stringify(logged.mock.calls)).not.toContain('529.982.247-25');
+    });
+
+    it('reads a 400 as a refusal, without the phone key in the format we sent it in the reason or the log', async () => {
+      fetchMock.mockResolvedValue(
+        json({ message: 'Chave +5511987654321 já pertence a outro titular' }, 400),
+      );
+
+      const error = (await gateway
+        .requestPayout({ ...input, pixKeyType: PixKeyTypeEnum.PHONE, pixKey: '11987654321' })
+        .catch((thrown: unknown) => thrown)) as PayoutRefusedError;
+
+      expect(error).toBeInstanceOf(PayoutRefusedError);
+      expect(error.reason).not.toContain('+5511987654321');
+      expect(JSON.stringify(logged.mock.calls)).not.toContain('+5511987654321');
+    });
+
     it.each([500, 502, 429])('reads a %s as the provider being down', async (status) => {
       fetchMock.mockResolvedValue(new Response('', { status }));
 

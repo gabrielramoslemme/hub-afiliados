@@ -55,7 +55,33 @@ function isRepeatedRequest(status: number, text: string): boolean {
   return status === 409 || (REFUSALS.has(status) && /idempot/i.test(text));
 }
 
-/** O motivo da recusa, sem a chave nem o CPF que a Transfeera às vezes cita. */
+/**
+ * Onze dígitos no molde do CPF, pontuação opcional — pega a Transfeera
+ * devolvendo o número formatado (`529.982.247-25`) mesmo quando mandamos só
+ * dígitos, sem depender de bater byte a byte com o que enviamos.
+ */
+const CPF_SHAPED = /\d{3}\.?\d{3}\.?\d{3}-?\d{2}/g;
+
+/** Escapa o segredo para valer como texto literal na regex, não como padrão. */
+function escapeForRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Troca toda ocorrência do segredo por `[removido]`, sem diferenciar
+ * maiúsculas de minúsculas — a chave de e-mail pode voltar com outra caixa.
+ */
+function redactSecret(text: string, secret: string): string {
+  if (!secret) return text;
+
+  return text.replace(new RegExp(escapeForRegExp(secret), 'gi'), '[removido]');
+}
+
+/**
+ * O motivo da recusa, sem a chave nem o CPF que a Transfeera às vezes cita —
+ * nem os valores exatos que mandamos (a chave, e a formatada quando é
+ * telefone, e o CPF), nem qualquer sequência que se pareça com um CPF.
+ */
 function scrubbedReason(text: string, secrets: string[]): string {
   let reason = FALLBACK_REASON;
 
@@ -67,9 +93,8 @@ function scrubbedReason(text: string, secrets: string[]): string {
     // Corpo que não é JSON: fica o motivo genérico, e o status vai para o log.
   }
 
-  return secrets
-    .filter(Boolean)
-    .reduce((clean, secret) => clean.split(secret).join('[removido]'), reason);
+  const withoutSecrets = secrets.reduce(redactSecret, reason);
+  return withoutSecrets.replace(CPF_SHAPED, '[removido]');
 }
 
 /**
@@ -132,7 +157,13 @@ export class TransfeeraPayoutGateway implements PayoutGateway {
       return { batchId: null };
     }
 
-    const reason = scrubbedReason(text, [input.pixKey, input.holderCpf]);
+    // A chave como guardamos e a chave como mandamos (a de telefone ganha o
+    // +55 antes de sair): a Transfeera pode ecoar qualquer uma das duas.
+    const reason = scrubbedReason(text, [
+      input.pixKey,
+      toTransfeeraPixKey(input.pixKeyType, input.pixKey),
+      input.holderCpf,
+    ]);
     this.logger.error(
       `Recusa da Transfeera ao criar o lote do saque ${input.reference}: ${response.status} ${reason}`,
     );
