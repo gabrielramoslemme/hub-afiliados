@@ -52,4 +52,12 @@ describe('AppLinkBuilder', () => {
       'https://afiliados.porto.example/admin/redefinir-senha?token=abc123',
     );
   });
+
+  it('points the wallet link at the affiliate wallet', () => {
+    const builder = new AppLinkBuilder(
+      configServiceMock({ APP_BASE_URL: 'https://afiliados.porto.example/' }),
+    );
+
+    expect(builder.walletLink()).toBe('https://afiliados.porto.example/minha-conta/carteira');
+  });
 });

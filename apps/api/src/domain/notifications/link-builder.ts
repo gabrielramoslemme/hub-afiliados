@@ -14,4 +14,6 @@ export interface LinkBuilder {
    * tela: a audiência que pediu é o que decide para onde o link aponta.
    */
   resetPasswordLink(token: string, audience: AuthAudienceEnum): string;
+  /** A carteira do afiliado, para o e-mail do saque levar direto ao extrato. */
+  walletLink(): string;
 }

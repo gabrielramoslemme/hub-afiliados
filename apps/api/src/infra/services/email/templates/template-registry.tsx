@@ -6,6 +6,8 @@ import { PixKeyChanged } from './pix-key-changed';
 import { RegistrationApproved } from './registration-approved';
 import { RegistrationReceived } from './registration-received';
 import { RegistrationRejected } from './registration-rejected';
+import { WithdrawalPaid } from './withdrawal-paid';
+import { WithdrawalReturned } from './withdrawal-returned';
 
 interface MailTemplateDefinition {
   subject: string;
@@ -74,6 +76,34 @@ export const MAIL_TEMPLATES: Record<MailTemplateEnum, MailTemplateDefinition> = 
     requiredVariables: ['name', 'newEmail'],
     build(variables) {
       return <EmailChanged name={variables.name} newEmail={variables.newEmail} />;
+    },
+  },
+  [MailTemplateEnum.WITHDRAWAL_PAID]: {
+    subject: 'Seu saque via PIX foi pago',
+    requiredVariables: ['name', 'amount', 'maskedPixKey', 'link'],
+    build(variables) {
+      return (
+        <WithdrawalPaid
+          name={variables.name}
+          amount={variables.amount}
+          maskedPixKey={variables.maskedPixKey}
+          link={variables.link}
+        />
+      );
+    },
+  },
+  [MailTemplateEnum.WITHDRAWAL_RETURNED]: {
+    subject: 'Seu saque via PIX foi devolvido',
+    requiredVariables: ['name', 'amount', 'maskedPixKey', 'link'],
+    build(variables) {
+      return (
+        <WithdrawalReturned
+          name={variables.name}
+          amount={variables.amount}
+          maskedPixKey={variables.maskedPixKey}
+          link={variables.link}
+        />
+      );
     },
   },
 };

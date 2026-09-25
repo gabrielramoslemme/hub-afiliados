@@ -5,6 +5,7 @@ import { LinkBuilder } from '@Domain/notifications/link-builder';
 import { EnvironmentVariables } from '@Infra/config/environment-variables';
 
 const SET_PASSWORD_PATH = '/definir-senha';
+const WALLET_PATH = '/minha-conta/carteira';
 
 /**
  * Uma variável só para os dois públicos: o painel é servido pelo mesmo Next que
@@ -27,9 +28,15 @@ export class AppLinkBuilder implements LinkBuilder {
     return this.linkTo(RESET_PASSWORD_PATH[audience], token);
   }
 
-  private linkTo(path: string, token: string): string {
-    const base = this.configService.get('APP_BASE_URL', { infer: true }).replace(/\/$/, '');
+  walletLink(): string {
+    return `${this.baseUrl()}${WALLET_PATH}`;
+  }
 
-    return `${base}${path}?token=${encodeURIComponent(token)}`;
+  private linkTo(path: string, token: string): string {
+    return `${this.baseUrl()}${path}?token=${encodeURIComponent(token)}`;
+  }
+
+  private baseUrl(): string {
+    return this.configService.get('APP_BASE_URL', { infer: true }).replace(/\/$/, '');
   }
 }

@@ -11,6 +11,8 @@ Provider selecionado por `MAIL_PROVIDER`: `logger` em desenvolvimento e teste,
 | `PASSWORD_RECOVERY` | Pedido de recuperação | `name`, `link` (2h) |
 | `PIX_KEY_CHANGED` | Afiliado troca a chave PIX pelo perfil | `name`, `pixKeyType`, `maskedPixKey` |
 | `EMAIL_CHANGED` | Afiliado troca o e-mail pelo perfil | `name`, `newEmail` |
+| `WITHDRAWAL_PAID` | O saque vira pago (webhook ou reconciliação) | `name`, `amount`, `maskedPixKey`, `link` |
+| `WITHDRAWAL_RETURNED` | O saque vira devolvido, inclusive depois de pago | `name`, `amount`, `maskedPixKey`, `link` |
 
 `PASSWORD_RECOVERY` sai do `RequestPasswordResetUseCase`, que atende os dois
 canais. O `link` aponta para `/redefinir-senha` quando o pedido veio do portal e
@@ -32,6 +34,12 @@ o e-mail novo estar gravado, e vai para o endereço **antigo**: é lá que o don
 ainda está olhando, e quem trocou já sabe da troca. O novo aparece inteiro, para
 o dono citá-lo ao suporte se a troca não foi dele. Trocar pelo mesmo e-mail não
 grava nem envia nada.
+
+`WITHDRAWAL_PAID` e `WITHDRAWAL_RETURNED` saem do `notifyPayoutOutcome`, chamado
+pelo webhook da Transfeera e pela reconciliação. Só saem quando o saque muda de
+verdade: uma notificação repetida não reenvia. A chave vai mascarada; `amount`
+já chega formatado em reais, e `link` aponta para a carteira. A falha
+(`FAILED`) não manda e-mail: ela acontece na hora do pedido, e a tela já diz.
 
 `REGISTRATION_APPROVED` só sai depois de o cupom estar emitido na Porto e
 gravado aqui, e mostra o código e o percentual acima do botão de criar a senha

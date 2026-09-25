@@ -140,4 +140,32 @@ describe('ReactEmailRenderer', () => {
       renderer.render(inputFor(MailTemplateEnum.REGISTRATION_APPROVED, { name: 'Marina' })),
     ).rejects.toThrow('link');
   });
+
+  describe('withdrawal emails', () => {
+    const variables = {
+      name: 'Marina',
+      amount: 'R$ 40,00',
+      maskedPixKey: 'pi***@email.com',
+      link: 'https://afiliados.porto.example/minha-conta/carteira',
+    };
+
+    it('tells the affiliate the pix landed, with the amount and the masked key', async () => {
+      const rendered = await renderer.render(inputFor(MailTemplateEnum.WITHDRAWAL_PAID, variables));
+
+      expect(rendered.subject).toBe('Seu saque via PIX foi pago');
+      expect(rendered.text).toContain('R$ 40,00');
+      expect(rendered.text).toContain('pi***@email.com');
+      expect(rendered.html).toContain(variables.link);
+    });
+
+    it('tells the affiliate the pix came back and the amount is in the balance again', async () => {
+      const rendered = await renderer.render(
+        inputFor(MailTemplateEnum.WITHDRAWAL_RETURNED, variables),
+      );
+
+      expect(rendered.subject).toBe('Seu saque via PIX foi devolvido');
+      expect(rendered.text).toContain('R$ 40,00');
+      expect(rendered.text).toContain('voltou para o seu saldo');
+    });
+  });
 });

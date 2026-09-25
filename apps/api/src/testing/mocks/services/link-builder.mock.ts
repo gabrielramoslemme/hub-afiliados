@@ -7,4 +7,5 @@ export const linkBuilderMock = (): jest.Mocked<LinkBuilder> => ({
   resetPasswordLink: jest
     .fn()
     .mockReturnValue('https://afiliados.porto.example/redefinir-senha?token=plain-token'),
+  walletLink: jest.fn().mockReturnValue('https://afiliados.porto.example/minha-conta/carteira'),
 });
