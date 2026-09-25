@@ -333,7 +333,7 @@ Dentro de infra o trabalho se parte em dois contratos: `MailRenderer` monta o co
 
 ## Auditoria
 
-Edição de registro entra em `audit_logs`: `entity` + `entity_id` dizem de quem é a linha, `diff` guarda `{ campo: { from, to } }` e `actor_user_id` diz quem editou. Hoje passam por ela a troca de chave PIX e a de e-mail. As trilhas de status e de cupom ainda moram nas tabelas delas.
+Edição de registro entra em `audit_logs`: `entity` + `entity_id` dizem de quem é a linha, `diff` guarda `{ campo: { from, to } }` e `actor_user_id` diz quem editou. Hoje passam por ela a troca de chave PIX, a de e-mail e a de ocupação. As trilhas de status e de cupom ainda moram nas tabelas delas.
 
 - **Na mesma transação da escrita, nunca depois.** Edição auditada vira método do repositório (`updateWithAudit`), que trava a linha, grava e chama `recordAuditLog` (`src/infra/database/typeorm/repositories/record-audit-log.ts`) com o mesmo `manager`. Se a escrita volta, a trilha volta junto. Um `try/catch` que só avisa, como em outros projetos, deixaria uma troca de PIX sem registro.
 - **O "antes" sai da linha travada**, não do use case: lido antes do lock, ele pode ser o de uma escrita que outra já envelheceu. O use case manda só a mudança e o autor.

@@ -1,4 +1,9 @@
-import { AffiliateStatusEnum, PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
+import {
+  AffiliateStatusEnum,
+  OccupationEnum,
+  PixKeyTypeEnum,
+  SocialNetworkEnum,
+} from '@porto/contracts';
 import { UnknownAffiliateError } from '@Domain/auth/auth.errors';
 import { buildAffiliate } from '@Testing/factories/affiliate.factory';
 import { buildCoupon } from '@Testing/factories/coupon.factory';
@@ -33,6 +38,7 @@ describe('GetAffiliateAccountUseCase', () => {
     await expect(useCase.execute(user.publicId)).resolves.toEqual({
       publicId: affiliate.publicId,
       name: 'Marina Ferraz',
+      occupation: OccupationEnum.INFLUENCER,
       email: 'marina@email.com',
       maskedCpf: '***.***.247-25',
       maskedRg: '*****678X',

@@ -53,6 +53,7 @@ export const MARINA = {
   pixKey: 'pix.marina@email.com',
   socialNetwork: 'INSTAGRAM',
   socialHandle: '@marina.ferraz',
+  occupation: 'INFLUENCER',
   termsAccepted: true,
 };
 
@@ -63,6 +64,7 @@ export const CLEIDE = {
   rg: '98765432',
   pixKeyType: 'CPF',
   pixKey: '390.533.447-05',
+  occupation: 'REAL_ESTATE_PROFESSIONAL',
   termsAccepted: true,
 };
 
@@ -73,6 +75,7 @@ export const ROGERIO = {
   rg: '22334455',
   pixKeyType: 'EMAIL',
   pixKey: 'pix.rogerio@email.com',
+  occupation: 'CONTENT_CREATOR',
   termsAccepted: true,
 };
 

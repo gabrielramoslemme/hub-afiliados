@@ -23,6 +23,7 @@ describe('Affiliate registration (e2e)', () => {
     rg: '12.345.678-X',
     pixKeyType: 'EMAIL',
     pixKey: 'marina@email.com',
+    occupation: 'INFLUENCER',
     termsAccepted: true,
   };
 
@@ -69,6 +70,29 @@ describe('Affiliate registration (e2e)', () => {
       );
 
       expect(row).toEqual({ social_network: 'INSTAGRAM', social_handle: 'marina.ferraz' });
+    });
+
+    it('stores the occupation chosen', async () => {
+      await signUp({ ...validBody, occupation: 'CONDOMINIUM_PROFESSIONAL' }).expect(201);
+
+      const [row] = await e2e.dataSource.query('SELECT occupation FROM affiliates');
+
+      expect(row).toEqual({ occupation: 'CONDOMINIUM_PROFESSIONAL' });
+    });
+
+    it('rejects a registration without the occupation', async () => {
+      const { occupation: _occupation, ...withoutOccupation } = validBody;
+
+      const response = await signUp(withoutOccupation).expect(400);
+
+      expect(response.body.message).toEqual(['Escolha sua ocupação.']);
+      expect(await e2e.dataSource.query('SELECT 1 FROM affiliates')).toEqual([]);
+    });
+
+    it('rejects an occupation out of the list', async () => {
+      const response = await signUp({ ...validBody, occupation: 'MEDICO' }).expect(400);
+
+      expect(response.body.message).toEqual(['Escolha sua ocupação.']);
     });
 
     it('rejects a name without a surname', async () => {

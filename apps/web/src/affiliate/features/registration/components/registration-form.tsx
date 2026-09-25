@@ -9,6 +9,7 @@ import {
   type CreateAffiliateFormValues,
   type CreateAffiliateRequest,
   createAffiliateSchema,
+  OccupationEnum,
   PixKeyTypeEnum,
   SocialNetworkEnum,
 } from '@porto/contracts';
@@ -24,7 +25,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 import { cn } from '@/shared/lib/cn';
-import { pixKeyTypeName, socialNetworkName } from '@/shared/lib/format';
+import { occupationName, pixKeyTypeName, socialNetworkName } from '@/shared/lib/format';
 import {
   formatCpf,
   formatPixKey,
@@ -79,6 +80,7 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
       pixKey: '',
       socialNetwork: '',
       socialHandle: '',
+      occupation: '',
       termsAccepted: false,
     },
   });
@@ -194,6 +196,33 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
           />
         </Field>
       </div>
+
+      {/* Abre sem escolha, ao contrário do tipo de chave PIX: uma ocupação já
+          marcada passaria como resposta de quem nem olhou o campo. */}
+      <Field id="occupation" label="Ocupação" required error={errors.occupation?.message}>
+        <Controller
+          control={control}
+          name="occupation"
+          render={({ field }) => (
+            <Select value={field.value} onValueChange={field.onChange}>
+              <SelectTrigger
+                {...fieldAria('occupation', { error: errors.occupation?.message, required: true })}
+                aria-label="Ocupação"
+                onBlur={field.onBlur}
+              >
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.values(OccupationEnum).map((occupation) => (
+                  <SelectItem key={occupation} value={occupation}>
+                    {occupationName(occupation)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </Field>
 
       <div className="grid gap-5 sm:grid-cols-[minmax(0,10rem)_1fr]">
         <Field id="pixKeyType" label="Tipo de chave PIX" required>

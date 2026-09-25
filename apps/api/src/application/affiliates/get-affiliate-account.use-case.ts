@@ -1,4 +1,9 @@
-import { AffiliateStatusEnum, PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
+import {
+  AffiliateStatusEnum,
+  OccupationEnum,
+  PixKeyTypeEnum,
+  SocialNetworkEnum,
+} from '@porto/contracts';
 import { maskCpf } from '@Domain/affiliates/cpf.util';
 import { maskPixKey } from '@Domain/affiliates/pix-key.util';
 import { maskRg } from '@Domain/affiliates/rg.util';
@@ -18,6 +23,7 @@ export interface AffiliateAccountOutput {
   email: string;
   maskedCpf: string;
   maskedRg: string;
+  occupation: OccupationEnum;
   socialNetwork: SocialNetworkEnum | null;
   socialHandle: string | null;
   pixKeyType: PixKeyTypeEnum;
@@ -47,6 +53,7 @@ export class GetAffiliateAccountUseCase implements UseCase<string, AffiliateAcco
       email: user.email,
       maskedCpf: maskCpf(affiliate.cpf),
       maskedRg: maskRg(affiliate.rg),
+      occupation: affiliate.occupation,
       socialNetwork: affiliate.socialNetwork,
       socialHandle: affiliate.socialHandle,
       pixKeyType: affiliate.pixKeyType,

@@ -1,4 +1,4 @@
-import type { PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
+import type { OccupationEnum, PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
 import { formatCpf, formatPixKey } from './masks';
 
 /** Cada marca escreve o próprio nome de um jeito, e o valor gravado é caixa alta. */
@@ -17,6 +17,22 @@ const SOCIAL_NETWORK_NAMES: Record<SocialNetworkEnum, string> = {
  */
 export function socialNetworkName(network: SocialNetworkEnum): string {
   return SOCIAL_NETWORK_NAMES[network];
+}
+
+const OCCUPATION_NAMES: Record<OccupationEnum, string> = {
+  REAL_ESTATE_PROFESSIONAL: 'Profissional de Imóvel',
+  CONDOMINIUM_PROFESSIONAL: 'Profissional de Condomínio',
+  INFLUENCER: 'Influenciador',
+  CONTENT_CREATOR: 'Criador de Conteúdo',
+  PROMOTION_SHARING: 'Compartilhamento de Promoção',
+};
+
+/**
+ * Os nomes que a Porto definiu para a lista. O cadastro, o perfil, a fila e o
+ * detalhe do painel leem daqui.
+ */
+export function occupationName(occupation: OccupationEnum): string {
+  return OCCUPATION_NAMES[occupation];
 }
 
 const PIX_KEY_TYPE_NAMES: Record<PixKeyTypeEnum, string> = {

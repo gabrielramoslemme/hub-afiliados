@@ -1,4 +1,4 @@
-import { AffiliateStatusEnum } from '@porto/contracts';
+import { AffiliateStatusEnum, OccupationEnum } from '@porto/contracts';
 import { QUEUE_PATH } from '@/backoffice/shared/routes';
 
 export const PAGE_SIZE = 10;
@@ -9,6 +9,7 @@ export type QueueSortOrder = 'asc' | 'desc';
 export interface QueueParams {
   page: number;
   status: AffiliateStatusEnum | null;
+  occupation: OccupationEnum | null;
   search: string;
   sortBy: QueueSortBy;
   sortOrder: QueueSortOrder;
@@ -19,6 +20,7 @@ export type RawSearchParams = Record<string, string | string[] | undefined>;
 const DEFAULTS: QueueParams = {
   page: 1,
   status: null,
+  occupation: null,
   search: '',
   sortBy: 'createdAt',
   sortOrder: 'desc',
@@ -38,6 +40,7 @@ function first(value: string | string[] | undefined): string | undefined {
 export function parseQueueParams(raw: RawSearchParams): QueueParams {
   const page = Number.parseInt(first(raw.page) ?? '', 10);
   const status = first(raw.status);
+  const occupation = first(raw.occupation);
   const sortBy = first(raw.sortBy) as QueueSortBy | undefined;
 
   return {
@@ -46,6 +49,10 @@ export function parseQueueParams(raw: RawSearchParams): QueueParams {
       status && Object.values(AffiliateStatusEnum).includes(status as AffiliateStatusEnum)
         ? (status as AffiliateStatusEnum)
         : DEFAULTS.status,
+    occupation:
+      occupation && Object.values(OccupationEnum).includes(occupation as OccupationEnum)
+        ? (occupation as OccupationEnum)
+        : DEFAULTS.occupation,
     search: (first(raw.search) ?? '').trim(),
     sortBy: sortBy && SORTABLE.includes(sortBy) ? sortBy : DEFAULTS.sortBy,
     sortOrder: first(raw.sortOrder) === 'asc' ? 'asc' : DEFAULTS.sortOrder,
@@ -58,7 +65,9 @@ export function parseQueueParams(raw: RawSearchParams): QueueParams {
  * vazia sem estar.
  */
 export function queueHref(current: QueueParams, changes: Partial<QueueParams>): string {
-  const resetsPage = ['status', 'search', 'sortBy', 'sortOrder'].some((key) => key in changes);
+  const resetsPage = ['status', 'occupation', 'search', 'sortBy', 'sortOrder'].some(
+    (key) => key in changes,
+  );
   const next: QueueParams = {
     ...current,
     ...changes,
@@ -68,6 +77,7 @@ export function queueHref(current: QueueParams, changes: Partial<QueueParams>): 
   const query = new URLSearchParams();
 
   if (next.status) query.set('status', next.status);
+  if (next.occupation) query.set('occupation', next.occupation);
   if (next.search) query.set('search', next.search);
   if (next.sortBy !== DEFAULTS.sortBy) query.set('sortBy', next.sortBy);
   if (next.sortOrder !== DEFAULTS.sortOrder) query.set('sortOrder', next.sortOrder);

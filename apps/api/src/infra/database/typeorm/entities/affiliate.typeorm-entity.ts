@@ -11,7 +11,12 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { AffiliateStatusEnum, type PixKeyTypeEnum, type SocialNetworkEnum } from '@porto/contracts';
+import {
+  AffiliateStatusEnum,
+  type OccupationEnum,
+  type PixKeyTypeEnum,
+  type SocialNetworkEnum,
+} from '@porto/contracts';
 import { AffiliateEntity } from '@Domain/affiliates/affiliate.entity';
 import { CouponTypeormEntity } from './coupon.typeorm-entity';
 import { UserTypeormEntity } from './user.typeorm-entity';
@@ -57,6 +62,9 @@ export class AffiliateTypeormEntity implements AffiliateEntity {
 
   @Column({ name: 'social_handle', type: 'varchar', length: 30, nullable: true })
   socialHandle: string | null;
+
+  @Column({ type: 'varchar', length: 40 })
+  occupation: OccupationEnum;
 
   @Column({ type: 'varchar', length: 20, default: AffiliateStatusEnum.PENDING_APPROVAL })
   status: AffiliateStatusEnum;

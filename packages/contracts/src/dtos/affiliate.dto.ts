@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { AffiliateStatusEnum, ReferralStatusEnum, StatementEntryKindEnum } from '../enums';
-import { PixKeyTypeEnum, SocialNetworkEnum } from '../enums';
+import { OccupationEnum, PixKeyTypeEnum, SocialNetworkEnum } from '../enums';
 import type { CouponSummary } from './coupon.dto';
 
 /** Item da fila de aprovação. CPF já vem mascarado da API. */
@@ -9,6 +9,7 @@ export interface AffiliateListItem {
   name: string;
   email: string;
   maskedCpf: string;
+  occupation: OccupationEnum;
   status: AffiliateStatusEnum;
   createdAt: string;
 }
@@ -47,6 +48,7 @@ export interface AffiliateMeResponse {
   email: string;
   maskedCpf: string;
   maskedRg: string;
+  occupation: OccupationEnum;
   socialNetwork: SocialNetworkEnum | null;
   socialHandle: string | null;
   pixKeyType: PixKeyTypeEnum;
@@ -217,6 +219,14 @@ function normalizeRg(value: string): string {
   return value.replace(/[.\-\s]/g, '').toUpperCase();
 }
 
+/*
+  Vazio na entrada porque o `select` abre sem escolha, e obrigatório na saída:
+  o `pipe` recusa o `''` com a mesma mensagem de um valor fora da lista.
+*/
+const occupationField = z
+  .union([z.enum(OccupationEnum), z.literal('')], { message: 'Escolha sua ocupação.' })
+  .pipe(z.enum(OccupationEnum, { message: 'Escolha sua ocupação.' }));
+
 /** O `@` é guardado sem o arroba: com ou sem, tem que virar o mesmo registro. */
 function normalizeSocialHandle(value: string): string {
   return value.trim().replace(/^@+/, '');
@@ -257,6 +267,7 @@ export const createAffiliateSchema = z
       })
       .default(''),
     socialHandle: z.string().transform(normalizeSocialHandle).default(''),
+    occupation: occupationField,
     /*
       Aceite do Regulamento. `boolean` e não `literal(true)`: a caixa nasce
       desmarcada, e um tipo de entrada que só admite `true` não descreveria o
@@ -311,6 +322,16 @@ export interface CreateAffiliateResponse {
   publicId: string;
   status: AffiliateStatusEnum;
 }
+
+/**
+ * A troca da ocupação pelo perfil, espelhando `ChangeOccupationRequestDto` da
+ * API. Sem senha, ao contrário do PIX e do e-mail: a ocupação não desvia
+ * pagamento nem toma a conta.
+ */
+export const changeOccupationSchema = z.object({ occupation: occupationField });
+
+export type ChangeOccupationRequest = z.infer<typeof changeOccupationSchema>;
+export type ChangeOccupationFormValues = z.input<typeof changeOccupationSchema>;
 
 /**
  * A troca da chave PIX pelo perfil, espelhando `ChangePixKeyRequestDto` da API.

@@ -1,6 +1,7 @@
 import {
   AffiliateStatusEnum,
   CouponSummary,
+  OccupationEnum,
   PixKeyTypeEnum,
   SocialNetworkEnum,
 } from '@porto/contracts';
@@ -20,6 +21,7 @@ export interface AffiliateDetailOutput {
   maskedCpf: string;
   cpf: string;
   rg: string;
+  occupation: OccupationEnum;
   socialNetwork: SocialNetworkEnum | null;
   socialHandle: string | null;
   pixKeyType: PixKeyTypeEnum;
@@ -48,6 +50,7 @@ export class GetAffiliateUseCase implements UseCase<string, AffiliateDetailOutpu
       maskedCpf: maskCpf(affiliate.cpf),
       cpf: affiliate.cpf,
       rg: affiliate.rg,
+      occupation: affiliate.occupation,
       socialNetwork: affiliate.socialNetwork,
       socialHandle: affiliate.socialHandle,
       pixKeyType: affiliate.pixKeyType,

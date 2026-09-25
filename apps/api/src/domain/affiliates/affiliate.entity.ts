@@ -1,4 +1,9 @@
-import { AffiliateStatusEnum, PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
+import {
+  AffiliateStatusEnum,
+  OccupationEnum,
+  PixKeyTypeEnum,
+  SocialNetworkEnum,
+} from '@porto/contracts';
 import { CouponEntity } from '@Domain/coupons/coupon.entity';
 import { UserEntity } from '@Domain/users/user.entity';
 
@@ -13,6 +18,7 @@ export interface AffiliateEntity {
   /** Rede e `@` andam juntos: ou os dois têm valor, ou os dois são nulos. */
   socialNetwork: SocialNetworkEnum | null;
   socialHandle: string | null;
+  occupation: OccupationEnum;
   status: AffiliateStatusEnum;
   /** Quando a pessoa aceitou o Regulamento, no envio do cadastro. */
   termsAcceptedAt: Date;

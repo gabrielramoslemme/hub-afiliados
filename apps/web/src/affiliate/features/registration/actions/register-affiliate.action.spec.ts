@@ -1,5 +1,6 @@
 import {
   AffiliateStatusEnum,
+  OccupationEnum,
   PixKeyTypeEnum,
   RegistrationErrorCodeEnum,
   SocialNetworkEnum,
@@ -23,6 +24,7 @@ const validInput = {
   rg: '12.345.678-X',
   pixKeyType: PixKeyTypeEnum.EMAIL,
   pixKey: 'marina@email.com',
+  occupation: OccupationEnum.INFLUENCER,
   termsAccepted: true,
 };
 
@@ -68,6 +70,7 @@ describe('registerAffiliate', () => {
       pixKey: 'marina@email.com',
       socialNetwork: SocialNetworkEnum.INSTAGRAM,
       socialHandle: 'marina.ferraz',
+      occupation: OccupationEnum.INFLUENCER,
       termsAccepted: true,
     });
   });

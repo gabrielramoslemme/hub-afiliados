@@ -8,6 +8,7 @@ import {
   formatDateTime,
   formatPixKeyDisplay,
   formatSocialProfile,
+  occupationName,
 } from '@/shared/lib/format';
 import { fetchAffiliate, fetchAffiliateHistory, fetchCouponHistory } from '../data';
 import { buildTrail } from '../lib/trail';
@@ -84,6 +85,7 @@ export async function AffiliateDetailScreen({ publicId }: { publicId: string }) 
             <DataRow label="RG">
               <span data-tabular>{affiliate.rg}</span>
             </DataRow>
+            <DataRow label="Ocupação">{occupationName(affiliate.occupation)}</DataRow>
             {social && <DataRow label="Rede social">{social}</DataRow>}
             <DataRow label="Tipo de chave PIX">{PIX_KEY_LABELS[affiliate.pixKeyType]}</DataRow>
             <DataRow label="Chave PIX">

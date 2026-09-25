@@ -12,7 +12,7 @@ import {
   MaxLength,
   ValidateIf,
 } from 'class-validator';
-import { PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
+import { OccupationEnum, PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
 import { CreateAffiliateInput } from '@Application/affiliates/create-affiliate.use-case';
 
 /** Nome e sobrenome: o cadastro do CPF sempre tem os dois, e o AC pede o nome completo. */
@@ -86,6 +86,10 @@ export class CreateAffiliateRequestDto implements CreateAffiliateInput {
   @IsNotEmpty({ message: 'Informe o @ da rede escolhida.' })
   @Transform(({ value }: { value: string }) => value?.trim())
   socialHandle?: string | null;
+
+  @ApiProperty({ enum: OccupationEnum, example: OccupationEnum.INFLUENCER })
+  @IsEnum(OccupationEnum, { message: 'Escolha sua ocupação.' })
+  occupation: OccupationEnum;
 
   /*
     O aceite é campo do cadastro, não pressuposto do envio: sem ele marcado a

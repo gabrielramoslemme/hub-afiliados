@@ -1,6 +1,7 @@
 import {
   AffiliateStatusEnum,
   MailTemplateEnum,
+  OccupationEnum,
   PixKeyTypeEnum,
   SocialNetworkEnum,
 } from '@porto/contracts';
@@ -31,6 +32,7 @@ describe('CreateAffiliateUseCase', () => {
     pixKey: 'marina@email.com',
     socialNetwork: null,
     socialHandle: null,
+    occupation: OccupationEnum.INFLUENCER,
     termsAccepted: true,
   };
 

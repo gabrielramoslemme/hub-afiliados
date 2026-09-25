@@ -1,3 +1,4 @@
+import { OccupationEnum } from '@porto/contracts';
 import { SESSION_EXPIRED_PATH } from '@/backoffice/shared/routes';
 import { authedApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
@@ -17,6 +18,7 @@ jest.mock('next/navigation', () => ({
 const params: QueueParams = {
   page: 1,
   status: null,
+  occupation: null,
   search: '',
   sortBy: 'createdAt',
   sortOrder: 'desc',
@@ -49,5 +51,17 @@ describe('leitura da fila com a sessão vencida', () => {
     fetchMock.mockResolvedValue({ data: [], total: 0, page: 1, limit: 10 });
 
     await expect(fetchAffiliates(params)).resolves.toMatchObject({ total: 0 });
+  });
+});
+
+describe('fetchAffiliates', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('forwards the occupation filter to the api', async () => {
+    fetchMock.mockResolvedValue({ data: [], total: 0, page: 1, limit: 10 });
+
+    await fetchAffiliates({ ...params, occupation: OccupationEnum.INFLUENCER });
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('occupation=INFLUENCER');
   });
 });

@@ -41,6 +41,18 @@ export enum SocialNetworkEnum {
   KWAI = 'KWAI',
 }
 
+/**
+ * O que o afiliado faz, na lista que a Porto definiu. Obrigatória no cadastro e
+ * trocada só pelo próprio afiliado, no perfil.
+ */
+export enum OccupationEnum {
+  REAL_ESTATE_PROFESSIONAL = 'REAL_ESTATE_PROFESSIONAL',
+  CONDOMINIUM_PROFESSIONAL = 'CONDOMINIUM_PROFESSIONAL',
+  INFLUENCER = 'INFLUENCER',
+  CONTENT_CREATOR = 'CONTENT_CREATOR',
+  PROMOTION_SHARING = 'PROMOTION_SHARING',
+}
+
 export enum TokenPurposeEnum {
   SET_PASSWORD = 'SET_PASSWORD',
   RESET_PASSWORD = 'RESET_PASSWORD',

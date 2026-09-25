@@ -1,4 +1,9 @@
-import { AffiliateStatusEnum, PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
+import {
+  AffiliateStatusEnum,
+  OccupationEnum,
+  PixKeyTypeEnum,
+  SocialNetworkEnum,
+} from '@porto/contracts';
 import { CouponEntity } from '@Domain/coupons/coupon.entity';
 import { createToken } from '@Domain/shared/token';
 import { AffiliateDetail, AffiliateEntity, AffiliateWithUser } from './affiliate.entity';
@@ -40,6 +45,7 @@ export interface SearchAffiliatesInput {
   page: number;
   limit: number;
   status: AffiliateStatusEnum | null;
+  occupation: OccupationEnum | null;
   /** Nome, e-mail ou CPF — o adapter decide qual pelo conteúdo. */
   search: string | null;
   sortBy: AffiliateSortBy;
@@ -61,6 +67,7 @@ export interface CreateAffiliateWithUserInput {
   pixKey: string;
   socialNetwork: SocialNetworkEnum | null;
   socialHandle: string | null;
+  occupation: OccupationEnum;
   termsAcceptedAt: Date;
 }
 
@@ -70,7 +77,7 @@ export interface CreateAffiliateWithUserInput {
  */
 export interface UpdateAffiliateWithAuditInput {
   affiliateId: number;
-  changes: Partial<Pick<AffiliateEntity, 'pixKeyType' | 'pixKey'>>;
+  changes: Partial<Pick<AffiliateEntity, 'pixKeyType' | 'pixKey' | 'occupation'>>;
   actorUserId: number | null;
 }
 
