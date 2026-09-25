@@ -21,6 +21,7 @@ import { ApplyIncentiveEventUseCase } from '@Application/sales/apply-incentive-e
 import { GetAffiliateReferralsUseCase } from '@Application/sales/get-affiliate-referrals.use-case';
 import { GetAffiliateWalletUseCase } from '@Application/sales/get-affiliate-wallet.use-case';
 import { RecordInvalidIncentiveNotificationUseCase } from '@Application/sales/record-invalid-incentive-notification.use-case';
+import { RequestWithdrawalUseCase } from '@Application/withdrawals/request-withdrawal.use-case';
 import { AFFILIATE_REPOSITORY } from '@Domain/affiliates/affiliate.repository';
 import { AUDIT_LOG_REPOSITORY } from '@Domain/audit/audit-log.repository';
 import { ACCESS_TOKEN_ISSUER } from '@Domain/auth/access-token';
@@ -36,6 +37,8 @@ import { SALE_REPOSITORY } from '@Domain/sales/sale.repository';
 import { CLOCK } from '@Domain/shared/clock';
 import { Token } from '@Domain/shared/token';
 import { USER_REPOSITORY } from '@Domain/users/user.repository';
+import { PAYOUT_GATEWAY } from '@Domain/withdrawals/payout-gateway';
+import { WITHDRAWAL_REPOSITORY } from '@Domain/withdrawals/withdrawal.repository';
 import { RepositoriesModule } from '@Infra/database/typeorm/repositories/repositories.module';
 
 /**
@@ -129,6 +132,12 @@ const USE_CASES = [
     CLOCK,
   ]),
   provideUseCase(RecordInvalidIncentiveNotificationUseCase, [INCENTIVE_EVENT_REPOSITORY, CLOCK]),
+  provideUseCase(RequestWithdrawalUseCase, [
+    USER_REPOSITORY,
+    WITHDRAWAL_REPOSITORY,
+    PAYOUT_GATEWAY,
+    CLOCK,
+  ]),
 ];
 
 @Module({

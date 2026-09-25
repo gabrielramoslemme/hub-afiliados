@@ -5,30 +5,39 @@ import {
   HttpCode,
   HttpStatus,
   Patch,
+  Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import {
+  ApiAcceptedResponse,
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiConflictResponse,
+  ApiCreatedResponse,
   ApiNoContentResponse,
   ApiOkResponse,
+  ApiServiceUnavailableResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { Response } from 'express';
+import { WithdrawalStatusEnum } from '@porto/contracts';
 import { ChangeEmailUseCase } from '@Application/affiliates/change-email.use-case';
 import { ChangeOccupationUseCase } from '@Application/affiliates/change-occupation.use-case';
 import { ChangePixKeyUseCase } from '@Application/affiliates/change-pix-key.use-case';
 import { GetAffiliateAccountUseCase } from '@Application/affiliates/get-affiliate-account.use-case';
 import { GetAffiliateReferralsUseCase } from '@Application/sales/get-affiliate-referrals.use-case';
 import { GetAffiliateWalletUseCase } from '@Application/sales/get-affiliate-wallet.use-case';
+import { RequestWithdrawalUseCase } from '@Application/withdrawals/request-withdrawal.use-case';
 import { ActorInfo } from '@Http/shared/authenticated-request';
 import { Actor } from '@Http/shared/decorators/actor.decorator';
 import { AffiliateGuard } from '@Http/shared/guards/affiliate.guard';
 import { AffiliateAccountResponseDto } from './dtos/affiliate-account.response.dto';
 import { AffiliateReferralsResponseDto } from './dtos/affiliate-referrals.response.dto';
 import { AffiliateWalletResponseDto } from './dtos/affiliate-wallet.response.dto';
+import { AffiliateWithdrawalResponseDto } from './dtos/affiliate-withdrawal.response.dto';
 import { ChangeEmailRequestDto } from './dtos/change-email.request.dto';
 import { ChangeOccupationRequestDto } from './dtos/change-occupation.request.dto';
 import { ChangePixKeyRequestDto } from './dtos/change-pix-key.request.dto';
@@ -47,6 +56,7 @@ export class AffiliateMeController {
     private readonly changeOccupationUseCase: ChangeOccupationUseCase,
     private readonly getAffiliateWalletUseCase: GetAffiliateWalletUseCase,
     private readonly getAffiliateReferralsUseCase: GetAffiliateReferralsUseCase,
+    private readonly requestWithdrawalUseCase: RequestWithdrawalUseCase,
   ) {}
 
   @Get()
@@ -123,5 +133,31 @@ export class AffiliateMeController {
     @Actor() actor: ActorInfo,
   ): Promise<void> {
     await this.changeOccupationUseCase.execute({ ...body, userPublicId: actor.publicId });
+  }
+
+  /**
+   * Saca o saldo inteiro via PIX, na chave cadastrada. 201 quando o fornecedor
+   * aceitou; 202 quando ele não respondeu — o pedido está gravado, já saiu do
+   * saldo, e o PIX sai na reconciliação.
+   */
+  @Post('withdrawals')
+  @ApiCreatedResponse({ type: AffiliateWithdrawalResponseDto, description: 'PIX aceito' })
+  @ApiAcceptedResponse({
+    type: AffiliateWithdrawalResponseDto,
+    description: 'PIX em processamento',
+  })
+  @ApiConflictResponse({ description: 'Sem saldo (WDR-001) ou PIX recusado (WDR-002)' })
+  @ApiServiceUnavailableResponse({ description: 'Saque desligado neste ambiente (WDR-003)' })
+  async requestWithdrawal(
+    @Actor() actor: ActorInfo,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AffiliateWithdrawalResponseDto> {
+    const output = await this.requestWithdrawalUseCase.execute(actor.publicId);
+
+    response.status(
+      output.status === WithdrawalStatusEnum.REQUESTED ? HttpStatus.ACCEPTED : HttpStatus.CREATED,
+    );
+
+    return AffiliateWithdrawalResponseDto.from(output);
   }
 }
