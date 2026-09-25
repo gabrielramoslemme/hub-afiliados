@@ -393,7 +393,7 @@ O que sobra é o registro **e** a consulta ficarem sem resposta seguidas: o cupo
 - **A corrida é decidida no banco**: `external_id` único com `ON CONFLICT DO NOTHING` no registro, `SELECT ... FOR UPDATE` conferindo pendente no encerramento. Quem perde relê e vira repetição ou conflito.
 - **Campo desconhecido é descartado, não recusado.** O `@WebhookBody()` valida com um `ValidationPipe` próprio, sem `forbidNonWhitelisted`; o global não alcança decorator customizado. Um 400 porque a Porto acrescentou um campo derrubaria a integração, e ela não reenvia sozinha. Pelo mesmo motivo `valorVenda` não tem limite de casas decimais: sobra de float vira centavos arredondados, não 400.
 - **Corpo fora do contrato também entra na trilha.** O `@WebhookBody()` devolve `InvalidWebhookBody` em vez de lançar, e o controller grava a chamada pelo `RecordInvalidIncentiveNotificationUseCase` antes de responder 400 `INC-006` — com o `idEvento` e o `venda.id` que der para ler, e o corpo inteiro. Só essa recusa deixa nulos os campos lidos do payload; o `CHECK` `ck_porto_incentive_events_readable` cobra isso.
-- **O valor do incentivo ainda não existe**: o payload só traz `valorVenda`, guardado em centavos. `incentivo.valor` e a data real da venda foram pedidos à Porto.
+- **O valor do incentivo é o da Porto, nunca calculado aqui.** `incentivo.valor` e `venda.dataVenda` são obrigatórios; sem eles o corpo é `INC-006`. O valor vai para `incentive_cents` em todo evento aplicado — o do encerramento substitui o do registro, porque é ele que a Porto paga. A data da venda (`sold_at`) só o registro grava.
 
 ## Testes
 

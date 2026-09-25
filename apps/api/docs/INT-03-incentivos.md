@@ -1,8 +1,8 @@
 # INT-03 — Notificações de incentivo (Porto → Mesa)
 
-A resposta da Mesa ao documento *Integração Porto x Mesa — Notificações de Incentivo (Afiliados)*. Fecha as quatro pendências listadas nele para a homologação integrada e traz dois pedidos de campo novo no payload.
+A resposta da Mesa ao documento *Integração Porto x Mesa — Notificações de Incentivo (Afiliados)*. Fecha as quatro pendências listadas nele para a homologação integrada.
 
-O payload, os três tipos de evento e a chave de idempotência (`venda.id` + `evento.tipoEvento`) são os do documento da Porto, sem mudança.
+Os três tipos de evento e a chave de idempotência (`venda.id` + `evento.tipoEvento`) são os do documento da Porto. O payload é o dele mais dois campos, que a Porto já envia e passaram a ser obrigatórios (seção 5).
 
 ## 1. Endpoint
 
@@ -93,11 +93,16 @@ Como a Porto não faz retentativa automática no piloto, a combinação é:
 - **400 e 404: não reprocessar** sem corrigir antes. Repetir devolve o mesmo erro.
 - **Toda chamada que passa pela assinatura fica registrada na Mesa**, aplicada ou não — inclusive a recusada por corpo fora do contrato (`INC-006`) —, com o `idEvento` e o corpo recebido. Para conciliar, o suporte informa o `venda.id` ou o `idEvento`.
 
-## 5. Dois pedidos à Porto
+## 5. Campos obrigatórios além do documento da Porto
 
-Para as telas de Vendas (painel) e Extrato (afiliado), faltam dois dados no payload:
+| Campo | Formato | Uso na Mesa |
+|---|---|---|
+| `incentivo.valor` | número, em reais, não negativo | O incentivo do afiliado naquela venda. Vale o do último evento aplicado: o do registro enquanto pendente, o do encerramento depois — que é o que a Porto paga. A Mesa não calcula incentivo. |
+| `venda.dataVenda` | ISO-8601 UTC | A data da venda no painel e no extrato. Só a do `VENDA_REGISTRADA` é gravada: a venda não muda de data. |
 
-1. **`incentivo.valor`** — o valor do incentivo daquela venda, em reais. A Porto já decide se a venda comissiona, e os percentuais por segmento são dela. Com o valor no evento, a Mesa não precisa versionar regra de comissionamento nem conciliar cálculo com a Porto. Hoje a Mesa guarda o valor da venda, e não tem como calcular o incentivo.
-2. **A data real da venda** (ex.: `venda.dataVenda`, ISO-8601 UTC). O documento diz que `dataHoraEvento` é a hora do envio. Num reprocessamento manual as duas se afastam por dias, e é a coluna "data da venda" do painel que fica errada. Enquanto o campo não vier, a Mesa usa o `dataHoraEvento`.
+Sem qualquer um dos dois, a chamada é recusada com 400 `INC-006`.
 
-Os dois podem entrar como campos novos: a Mesa já aceita campo desconhecido sem erro (seção 3).
+```json
+"incentivo": { "status": "PENDENTE", "valor": 27 },
+"venda": { "id": "...", "cupom": "MARINA", "valorVenda": 269.99, "item": "Conserto de fogão", "dataVenda": "2026-09-25T14:28:04Z" }
+```

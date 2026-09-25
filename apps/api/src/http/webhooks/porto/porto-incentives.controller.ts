@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
+  ApiBody,
   ApiConflictResponse,
   ApiHeader,
   ApiNotFoundResponse,
@@ -51,6 +52,9 @@ export class PortoIncentivesController {
    */
   @Post()
   @HttpCode(HttpStatus.OK)
+  // O corpo chega pelo `@WebhookBody()`, que o Swagger não enxerga: sem isto a
+  // rota sai no contrato publicado sem corpo nenhum.
+  @ApiBody({ type: IncentiveNotificationRequestDto })
   @ApiOkResponse({ type: IncentiveNotificationResponseDto })
   @ApiBadRequestResponse({
     description:

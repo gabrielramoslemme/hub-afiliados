@@ -29,8 +29,15 @@ function notification(
     idEvento: `8d4a9d5f-4f17-4ad8-bec7-${String(eventSequence).padStart(12, '0')}`,
     dataHoraEvento: '2026-09-11T12:17:08.319Z',
     evento: { tipoEvento, descricaoEvento: 'Venda realizada com seu cupom' },
-    incentivo: { status: STATUS_BY_TYPE[tipoEvento] },
-    venda: { id: SALE_ID, cupom, valorVenda: 310.99, item: 'PFAZ * VENTILADOR' },
+    incentivo: { status: STATUS_BY_TYPE[tipoEvento], valor: 31.1 },
+    venda: {
+      id: SALE_ID,
+      cupom,
+      valorVenda: 310.99,
+      item: 'PFAZ * VENTILADOR',
+      // Dias antes do envio, com a fração de sete casas que o dev da Porto manda.
+      dataVenda: '2026-09-08T15:40:00.1234567Z',
+    },
     ...overrides,
   };
 }
@@ -58,7 +65,8 @@ describe('Porto incentives webhook (e2e)', () => {
 
   async function sales() {
     return e2e.dataSource.query(
-      `SELECT s.incentive_status, s.amount_cents, s.item, s.settled_at, c.code
+      `SELECT s.incentive_status, s.amount_cents, s.incentive_cents, s.item, s.sold_at,
+              s.settled_at, c.code
          FROM affiliate_sales s JOIN affiliate_coupons c ON c.id = s.coupon_id`,
     );
   }
@@ -98,7 +106,9 @@ describe('Porto incentives webhook (e2e)', () => {
       {
         incentive_status: 'RELEASED',
         amount_cents: 31099,
+        incentive_cents: 3110,
         item: 'PFAZ * VENTILADOR',
+        sold_at: new Date('2026-09-08T15:40:00.123Z'),
         settled_at: new Date('2026-09-11T12:17:08.319Z'),
         code: coupon,
       },
@@ -221,6 +231,26 @@ describe('Porto incentives webhook (e2e)', () => {
       expect(await sales()).toEqual([expect.objectContaining({ amount_cents: 30 })]);
     });
 
+    it('refuses a notification without the incentive value', async () => {
+      const payload = notification('VENDA_REGISTRADA', coupon);
+
+      const response = await send({ ...payload, incentivo: { status: 'PENDENTE' } }).expect(400);
+
+      expect(response.body.code).toBe(IncentiveErrorCodeEnum.INVALID_PAYLOAD);
+      expect(response.body.message).toEqual(['incentivo.valor deve ser número']);
+      expect(await sales()).toEqual([]);
+    });
+
+    /* A mesma venda, encerrada com outro valor: vale o do encerramento. */
+    it('keeps the incentive of the event that settled the sale', async () => {
+      await send(notification('VENDA_REGISTRADA', coupon)).expect(200);
+      const completed = notification('VENDA_CONCLUIDA', coupon);
+
+      await send({ ...completed, incentivo: { status: 'LIBERADO', valor: 25 } }).expect(200);
+
+      expect(await sales()).toEqual([expect.objectContaining({ incentive_cents: 2500 })]);
+    });
+
     it('refuses an event type Porto does not send', async () => {
       await send(
         notification('VENDA_REGISTRADA', coupon, {
@@ -253,7 +283,7 @@ describe('Porto incentives webhook (e2e)', () => {
 
     it('answers a mismatched type and status with INC-004', async () => {
       const response = await send(
-        notification('VENDA_CONCLUIDA', coupon, { incentivo: { status: 'CANCELADO' } }),
+        notification('VENDA_CONCLUIDA', coupon, { incentivo: { status: 'CANCELADO', valor: 0 } }),
       ).expect(400);
 
       expect(response.body.code).toBe(IncentiveErrorCodeEnum.INCONSISTENT_EVENT);
