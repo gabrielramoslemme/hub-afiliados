@@ -87,6 +87,11 @@ export enum ReferralStatusEnum {
   PENDING = 'PENDING',
   /** Serviço concluído: o incentivo está confirmado e entrou no extrato. */
   COMPLETED = 'COMPLETED',
+  /**
+   * O serviço não foi concluído, e a venda não rende incentivo. Continua na lista
+   * para a pessoa entender por que um pendente não virou dinheiro.
+   */
+  CANCELED = 'CANCELED',
 }
 
 /**
