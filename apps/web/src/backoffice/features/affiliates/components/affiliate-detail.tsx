@@ -10,7 +10,7 @@ import {
   formatSocialProfile,
   occupationName,
 } from '@/shared/lib/format';
-import { fetchAffiliate, fetchAffiliateHistory, fetchCouponHistory } from '../data';
+import { fetchAffiliate, fetchAuditLogs } from '../data';
 import { buildTrail } from '../lib/trail';
 import { AffiliateStatusBadge } from './affiliate-status';
 import { CouponActions } from './coupon-actions';
@@ -32,13 +32,12 @@ function DataRow({ label, children }: { label: string; children: ReactNode }) {
 }
 
 export async function AffiliateDetailScreen({ publicId }: { publicId: string }) {
-  const [affiliate, history, couponHistory] = await Promise.all([
+  const [affiliate, auditLogs] = await Promise.all([
     fetchAffiliate(publicId),
-    fetchAffiliateHistory(publicId),
-    fetchCouponHistory(publicId),
+    fetchAuditLogs(publicId),
   ]);
 
-  const trail = buildTrail(history, couponHistory);
+  const trail = buildTrail(auditLogs);
 
   const pending = affiliate.status === AffiliateStatusEnum.PENDING_APPROVAL;
   const social = formatSocialProfile(affiliate.socialNetwork, affiliate.socialHandle);
@@ -152,7 +151,7 @@ export async function AffiliateDetailScreen({ publicId }: { publicId: string }) 
                   <p className="text-[0.9375rem] font-semibold text-ink-900">{entry.title}</p>
                   <p className="mt-0.5 text-[0.8125rem] text-ink-500" data-tabular>
                     {formatDateTime(entry.createdAt)}
-                    {entry.actorName ? ` · ${entry.actorName}` : ' · pelo próprio afiliado'}
+                    {` · ${entry.actor}`}
                   </p>
                   {entry.reason && (
                     <p className="mt-2 border-l-2 border-ink-200 pl-3 text-[0.875rem] leading-relaxed text-ink-500">

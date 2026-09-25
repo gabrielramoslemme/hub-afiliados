@@ -1,133 +1,128 @@
 import {
-  AffiliateStatusEnum,
-  type AffiliateStatusHistoryItem,
-  type CouponHistoryItem,
-  CouponStatusEnum,
+  type AffiliateAuditLogItem,
+  AuditChangeTypeEnum,
+  AuditEntityEnum,
+  UserTypeEnum,
 } from '@porto/contracts';
 import { buildTrail, type TrailEntry } from './trail';
 
-function statusEntry(
-  overrides: Partial<AffiliateStatusHistoryItem> = {},
-): AffiliateStatusHistoryItem {
+function entry(overrides: Partial<AffiliateAuditLogItem> = {}): AffiliateAuditLogItem {
   return {
-    fromStatus: AffiliateStatusEnum.PENDING_APPROVAL,
-    toStatus: AffiliateStatusEnum.APPROVED,
-    reason: null,
+    entity: AuditEntityEnum.AFFILIATE,
+    changeType: AuditChangeTypeEnum.UPDATE,
+    diff: { status: { from: 'PENDING_APPROVAL', to: 'APPROVED' } },
+    justification: null,
     actorName: 'Analista Porto',
+    actorType: UserTypeEnum.ADMIN,
     createdAt: '2026-08-25T12:00:00.000Z',
     ...overrides,
   };
 }
 
-function couponEntry(overrides: Partial<CouponHistoryItem> = {}): CouponHistoryItem {
-  return {
-    fromStatus: CouponStatusEnum.ACTIVE,
-    toStatus: CouponStatusEnum.INACTIVE,
-    fromDiscountPercent: 10,
-    toDiscountPercent: 10,
-    actorName: 'Analista Porto',
-    createdAt: '2026-09-01T12:00:00.000Z',
-    ...overrides,
-  };
+function coupon(diff: AffiliateAuditLogItem['diff'], changeType = AuditChangeTypeEnum.UPDATE) {
+  return entry({ entity: AuditEntityEnum.COUPON, changeType, diff });
 }
 
-const issue = couponEntry({
-  fromStatus: null,
-  toStatus: CouponStatusEnum.ACTIVE,
-  fromDiscountPercent: null,
-  toDiscountPercent: 10,
-  createdAt: '2026-08-25T12:00:00.000Z',
-});
-
 function titles(trail: TrailEntry[]): string[] {
-  return trail.map((entry) => entry.title);
+  return trail.map((item) => item.title);
 }
 
 describe('buildTrail', () => {
-  it('names the registration events as it always did', () => {
-    const received = statusEntry({
-      fromStatus: null,
-      toStatus: AffiliateStatusEnum.PENDING_APPROVAL,
+  it('names the registration and each status transition', () => {
+    const received = entry({
+      changeType: AuditChangeTypeEnum.CREATE,
+      diff: { status: { from: null, to: 'PENDING_APPROVAL' } },
       actorName: null,
-      createdAt: '2026-08-17T12:00:00.000Z',
+      actorType: null,
     });
 
-    expect(titles(buildTrail([statusEntry(), received], []))).toEqual([
+    expect(titles(buildTrail([entry(), received]))).toEqual([
       'Em análise → Aprovado',
       'Cadastro recebido',
     ]);
   });
 
-  it('carries the reason and who acted', () => {
-    const [entry] = buildTrail(
-      [statusEntry({ toStatus: AffiliateStatusEnum.REJECTED, reason: 'CPF divergente' })],
-      [],
+  it('keeps the order the api answered, newest first', () => {
+    const older = entry({ createdAt: '2026-08-01T12:00:00.000Z' });
+    const newer = coupon({ discountPercent: { from: 10, to: 15 } });
+
+    expect(titles(buildTrail([newer, older]))).toEqual([
+      'Desconto de 10% para 15%',
+      'Em análise → Aprovado',
+    ]);
+  });
+
+  it('carries the justification as the reason', () => {
+    const [item] = buildTrail([
+      entry({
+        diff: { status: { from: 'PENDING_APPROVAL', to: 'REJECTED' } },
+        justification: 'CPF divergente',
+      }),
+    ]);
+
+    expect(item.reason).toBe('CPF divergente');
+  });
+
+  it('names the analyst who acted, and the affiliate as itself', () => {
+    const byAffiliate = entry({
+      diff: { occupation: { from: 'INFLUENCER', to: 'CONTENT_CREATOR' } },
+      actorName: 'Marina Ferraz',
+      actorType: UserTypeEnum.AFFILIATE,
+    });
+    const bySystem = entry({ actorName: null, actorType: null });
+
+    expect(buildTrail([entry(), byAffiliate, bySystem]).map((item) => item.actor)).toEqual([
+      'Analista Porto',
+      'pelo próprio afiliado',
+      'pelo próprio afiliado',
+    ]);
+  });
+
+  it('names the coupon issue with its code and discount', () => {
+    const issued = coupon(
+      {
+        code: { from: null, to: 'MARINA10' },
+        status: { from: null, to: 'ACTIVE' },
+        discountPercent: { from: null, to: 10 },
+      },
+      AuditChangeTypeEnum.CREATE,
     );
 
-    expect(entry).toMatchObject({ reason: 'CPF divergente', actorName: 'Analista Porto' });
+    expect(titles(buildTrail([issued]))).toEqual(['Cupom MARINA10 emitido com 10% de desconto']);
   });
 
-  it('names the coupon issue with the discount it carried', () => {
-    expect(titles(buildTrail([], [issue]))).toEqual(['Cupom emitido com 10% de desconto']);
+  it('names a deactivation, a reactivation and a discount change together', () => {
+    expect(
+      titles(
+        buildTrail([
+          coupon({ status: { from: 'ACTIVE', to: 'INACTIVE' } }),
+          coupon({
+            status: { from: 'INACTIVE', to: 'ACTIVE' },
+            discountPercent: { from: 10, to: 20 },
+          }),
+        ]),
+      ),
+    ).toEqual(['Cupom desativado', 'Cupom reativado · Desconto de 10% para 20%']);
   });
 
-  it('names a deactivation', () => {
-    expect(titles(buildTrail([], [couponEntry()]))).toEqual(['Cupom desativado']);
-  });
-
-  it('names a reactivation', () => {
-    const reactivated = couponEntry({
-      fromStatus: CouponStatusEnum.INACTIVE,
-      toStatus: CouponStatusEnum.ACTIVE,
-    });
-
-    expect(titles(buildTrail([], [reactivated]))).toEqual(['Cupom reativado']);
-  });
-
-  it('names a discount change', () => {
-    const discounted = couponEntry({
-      toStatus: CouponStatusEnum.ACTIVE,
-      toDiscountPercent: 15,
-    });
-
-    expect(titles(buildTrail([], [discounted]))).toEqual(['Desconto de 10% para 15%']);
-  });
-
-  it('names both changes when they came together', () => {
-    expect(titles(buildTrail([], [couponEntry({ toDiscountPercent: 15 })]))).toEqual([
-      'Cupom desativado · Desconto de 10% para 15%',
+  it('names each profile edit with the value before and after', () => {
+    expect(
+      titles(
+        buildTrail([
+          entry({ diff: { occupation: { from: 'INFLUENCER', to: 'CONTENT_CREATOR' } } }),
+          entry({ diff: { email: { from: 'marina@email.com', to: 'nova@email.com' } } }),
+          entry({
+            diff: {
+              pixKeyType: { from: 'EMAIL', to: 'PHONE' },
+              pixKey: { from: 'marina@email.com', to: '11987654321' },
+            },
+          }),
+        ]),
+      ),
+    ).toEqual([
+      'Ocupação: Influenciador → Criador de Conteúdo',
+      'E-mail: marina@email.com → nova@email.com',
+      'Tipo de chave PIX: E-mail → Telefone · Chave PIX: marina@email.com → (11) 98765-4321',
     ]);
-  });
-
-  it('mixes both trails, newest first', () => {
-    const received = statusEntry({
-      fromStatus: null,
-      toStatus: AffiliateStatusEnum.PENDING_APPROVAL,
-      createdAt: '2026-08-17T12:00:00.000Z',
-    });
-
-    expect(titles(buildTrail([statusEntry(), received], [couponEntry()]))).toEqual([
-      'Cupom desativado',
-      'Em análise → Aprovado',
-      'Cadastro recebido',
-    ]);
-  });
-
-  /*
-    Cupom e aprovação são gravados na mesma transação e saem com o mesmo
-    instante. Lida de baixo para cima, a trilha tem que contar a aprovação antes
-    do cupom que ela emitiu.
-  */
-  it('shows the coupon issue above the approval it came with', () => {
-    expect(titles(buildTrail([statusEntry()], [issue]))).toEqual([
-      'Cupom emitido com 10% de desconto',
-      'Em análise → Aprovado',
-    ]);
-  });
-
-  it('gives every entry a key of its own, even at the same instant', () => {
-    const keys = buildTrail([statusEntry()], [issue]).map((entry) => entry.key);
-
-    expect(new Set(keys).size).toBe(keys.length);
   });
 });
