@@ -11,6 +11,8 @@ export const LOGIN_PATH = '/admin/login';
  */
 export const DASHBOARD_PATH = '/admin';
 export const QUEUE_PATH = '/admin/afiliados';
+/** O download da planilha com todos os afiliados, servido por route handler. */
+export const QUEUE_SHEET_PATH = '/admin/afiliados/planilha';
 export const CAMPAIGNS_PATH = '/admin/campanhas';
 
 /**

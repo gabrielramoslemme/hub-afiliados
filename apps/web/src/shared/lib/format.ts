@@ -51,7 +51,7 @@ export function pixKeyTypeName(type: PixKeyTypeEnum): string {
  * string que o cliente hidrata, e a analista vê o horário do fato — não o da
  * máquina onde o Next está rodando.
  */
-const TIME_ZONE = 'America/Sao_Paulo';
+export const TIME_ZONE = 'America/Sao_Paulo';
 
 const dateTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
   timeZone: TIME_ZONE,
