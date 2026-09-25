@@ -53,4 +53,21 @@ export interface EnvironmentVariables {
    * lados. É o que impede reenviar para sempre uma chamada capturada.
    */
   PORTO_WEBHOOK_TOLERANCE_SECONDS: number;
+  /** Vazias, o saque fica desligado. */
+  TRANSFEERA_CLIENT_ID: string;
+  TRANSFEERA_CLIENT_SECRET: string;
+  /** O endpoint inteiro, `/authorization` incluído. */
+  TRANSFEERA_AUTH_URL: string;
+  TRANSFEERA_API_BASE_URL: string;
+  /** A Transfeera exige nome e contato no `User-Agent` de toda chamada. */
+  TRANSFEERA_USER_AGENT: string;
+  TRANSFEERA_TIMEOUT_MS: number;
+  /** O segredo devolvido no cadastro do webhook na Transfeera. Vazio, a rota recusa tudo. */
+  TRANSFEERA_WEBHOOK_SECRET: string;
+  /** O `t` do `Transfeera-Signature` vem em milissegundos; a tolerância, em segundos. */
+  TRANSFEERA_WEBHOOK_TOLERANCE_SECONDS: number;
+  /** Quanto um saque sem resposta da Transfeera espera até ser pedido de novo. */
+  WITHDRAWAL_RETRY_AFTER_MINUTES: number;
+  /** Quanto um saque em processamento espera o webhook até a Transfeera ser consultada. */
+  WITHDRAWAL_STALE_AFTER_MINUTES: number;
 }

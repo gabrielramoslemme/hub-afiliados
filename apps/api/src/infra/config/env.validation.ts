@@ -51,4 +51,23 @@ export const envValidationSchema = Joi.object({
   // combinou o segredo com a Porto, e o que se quer ali é só a rota fechada.
   PORTO_WEBHOOK_SECRET: Joi.string().min(32).allow('').default(''),
   PORTO_WEBHOOK_TOLERANCE_SECONDS: Joi.number().integer().min(1).default(300),
+
+  // Sem credencial o saque fica desligado — a rota responde WDR-003 e a
+  // reconciliação não roda. Opcional de propósito: obrigatória, derrubaria o
+  // deploy de todo ambiente que ainda não recebeu a credencial da Transfeera.
+  TRANSFEERA_CLIENT_ID: Joi.string().allow('').default(''),
+  TRANSFEERA_CLIENT_SECRET: Joi.string().allow('').default(''),
+  TRANSFEERA_AUTH_URL: Joi.string()
+    .uri()
+    .default('https://login-api-sandbox.transfeera.com/authorization'),
+  TRANSFEERA_API_BASE_URL: Joi.string().uri().default('https://api-sandbox.transfeera.com'),
+  TRANSFEERA_USER_AGENT: Joi.string().default(
+    'Porto Hub de Afiliados (afiliados@portoservico.com.br)',
+  ),
+  TRANSFEERA_TIMEOUT_MS: Joi.number().default(10000),
+  // Vazio fecha o webhook da Transfeera: toda chamada volta 401.
+  TRANSFEERA_WEBHOOK_SECRET: Joi.string().allow('').default(''),
+  TRANSFEERA_WEBHOOK_TOLERANCE_SECONDS: Joi.number().integer().min(1).default(300),
+  WITHDRAWAL_RETRY_AFTER_MINUTES: Joi.number().integer().min(1).default(5),
+  WITHDRAWAL_STALE_AFTER_MINUTES: Joi.number().integer().min(1).default(120),
 });

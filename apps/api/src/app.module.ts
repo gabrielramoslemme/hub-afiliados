@@ -11,6 +11,7 @@ import { AuthServicesModule } from '@Infra/services/auth/auth-services.module';
 import { ClockModule } from '@Infra/services/clock/clock.module';
 import { CouponGatewayModule } from '@Infra/services/coupons/coupon-gateway.module';
 import { MailModule } from '@Infra/services/email/mail.module';
+import { PayoutGatewayModule } from '@Infra/services/payouts/payout-gateway.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { MailModule } from '@Infra/services/email/mail.module';
     ClockModule,
     MailModule,
     CouponGatewayModule,
+    PayoutGatewayModule,
     HealthModule,
     AffiliateChannelModule,
     AdminModule,
