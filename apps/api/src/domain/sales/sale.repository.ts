@@ -21,14 +21,17 @@ export interface RegisterSaleInput {
   couponId: number;
   externalId: string;
   amountCents: number;
+  incentiveCents: number;
   item: string;
-  registeredAt: Date;
+  soldAt: Date;
   event: AppliedIncentiveEvent;
 }
 
 export interface SettleSaleInput {
   saleId: number;
   toStatus: IncentiveStatusEnum.RELEASED | IncentiveStatusEnum.CANCELED;
+  /** O valor do evento que encerra, que substitui o do registro. */
+  incentiveCents: number;
   settledAt: Date;
   event: AppliedIncentiveEvent;
 }

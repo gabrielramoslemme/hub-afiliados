@@ -28,6 +28,9 @@ export interface ApplyIncentiveEventInput {
   externalSaleId: string;
   couponCode: string;
   amountCents: number;
+  incentiveCents: number;
+  /** Quando o cliente comprou. Só o registro a grava: a venda não muda de data. */
+  soldAt: Date;
   item: string;
   /** A chamada como chegou, para a trilha. */
   payload: Record<string, unknown>;
@@ -130,10 +133,9 @@ export class ApplyIncentiveEventUseCase
           couponId: coupon.id,
           externalId: input.externalSaleId,
           amountCents: input.amountCents,
+          incentiveCents: input.incentiveCents,
           item: input.item,
-          // O melhor instante que o contrato oferece: `dataHoraEvento` é a hora
-          // do envio, não a da venda, e a data real foi pedida à Porto.
-          registeredAt: input.sentAt,
+          soldAt: input.soldAt,
           event,
         });
         return sale && { applied: true, salePublicId: sale.publicId };
@@ -143,6 +145,7 @@ export class ApplyIncentiveEventUseCase
         const sale = await this.saleRepository.settle({
           saleId: decision.sale.id,
           toStatus: decision.toStatus,
+          incentiveCents: input.incentiveCents,
           settledAt: input.sentAt,
           event,
         });

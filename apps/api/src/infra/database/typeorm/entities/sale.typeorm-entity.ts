@@ -15,8 +15,9 @@ import { SaleEntity } from '@Domain/sales/sale.entity';
 import { CouponTypeormEntity } from './coupon.typeorm-entity';
 
 @Entity('affiliate_sales')
-@Index('ix_affiliate_sales_coupon', ['couponId', 'registeredAt'])
+@Index('ix_affiliate_sales_coupon', ['couponId', 'soldAt'])
 @Check('ck_affiliate_sales_amount_cents', '"amount_cents" >= 0')
+@Check('ck_affiliate_sales_incentive_cents', '"incentive_cents" >= 0')
 @Check('ck_affiliate_sales_settled_at', `("incentive_status" = 'PENDING') = ("settled_at" IS NULL)`)
 export class SaleTypeormEntity implements SaleEntity {
   @PrimaryGeneratedColumn()
@@ -39,14 +40,17 @@ export class SaleTypeormEntity implements SaleEntity {
   @Column({ name: 'amount_cents', type: 'int' })
   amountCents: number;
 
+  @Column({ name: 'incentive_cents', type: 'int' })
+  incentiveCents: number;
+
   @Column({ type: 'text' })
   item: string;
 
   @Column({ name: 'incentive_status', type: 'varchar', length: 20 })
   incentiveStatus: IncentiveStatusEnum;
 
-  @Column({ name: 'registered_at', type: 'timestamptz' })
-  registeredAt: Date;
+  @Column({ name: 'sold_at', type: 'timestamptz' })
+  soldAt: Date;
 
   @Column({ name: 'settled_at', type: 'timestamptz', nullable: true })
   settledAt: Date | null;

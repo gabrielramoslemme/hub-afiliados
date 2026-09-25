@@ -61,6 +61,16 @@ export class IncentiveDto {
     message: 'status deve ser PENDENTE, LIBERADO ou CANCELADO',
   })
   status: WireIncentiveStatus;
+
+  // Obrigatório: é o que o afiliado recebe, e a Mesa não tem como calcular — os
+  // percentuais e a decisão de comissionar são da Porto. Sem limite de casas
+  // decimais pelo mesmo motivo do `valorVenda`.
+  @ApiProperty({ example: 27, description: 'O incentivo do afiliado nesta venda, em reais' })
+  // Os decorators rodam de baixo para cima e o pipe para no primeiro erro: o
+  // `@IsNumber` fica embaixo para o valor ausente não virar "negativo".
+  @Min(0, { message: 'valor não pode ser negativo' })
+  @IsNumber({ allowNaN: false, allowInfinity: false }, { message: 'valor deve ser número' })
+  valor: number;
 }
 
 export class IncentiveSaleDto {
@@ -88,6 +98,14 @@ export class IncentiveSaleDto {
   @IsString({ message: 'item é obrigatório' })
   @IsNotEmpty({ message: 'item é obrigatório' })
   item: string;
+
+  @ApiProperty({
+    format: 'date-time',
+    example: '2026-09-11T12:10:00Z',
+    description: 'Quando o cliente comprou, em UTC',
+  })
+  @IsISO8601({ strict: true }, { message: 'dataVenda deve ser data e hora ISO-8601' })
+  dataVenda: string;
 }
 
 export class IncentiveNotificationRequestDto {
@@ -133,6 +151,8 @@ export class IncentiveNotificationRequestDto {
       couponCode: dto.venda.cupom,
       // Arredondar, não truncar: 310.99 * 100 é 31098.999999999996 em float.
       amountCents: Math.round(dto.venda.valorVenda * 100),
+      incentiveCents: Math.round(dto.incentivo.valor * 100),
+      soldAt: new Date(dto.venda.dataVenda),
       item: dto.venda.item,
       payload,
     };

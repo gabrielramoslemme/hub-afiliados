@@ -17,9 +17,16 @@ export interface SaleEntity {
   externalId: string;
   /** Em centavos, nunca em float. A Porto manda sempre o valor original da compra. */
   amountCents: number;
+  /**
+   * O incentivo do afiliado nesta venda, em centavos, como a Porto decidiu. É o
+   * do último evento aplicado: o do registro enquanto pendente, e o do
+   * encerramento depois — que é o que ela paga.
+   */
+  incentiveCents: number;
   item: string;
   incentiveStatus: IncentiveStatusEnum;
-  registeredAt: Date;
+  /** A `venda.dataVenda` da Porto: quando o cliente comprou, não quando nos avisaram. */
+  soldAt: Date;
   /** Quando a venda foi concluída ou cancelada; nulo enquanto pendente. */
   settledAt: Date | null;
   createdAt: Date;

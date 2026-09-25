@@ -49,7 +49,13 @@ export class SaleTypeormRepository implements SaleRepository {
     });
   }
 
-  settle({ saleId, toStatus, settledAt, event }: SettleSaleInput): Promise<SaleEntity | null> {
+  settle({
+    saleId,
+    toStatus,
+    incentiveCents,
+    settledAt,
+    event,
+  }: SettleSaleInput): Promise<SaleEntity | null> {
     return this.dataSource.transaction(async (manager) => {
       // O use case leu a venda pendente sem lock; é aqui, travada, que se
       // confere se ela continua pendente — senão duas conclusões opostas
@@ -62,6 +68,7 @@ export class SaleTypeormRepository implements SaleRepository {
       if (sale?.incentiveStatus !== IncentiveStatusEnum.PENDING) return null;
 
       sale.incentiveStatus = toStatus;
+      sale.incentiveCents = incentiveCents;
       sale.settledAt = settledAt;
       const saved = await manager.save(sale);
 

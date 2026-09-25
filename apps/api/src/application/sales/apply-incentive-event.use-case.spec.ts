@@ -24,6 +24,8 @@ import {
 describe('ApplyIncentiveEventUseCase', () => {
   const NOW = new Date('2026-09-11T12:17:09.000Z');
   const SENT_AT = new Date('2026-09-11T12:17:08.319Z');
+  /* Dias antes do envio: é o caso de um reprocessamento manual. */
+  const SOLD_AT = new Date('2026-09-08T15:40:00.000Z');
   const EXTERNAL_ID = '7c4f7b20-709a-4bde-8646-2fd1a5ae6fd4';
 
   let couponRepository: ReturnType<typeof couponRepositoryMock>;
@@ -51,6 +53,8 @@ describe('ApplyIncentiveEventUseCase', () => {
       externalSaleId: EXTERNAL_ID,
       couponCode: 'PARCEIRO10',
       amountCents: 31099,
+      incentiveCents: 2700,
+      soldAt: SOLD_AT,
       item: 'PFAZ * VENTILADOR',
       payload: { idEvento: '8d4a9d5f-4f17-4ad8-bec7-16db8d0e2a4b' },
       ...overrides,
@@ -83,15 +87,16 @@ describe('ApplyIncentiveEventUseCase', () => {
   });
 
   describe('registration', () => {
-    it('creates the sale as pending, dated by when Porto sent it', async () => {
+    it('creates the sale as pending, with the incentive Porto decided and when it was sold', async () => {
       const result = await useCase.execute(input(IncentiveEventTypeEnum.SALE_REGISTERED));
 
       expect(saleRepository.register).toHaveBeenCalledWith({
         couponId: 7,
         externalId: EXTERNAL_ID,
         amountCents: 31099,
+        incentiveCents: 2700,
         item: 'PFAZ * VENTILADOR',
-        registeredAt: SENT_AT,
+        soldAt: SOLD_AT,
         event: {
           eventId: '8d4a9d5f-4f17-4ad8-bec7-16db8d0e2a4b',
           externalSaleId: EXTERNAL_ID,
@@ -150,6 +155,17 @@ describe('ApplyIncentiveEventUseCase', () => {
         expect.objectContaining({ saleId: 40, toStatus, settledAt: SENT_AT }),
       );
       expect(result.applied).toBe(true);
+    });
+
+    /* O valor que vale é o do evento que encerrou a venda: é ele que a Porto paga. */
+    it('keeps the incentive carried by the event that settled the sale', async () => {
+      saleRepository.findByExternalId.mockResolvedValue(existingSale(IncentiveStatusEnum.PENDING));
+
+      await useCase.execute(input(IncentiveEventTypeEnum.SALE_COMPLETED, { incentiveCents: 2500 }));
+
+      expect(saleRepository.settle).toHaveBeenCalledWith(
+        expect.objectContaining({ incentiveCents: 2500 }),
+      );
     });
 
     it('answers a repeated settlement without writing the sale again', async () => {
