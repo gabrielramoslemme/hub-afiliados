@@ -17,6 +17,8 @@ import { SetPasswordUseCase } from '@Application/auth/set-password.use-case';
 import { ChangeAffiliateCouponUseCase } from '@Application/coupons/change-affiliate-coupon.use-case';
 import { CheckCouponAvailabilityUseCase } from '@Application/coupons/check-coupon-availability.use-case';
 import { ApplyIncentiveEventUseCase } from '@Application/sales/apply-incentive-event.use-case';
+import { GetAffiliateReferralsUseCase } from '@Application/sales/get-affiliate-referrals.use-case';
+import { GetAffiliateWalletUseCase } from '@Application/sales/get-affiliate-wallet.use-case';
 import { RecordInvalidIncentiveNotificationUseCase } from '@Application/sales/record-invalid-incentive-notification.use-case';
 import { AFFILIATE_REPOSITORY } from '@Domain/affiliates/affiliate.repository';
 import { AUDIT_LOG_REPOSITORY } from '@Domain/audit/audit-log.repository';
@@ -116,6 +118,8 @@ const USE_CASES = [
   ]),
   provideUseCase(ChangeEmailUseCase, [USER_REPOSITORY, PASSWORD_HASHER, MAILER]),
   provideUseCase(ChangeOccupationUseCase, [USER_REPOSITORY, AFFILIATE_REPOSITORY]),
+  provideUseCase(GetAffiliateReferralsUseCase, [USER_REPOSITORY, SALE_REPOSITORY, CLOCK]),
+  provideUseCase(GetAffiliateWalletUseCase, [USER_REPOSITORY, SALE_REPOSITORY, CLOCK]),
   provideUseCase(ApplyIncentiveEventUseCase, [
     COUPON_REPOSITORY,
     SALE_REPOSITORY,

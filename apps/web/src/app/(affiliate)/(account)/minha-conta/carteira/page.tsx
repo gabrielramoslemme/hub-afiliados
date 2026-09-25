@@ -9,11 +9,11 @@ export default async function WalletPage() {
 
   return (
     <>
-      <PageHeading title="Carteira" lead="Saldo, extrato e para onde o dinheiro vai." />
+      <PageHeading title="Carteira" lead="Incentivos liberados e para onde o dinheiro vai." />
 
       {/*
-        Em telas largas o saldo acompanha a rolagem do extrato: a resposta para
-        "quanto eu tenho" não some quando a pessoa desce a lista.
+        Em telas largas o total acompanha a rolagem do extrato: a resposta para
+        "quanto foi liberado" não some quando a pessoa desce a lista.
       */}
       <div className="mt-7 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:items-start">
         <div className="lg:sticky lg:top-24">

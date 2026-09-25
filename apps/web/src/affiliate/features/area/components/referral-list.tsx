@@ -15,9 +15,17 @@ const PERIODS: { period: ReferralPeriodEnum; tab: string; caption: string }[] = 
   { period: ReferralPeriodEnum.ALL, tab: 'Tudo', caption: 'Desde o início' },
 ];
 
-const STATUS: Record<ReferralStatusEnum, { label: string; tone: 'approved' | 'pending' }> = {
+/*
+  A não concluída sai em cinza, não em vermelho: não é erro de ninguém, e o
+  afiliado não tem o que fazer com ela além de entender por que não rendeu.
+*/
+const STATUS: Record<
+  ReferralStatusEnum,
+  { label: string; tone: 'approved' | 'pending' | 'neutral' }
+> = {
   [ReferralStatusEnum.COMPLETED]: { label: 'Realizado', tone: 'approved' },
   [ReferralStatusEnum.PENDING]: { label: 'Pendente', tone: 'pending' },
+  [ReferralStatusEnum.CANCELED]: { label: 'Não concluída', tone: 'neutral' },
 };
 
 interface ReferralListProps {
@@ -76,33 +84,37 @@ export function ReferralList({ referrals, period, className }: ReferralListProps
           {referrals.entries.map((referral) => {
             const status = STATUS[referral.status];
             const isCompleted = referral.status === ReferralStatusEnum.COMPLETED;
+            const isCanceled = referral.status === ReferralStatusEnum.CANCELED;
 
             return (
               <li key={referral.id} className="flex items-start justify-between gap-4 py-3.5">
                 <div className="min-w-0">
-                  <p className="font-semibold text-ink-900">{referral.title}</p>
-                  <p className="mt-0.5 text-[0.8125rem] text-ink-500">
-                    {referral.detail} ·{' '}
-                    <span className="whitespace-nowrap" data-tabular>
-                      {formatDate(referral.occurredAt)}
-                    </span>
+                  <p className="font-semibold text-ink-900">{referral.service}</p>
+                  <p className="mt-0.5 text-[0.8125rem] text-ink-500" data-tabular>
+                    {formatDate(referral.occurredAt)}
                   </p>
                 </div>
 
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
                   {/*
                     O incentivo pendente sai sem o verde: ele ainda depende do
-                    serviço ser concluído e não entrou no saldo.
+                    serviço ser concluído e não entrou no extrato.
                   */}
-                  <span
-                    className={cn(
-                      'whitespace-nowrap font-semibold',
-                      isCompleted ? 'text-[var(--status-approved)]' : 'text-ink-500',
-                    )}
-                    data-tabular
-                  >
-                    + {formatBRL(referral.incentiveCents)}
-                  </span>
+                  {isCanceled ? (
+                    <span className="whitespace-nowrap text-[0.8125rem] text-ink-400">
+                      Sem incentivo
+                    </span>
+                  ) : (
+                    <span
+                      className={cn(
+                        'whitespace-nowrap font-semibold',
+                        isCompleted ? 'text-[var(--status-approved)]' : 'text-ink-500',
+                      )}
+                      data-tabular
+                    >
+                      + {formatBRL(referral.incentiveCents)}
+                    </span>
+                  )}
                   <Badge tone={status.tone}>{status.label}</Badge>
                 </div>
               </li>

@@ -43,6 +43,8 @@ export interface SettleSaleInput {
  */
 export interface SaleRepository {
   findByExternalId(externalId: string): Promise<SaleEntity | null>;
+  /** Todas as vendas do cupom, da mais recente para a mais antiga pela data da venda. */
+  listByCoupon(couponId: number): Promise<SaleEntity[]>;
   /**
    * Cria a venda pendente. Nulo quando outra chamada criou a mesma venda antes —
    * é o índice único que decide, porque a leitura do use case não segura nada.

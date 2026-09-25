@@ -1,5 +1,5 @@
 import type { ReferralPeriodEnum } from '@porto/contracts';
-import { fetchAccount, fetchReferrals, fetchWallet } from '../data';
+import { fetchAccount, fetchReferrals } from '../data';
 import { firstNameOf } from './account-topbar';
 import { CouponPanel } from './coupon-panel';
 import { PageHeading } from './page-heading';
@@ -8,11 +8,7 @@ import { SummaryCards } from './summary-cards';
 
 /** A primeira tela depois do login: o resumo, as indicações e o cupom. */
 export async function HomeScreen({ period }: { period: ReferralPeriodEnum }) {
-  const [account, wallet, referrals] = await Promise.all([
-    fetchAccount(),
-    fetchWallet(),
-    fetchReferrals(period),
-  ]);
+  const [account, referrals] = await Promise.all([fetchAccount(), fetchReferrals(period)]);
 
   return (
     <>
@@ -21,7 +17,7 @@ export async function HomeScreen({ period }: { period: ReferralPeriodEnum }) {
         lead="Seu resumo de indicações, incentivos e próximos passos."
       />
 
-      <SummaryCards summary={referrals.summary} balanceCents={wallet.balanceCents} />
+      <SummaryCards summary={referrals.summary} />
 
       {/* No celular o cupom vem antes da lista: copiar e compartilhar é o que mais se faz aqui. */}
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-start">

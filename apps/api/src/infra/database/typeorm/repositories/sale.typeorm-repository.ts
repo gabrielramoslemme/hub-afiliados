@@ -20,6 +20,12 @@ export class SaleTypeormRepository implements SaleRepository {
     return this.repository.findOne({ where: { externalId } });
   }
 
+  listByCoupon(couponId: number): Promise<SaleEntity[]> {
+    // `id` desempata duas vendas no mesmo instante, para a lista não trocar de
+    // ordem entre dois reloads.
+    return this.repository.find({ where: { couponId }, order: { soldAt: 'DESC', id: 'DESC' } });
+  }
+
   register({ event, ...sale }: RegisterSaleInput): Promise<SaleEntity | null> {
     return this.dataSource.transaction(async (manager) => {
       // `ON CONFLICT DO NOTHING` em vez de capturar o erro do índice único: o

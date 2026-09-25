@@ -1,7 +1,7 @@
-import { Landmark, ShieldCheck } from 'lucide-react';
+import { Landmark } from 'lucide-react';
 import type { AffiliateWalletResponse, PixKeyTypeEnum } from '@porto/contracts';
 import { CountUp } from '@/affiliate/shared/components/count-up';
-import { formatBRL, formatDateTime } from '@/shared/lib/format';
+import { formatDateTime } from '@/shared/lib/format';
 
 const PIX_LABELS: Record<PixKeyTypeEnum, string> = {
   EMAIL: 'E-mail',
@@ -19,15 +19,18 @@ interface WalletCardProps {
  * Não há botão de saque, ao contrário da referência que serviu de base: neste
  * programa o incentivo é pago pela Porto direto na chave cadastrada, sem a
  * pessoa pedir. Um botão que não corresponde a nada seria pior que a ausência
- * dele — o que o cartão faz é dizer para onde o dinheiro vai e quanto já foi.
+ * dele — o que o cartão faz é dizer quanto foi liberado e para onde vai.
+ *
+ * Também não há "saldo" nem "já pago": os pagamentos da Porto ainda não chegam
+ * à Mesa, e um saldo que ignora o que já foi pago mentiria no primeiro deles.
  */
 export function WalletCard({ wallet, pixKeyType, maskedPixKey }: WalletCardProps) {
   return (
     <section className="surface-brand surface-mesh relative isolate overflow-hidden rounded-panel p-6 text-white shadow-float sm:p-8">
-      <p className="text-eyebrow uppercase text-blue-200">Saldo disponível</p>
+      <p className="text-eyebrow uppercase text-blue-200">Incentivo liberado</p>
 
       <CountUp
-        cents={wallet.balanceCents}
+        cents={wallet.releasedCents}
         className="mt-3 text-[2.75rem] font-extrabold leading-none tracking-[-0.035em] sm:text-[3.25rem]"
       />
 
@@ -39,29 +42,19 @@ export function WalletCard({ wallet, pixKeyType, maskedPixKey }: WalletCardProps
         Atualizado em {formatDateTime(wallet.updatedAt)}
       </p>
 
-      <dl className="mt-7 grid gap-3 border-t border-white/15 pt-6 sm:grid-cols-2">
+      <dl className="mt-7 border-t border-white/15 pt-6">
         <div className="flex items-start gap-3">
           <Landmark className="mt-0.5 size-4 shrink-0 text-cyan-300" aria-hidden />
-          {/*
-            `min-w-0` e `break-all`: a chave de e-mail mascarada não tem espaço
-            para quebrar, e sem os dois ela passa por cima do "já pago" ao lado.
-          */}
+          {/* `break-all`: a chave de e-mail mascarada não tem espaço para quebrar. */}
           <div className="min-w-0">
             <dt className="text-[0.8125rem] text-blue-200">Recebe na chave</dt>
             <dd className="mt-0.5 break-all text-[0.9375rem] font-semibold" data-tabular>
               {maskedPixKey}
               <span className="ml-2 font-normal text-blue-200">{PIX_LABELS[pixKeyType]}</span>
             </dd>
-          </div>
-        </div>
-
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-cyan-300" aria-hidden />
-          <div>
-            <dt className="text-[0.8125rem] text-blue-200">Já pago pela Porto</dt>
-            <dd className="mt-0.5 text-[0.9375rem] font-semibold" data-tabular>
-              {formatBRL(wallet.paidCents)}
-            </dd>
+            <p className="mt-1 text-[0.8125rem] text-blue-200">
+              A Porto paga direto nesta chave, sem você precisar pedir.
+            </p>
           </div>
         </div>
       </dl>

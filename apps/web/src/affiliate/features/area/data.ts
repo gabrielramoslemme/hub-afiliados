@@ -12,7 +12,7 @@ import { affiliateApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
 
 /**
- * Saldo, extrato e indicações não podem vir de cache: entre a pessoa abrir a
+ * Carteira, extrato e indicações não podem vir de cache: entre a pessoa abrir a
  * tela e olhar de novo, uma venda pode ter entrado ou um pagamento pode ter
  * saído.
  */

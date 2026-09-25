@@ -45,17 +45,13 @@ function Card({ label, value, note, highlight = false, valueClassName }: CardPro
   );
 }
 
-interface SummaryCardsProps {
-  summary: AffiliateReferralsSummary;
-  balanceCents: number;
-}
-
 /**
  * Os três números respondem, nesta ordem, "quanto eu vendi", "quanto isso me
- * rendeu" e "quanto ainda vou receber". O saldo não diz "disponível para saque":
- * neste programa não há saque — a Porto paga direto na chave cadastrada.
+ * rendeu" e "quanto ainda pode entrar". O terceiro é o incentivo das vendas que
+ * esperam o serviço, e não um saldo: os pagamentos da Porto ainda não chegam à
+ * Mesa, então não há como dizer quanto falta receber.
  */
-export function SummaryCards({ summary, balanceCents }: SummaryCardsProps) {
+export function SummaryCards({ summary }: { summary: AffiliateReferralsSummary }) {
   const services = summary.salesCount === 1 ? 'serviço vendido' : 'serviços vendidos';
 
   return (
@@ -73,9 +69,9 @@ export function SummaryCards({ summary, balanceCents }: SummaryCardsProps) {
         note="Das vendas com serviço concluído"
       />
       <Card
-        label="Saldo da carteira"
-        value={formatBRL(balanceCents)}
-        note="A receber na sua chave PIX"
+        label="Aguardando conclusão"
+        value={formatBRL(summary.pendingIncentiveCents)}
+        note="Incentivo das vendas com serviço pendente"
       />
     </div>
   );

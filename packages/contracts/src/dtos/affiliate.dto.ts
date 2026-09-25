@@ -81,18 +81,21 @@ export interface AffiliateMeResponse {
 export interface AffiliateStatementEntry {
   id: string;
   kind: StatementEntryKindEnum;
+  /** De onde a linha veio: o serviço vendido, no caso de um incentivo. */
   title: string;
-  detail: string;
   /** Centavos, sempre positivo. O sinal quem dá é o `kind`. */
   cents: number;
   occurredAt: string;
 }
 
+/*
+  Sem saldo e sem "já pago": os pagamentos da Porto na chave do afiliado ainda
+  não chegam à Mesa, e um saldo calculado sem eles ficaria errado no primeiro
+  pagamento. O extrato, por ora, só tem entradas.
+*/
 export interface AffiliateWalletResponse {
-  /** Centavos. Dinheiro em ponto flutuante acumula erro na soma. */
-  balanceCents: number;
-  /** Total já pago via PIX, em centavos. */
-  paidCents: number;
+  /** Soma dos incentivos liberados, em centavos. Dinheiro em float acumula erro na soma. */
+  releasedCents: number;
   updatedAt: string;
   entries: AffiliateStatementEntry[];
 }
@@ -101,10 +104,8 @@ export interface AffiliateWalletResponse {
 export interface AffiliateReferral {
   id: string;
   status: ReferralStatusEnum;
-  /** A categoria do serviço: "Serviços Automotivos". */
-  title: string;
-  /** O serviço contratado: "Guincho 24h". */
-  detail: string;
+  /** O serviço contratado, como a Porto o descreve: "Conserto de fogão". */
+  service: string;
   /** Valor do serviço vendido, em centavos. */
   saleCents: number;
   /** O incentivo do afiliado nesta venda, em centavos. */
@@ -120,6 +121,8 @@ export interface AffiliateReferralsSummary {
   salesCount: number;
   /** Soma dos incentivos das vendas concluídas, em centavos. */
   confirmedIncentiveCents: number;
+  /** Soma dos incentivos das vendas que ainda esperam o serviço, em centavos. */
+  pendingIncentiveCents: number;
   /** Quantas vezes o cupom foi usado, com o serviço concluído ou não. */
   couponUses: number;
 }

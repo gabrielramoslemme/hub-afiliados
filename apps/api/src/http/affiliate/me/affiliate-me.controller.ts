@@ -1,4 +1,13 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Patch,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -12,13 +21,18 @@ import { ChangeEmailUseCase } from '@Application/affiliates/change-email.use-cas
 import { ChangeOccupationUseCase } from '@Application/affiliates/change-occupation.use-case';
 import { ChangePixKeyUseCase } from '@Application/affiliates/change-pix-key.use-case';
 import { GetAffiliateAccountUseCase } from '@Application/affiliates/get-affiliate-account.use-case';
+import { GetAffiliateReferralsUseCase } from '@Application/sales/get-affiliate-referrals.use-case';
+import { GetAffiliateWalletUseCase } from '@Application/sales/get-affiliate-wallet.use-case';
 import { ActorInfo } from '@Http/shared/authenticated-request';
 import { Actor } from '@Http/shared/decorators/actor.decorator';
 import { AffiliateGuard } from '@Http/shared/guards/affiliate.guard';
 import { AffiliateAccountResponseDto } from './dtos/affiliate-account.response.dto';
+import { AffiliateReferralsResponseDto } from './dtos/affiliate-referrals.response.dto';
+import { AffiliateWalletResponseDto } from './dtos/affiliate-wallet.response.dto';
 import { ChangeEmailRequestDto } from './dtos/change-email.request.dto';
 import { ChangeOccupationRequestDto } from './dtos/change-occupation.request.dto';
 import { ChangePixKeyRequestDto } from './dtos/change-pix-key.request.dto';
+import { ReferralsQueryDto } from './dtos/referrals.query.dto';
 
 @ApiTags('affiliate/me')
 @ApiBearerAuth()
@@ -31,6 +45,8 @@ export class AffiliateMeController {
     private readonly changePixKeyUseCase: ChangePixKeyUseCase,
     private readonly changeEmailUseCase: ChangeEmailUseCase,
     private readonly changeOccupationUseCase: ChangeOccupationUseCase,
+    private readonly getAffiliateWalletUseCase: GetAffiliateWalletUseCase,
+    private readonly getAffiliateReferralsUseCase: GetAffiliateReferralsUseCase,
   ) {}
 
   @Get()
@@ -39,6 +55,31 @@ export class AffiliateMeController {
     // Nunca um id da rota: a conta que sai é sempre a de quem assinou o token.
     return AffiliateAccountResponseDto.from(
       await this.getAffiliateAccountUseCase.execute(actor.publicId),
+    );
+  }
+
+  /** Os incentivos liberados do afiliado. Sem saldo: os pagamentos ainda não chegam aqui. */
+  @Get('wallet')
+  @ApiOkResponse({ type: AffiliateWalletResponseDto })
+  async wallet(@Actor() actor: ActorInfo): Promise<AffiliateWalletResponseDto> {
+    return AffiliateWalletResponseDto.from(
+      await this.getAffiliateWalletUseCase.execute(actor.publicId),
+    );
+  }
+
+  /** As vendas feitas com o cupom. O período recorta a lista; o resumo é o acumulado. */
+  @Get('referrals')
+  @ApiOkResponse({ type: AffiliateReferralsResponseDto })
+  @ApiBadRequestResponse({ description: 'Período inválido' })
+  async referrals(
+    @Query() query: ReferralsQueryDto,
+    @Actor() actor: ActorInfo,
+  ): Promise<AffiliateReferralsResponseDto> {
+    return AffiliateReferralsResponseDto.from(
+      await this.getAffiliateReferralsUseCase.execute({
+        userPublicId: actor.publicId,
+        period: query.period,
+      }),
     );
   }
 
