@@ -24,23 +24,21 @@ import {
 } from '@nestjs/swagger';
 import { ApproveAffiliateUseCase } from '@Application/affiliates/approve-affiliate.use-case';
 import { GetAffiliateUseCase } from '@Application/affiliates/get-affiliate.use-case';
-import { ListAffiliateStatusHistoryUseCase } from '@Application/affiliates/list-affiliate-status-history.use-case';
+import { ListAffiliateAuditLogsUseCase } from '@Application/affiliates/list-affiliate-audit-logs.use-case';
 import { ListAffiliatesUseCase } from '@Application/affiliates/list-affiliates.use-case';
 import { RejectAffiliateUseCase } from '@Application/affiliates/reject-affiliate.use-case';
 import { ChangeAffiliateCouponUseCase } from '@Application/coupons/change-affiliate-coupon.use-case';
-import { ListCouponHistoryUseCase } from '@Application/coupons/list-coupon-history.use-case';
 import { ActorInfo } from '@Http/shared/authenticated-request';
 import { Actor } from '@Http/shared/decorators/actor.decorator';
 import { AdminGuard } from '@Http/shared/guards/admin.guard';
+import { AffiliateAuditLogResponseDto } from './dtos/affiliate-audit-log.response.dto';
 import {
   AffiliateDetailResponseDto,
   CouponSummaryResponseDto,
 } from './dtos/affiliate-detail.response.dto';
 import { PaginatedAffiliatesResponseDto } from './dtos/affiliate-list-item.response.dto';
-import { AffiliateStatusHistoryResponseDto } from './dtos/affiliate-status-history.response.dto';
 import { ApproveAffiliateRequestDto } from './dtos/approve-affiliate.request.dto';
 import { ChangeCouponRequestDto } from './dtos/change-coupon.request.dto';
-import { CouponHistoryResponseDto } from './dtos/coupon-history.response.dto';
 import { ListAffiliatesQueryDto } from './dtos/list-affiliates.query.dto';
 import { RejectAffiliateRequestDto } from './dtos/reject-affiliate.request.dto';
 
@@ -53,11 +51,10 @@ export class AdminAffiliatesController {
   constructor(
     private readonly listAffiliatesUseCase: ListAffiliatesUseCase,
     private readonly getAffiliateUseCase: GetAffiliateUseCase,
-    private readonly listAffiliateStatusHistoryUseCase: ListAffiliateStatusHistoryUseCase,
+    private readonly listAffiliateAuditLogsUseCase: ListAffiliateAuditLogsUseCase,
     private readonly approveAffiliateUseCase: ApproveAffiliateUseCase,
     private readonly rejectAffiliateUseCase: RejectAffiliateUseCase,
     private readonly changeAffiliateCouponUseCase: ChangeAffiliateCouponUseCase,
-    private readonly listCouponHistoryUseCase: ListCouponHistoryUseCase,
   ) {}
 
   @Get()
@@ -85,15 +82,19 @@ export class AdminAffiliatesController {
     return AffiliateDetailResponseDto.from(await this.getAffiliateUseCase.execute(publicId));
   }
 
-  @Get(':publicId/history')
-  @ApiOkResponse({ type: [AffiliateStatusHistoryResponseDto] })
+  /**
+   * A trilha de auditoria: o cadastro, as mudanças de status, as edições do
+   * perfil e o cupom, da mais recente para a mais antiga.
+   */
+  @Get(':publicId/audit-logs')
+  @ApiOkResponse({ type: [AffiliateAuditLogResponseDto] })
   @ApiNotFoundResponse({ description: 'Afiliado não encontrado' })
-  async history(
+  async auditLogs(
     @Param('publicId', ParseUUIDPipe) publicId: string,
-  ): Promise<AffiliateStatusHistoryResponseDto[]> {
-    const entries = await this.listAffiliateStatusHistoryUseCase.execute(publicId);
+  ): Promise<AffiliateAuditLogResponseDto[]> {
+    const entries = await this.listAffiliateAuditLogsUseCase.execute(publicId);
 
-    return entries.map(AffiliateStatusHistoryResponseDto.from);
+    return entries.map(AffiliateAuditLogResponseDto.from);
   }
 
   /** Aprovar é criar o cupom: ele é registrado na Porto antes de o status mudar. */
@@ -159,16 +160,5 @@ export class AdminAffiliatesController {
       status: body.status,
       discountPercent: body.discountPercent,
     });
-  }
-
-  @Get(':publicId/coupon/history')
-  @ApiOkResponse({ type: [CouponHistoryResponseDto] })
-  @ApiNotFoundResponse({ description: 'Afiliado não encontrado' })
-  async couponHistory(
-    @Param('publicId', ParseUUIDPipe) publicId: string,
-  ): Promise<CouponHistoryResponseDto[]> {
-    const entries = await this.listCouponHistoryUseCase.execute(publicId);
-
-    return entries.map(CouponHistoryResponseDto.from);
   }
 }

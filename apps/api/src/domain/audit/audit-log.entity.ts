@@ -1,4 +1,5 @@
 import { AuditChangeTypeEnum, AuditEntityEnum } from '@porto/contracts';
+import { UserEntity } from '@Domain/users/user.entity';
 
 /** O antes e o depois de cada campo que mudou, pelo nome da propriedade. */
 export type AuditDiff = Record<string, { from: unknown; to: unknown }>;
@@ -20,7 +21,13 @@ export interface AuditLogEntity {
   actorUserId: number | null;
   changeType: AuditChangeTypeEnum;
   diff: AuditDiff;
+  /** O motivo, quando a mudança pede um — a reprovação, por exemplo. */
+  justification: string | null;
   createdAt: Date;
+}
+
+export interface AuditLogWithActor extends AuditLogEntity {
+  actor: UserEntity | null;
 }
 
 /**

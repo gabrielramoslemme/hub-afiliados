@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { AuditEntityEnum } from '@porto/contracts';
 import { CouponEntity } from '@Domain/coupons/coupon.entity';
 import { ChangeCouponRecordInput, CouponRepository } from '@Domain/coupons/coupon.repository';
 import { CouponTypeormEntity } from '@Infra/database/typeorm/entities/coupon.typeorm-entity';
-import { CouponHistoryTypeormEntity } from '@Infra/database/typeorm/entities/coupon-history.typeorm-entity';
+import { recordAuditLog } from './record-audit-log';
 
 @Injectable()
 export class CouponTypeormRepository implements CouponRepository {
@@ -38,14 +39,12 @@ export class CouponTypeormRepository implements CouponRepository {
 
       const saved = await manager.save(coupon);
 
-      await manager.insert(CouponHistoryTypeormEntity, {
-        couponId: coupon.id,
-        fromStatus: before.status,
-        toStatus: saved.status,
-        fromDiscountPercent: before.discountPercent,
-        toDiscountPercent: saved.discountPercent,
-        actorUserId: input.actorUserId,
-      });
+      await recordAuditLog(
+        manager,
+        { entity: AuditEntityEnum.COUPON, entityId: coupon.id, actorUserId: input.actorUserId },
+        before,
+        { status: saved.status, discountPercent: saved.discountPercent },
+      );
 
       return saved;
     });

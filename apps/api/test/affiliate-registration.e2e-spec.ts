@@ -53,8 +53,14 @@ describe('Affiliate registration (e2e)', () => {
 
       expect(response.body).toEqual({ publicId: expect.any(String), status: 'PENDING_APPROVAL' });
       expect(
-        await e2e.dataSource.query('SELECT from_status, to_status FROM affiliate_status_history'),
-      ).toEqual([{ from_status: null, to_status: 'PENDING_APPROVAL' }]);
+        await e2e.dataSource.query('SELECT change_type, actor_user_id, diff FROM audit_logs'),
+      ).toEqual([
+        {
+          change_type: 'CREATE',
+          actor_user_id: null,
+          diff: { status: { from: null, to: 'PENDING_APPROVAL' } },
+        },
+      ]);
       expect(e2e.mail.sentTo(validBody.email)).toHaveLength(1);
     });
 
