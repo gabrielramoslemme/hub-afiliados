@@ -347,8 +347,14 @@ PORTO_WEBHOOK_SECRET=<segredo>
 Ele é opcional: sem a linha a API sobe, e `POST /v1/webhooks/porto/incentives`
 recusa toda chamada com 401. Gere com `openssl rand -hex 32`.
 
+Sem as duas credenciais da Porto (`PORTO_CLIENT_ID` e `PORTO_CLIENT_SECRET`) o
+deploy falha: linha ausente para o `install-release.sh` com `unbound variable`
+antes de tocar nos containers; linha vazia chega à API, que recusa subir, e o
+deploy volta para a release anterior. Os endereços do gateway da Porto não entram
+no parâmetro: valem os padrões da API, que são os de homologação.
+
 As credenciais da Transfeera (saque via PIX) entram do mesmo jeito, mais três
-linhas:
+linhas — todas opcionais, ao contrário das da Porto:
 
 ```
 TRANSFEERA_CLIENT_ID=<client_id>
@@ -360,16 +366,24 @@ TRANSFEERA_WEBHOOK_SECRET=<segredo>
 integração; sem elas o saque fica desligado (`WDR-003`), sem derrubar o
 deploy. `TRANSFEERA_WEBHOOK_SECRET` é o `signature_secret` devolvido pelo
 `POST /webhook` da Transfeera ao cadastrar o endereço do webhook; vazio, a
-rota recusa toda chamada com 401.
+rota recusa toda chamada com 401 (e a API avisa no log ao subir, se o saque
+estiver ligado sem ele).
+
+Os endereços da Transfeera têm padrão de sandbox na API. Em produção, mais duas
+linhas — `TRANSFEERA_AUTH_URL` é a URL inteira, com o `/authorization`:
+
+```
+TRANSFEERA_AUTH_URL=https://login-api.transfeera.com/authorization
+TRANSFEERA_API_BASE_URL=https://api.transfeera.com
+```
+
+O `install-release.sh` só escreve essas duas no `api.env` quando o parâmetro as
+traz: linha vazia não cai no padrão, chega à API como texto vazio e o Joi, que
+exige URL, recusa subir.
 
 **Webhook da Transfeera.** Cadastre `https://<host>/v1/webhooks/transfeera` na Transfeera
 (`POST /webhook`) e grave o segredo devolvido em `TRANSFEERA_WEBHOOK_SECRET`. O contrato
 está em `apps/api/docs/TRANSFEERA-webhook.md`.
-
-Sem as duas credenciais o deploy falha: linha ausente para o `install-release.sh` com
-`unbound variable` antes de tocar nos containers; linha vazia chega à API, que
-recusa subir, e o deploy volta para a release anterior. Os endereços do gateway
-não entram no parâmetro: valem os padrões da API, que são os de homologação.
 
 ⚠️ **Update de stack pode apagar as linhas escritas à mão.** O CloudFormation só regrava o
 parâmetro quando o valor dele no template muda — trocar `MailProvider`,

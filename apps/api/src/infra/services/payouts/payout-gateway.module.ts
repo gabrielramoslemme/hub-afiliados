@@ -1,4 +1,4 @@
-import { Global, Module } from '@nestjs/common';
+import { Global, Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CLOCK, Clock } from '@Domain/shared/clock';
 import { PAYOUT_GATEWAY } from '@Domain/withdrawals/payout-gateway';
@@ -31,12 +31,21 @@ import { TransfeeraTokenProvider } from './transfeera-token.provider';
           clock,
         );
 
+        const enabled = Boolean(clientId && clientSecret);
+        // O saque sai, mas o desfecho não volta: o webhook recusa tudo com 401 e
+        // só a reconciliação, a cada rodada, fecha o que ficou em processamento.
+        if (enabled && !configService.get('TRANSFEERA_WEBHOOK_SECRET', { infer: true })) {
+          new Logger(PayoutGatewayModule.name).warn(
+            'Saque via PIX ligado sem TRANSFEERA_WEBHOOK_SECRET: o webhook da Transfeera vai recusar toda chamada',
+          );
+        }
+
         return new TransfeeraPayoutGateway(
           {
             apiBaseUrl: configService.get('TRANSFEERA_API_BASE_URL', { infer: true }),
             userAgent,
             timeoutMs,
-            enabled: Boolean(clientId && clientSecret),
+            enabled,
           },
           tokenProvider,
         );

@@ -6,7 +6,10 @@ import {
   PayoutEventRepository,
   RecordStandalonePayoutEventInput,
 } from '@Domain/withdrawals/payout-event.repository';
-import { PayoutEventTypeormEntity } from '@Infra/database/typeorm/entities/payout-event.typeorm-entity';
+import {
+  fitPayoutEventText,
+  PayoutEventTypeormEntity,
+} from '@Infra/database/typeorm/entities/payout-event.typeorm-entity';
 
 @Injectable()
 export class PayoutEventTypeormRepository implements PayoutEventRepository {
@@ -18,7 +21,14 @@ export class PayoutEventTypeormRepository implements PayoutEventRepository {
   async record(input: RecordStandalonePayoutEventInput): Promise<void> {
     // `save`, e não `insert`: o tipo do `insert` trata o objeto da coluna
     // `jsonb` como entidade aninhada e recusa o `payload`.
-    await this.repository.save(this.repository.create(input));
+    await this.repository.save(
+      this.repository.create({
+        ...input,
+        eventId: fitPayoutEventText(input.eventId, 'eventId'),
+        reference: fitPayoutEventText(input.reference, 'reference'),
+        providerStatus: fitPayoutEventText(input.providerStatus, 'providerStatus'),
+      }),
+    );
   }
 
   async listByWithdrawal(withdrawalId: number): Promise<PayoutEventEntity[]> {

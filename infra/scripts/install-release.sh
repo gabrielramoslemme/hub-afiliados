@@ -137,6 +137,17 @@ TRANSFEERA_CLIENT_SECRET=${TRANSFEERA_CLIENT_SECRET:-}
 TRANSFEERA_WEBHOOK_SECRET=${TRANSFEERA_WEBHOOK_SECRET:-}
 ENV
 
+    # Os endereços da Transfeera só entram quando o parâmetro os traz. Linha
+    # vazia não cai no padrão da API: chega como '' e o Joi, que exige URL,
+    # derruba o boot. Sem a linha valem os padrões de sandbox; produção põe no
+    # parâmetro TRANSFEERA_AUTH_URL e TRANSFEERA_API_BASE_URL.
+    local name
+    for name in TRANSFEERA_AUTH_URL TRANSFEERA_API_BASE_URL; do
+      if [ -n "${!name:-}" ]; then
+        printf '%s=%s\n' "${name}" "${!name}" >> "${APP_DIR}/api.env"
+      fi
+    done
+
     # Nada de segredo aqui, e é essa a fronteira: a web não tem o que vazar.
     # `API_BASE_URL` aponta para o nome do serviço na rede interna do compose —
     # não é `NEXT_PUBLIC_`, e o navegador nunca a vê.

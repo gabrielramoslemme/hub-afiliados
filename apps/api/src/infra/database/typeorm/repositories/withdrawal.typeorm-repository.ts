@@ -31,7 +31,10 @@ import {
   SearchWithdrawalsResult,
   WithdrawalRepository,
 } from '@Domain/withdrawals/withdrawal.repository';
-import { PayoutEventTypeormEntity } from '@Infra/database/typeorm/entities/payout-event.typeorm-entity';
+import {
+  fitPayoutEventText,
+  PayoutEventTypeormEntity,
+} from '@Infra/database/typeorm/entities/payout-event.typeorm-entity';
 import { SaleTypeormEntity } from '@Infra/database/typeorm/entities/sale.typeorm-entity';
 import { WithdrawalTypeormEntity } from '@Infra/database/typeorm/entities/withdrawal.typeorm-entity';
 
@@ -202,10 +205,10 @@ export class WithdrawalTypeormRepository implements WithdrawalRepository {
         await manager.save(
           manager.create(PayoutEventTypeormEntity, {
             source: event.source,
-            eventId: event.eventId,
+            eventId: fitPayoutEventText(event.eventId, 'eventId'),
             withdrawalId: withdrawal?.id ?? null,
-            reference: update.reference || null,
-            providerStatus: update.providerStatus || null,
+            reference: fitPayoutEventText(update.reference, 'reference'),
+            providerStatus: fitPayoutEventText(update.providerStatus, 'providerStatus'),
             outcome,
             payload: update.payload,
             receivedAt: event.receivedAt,
