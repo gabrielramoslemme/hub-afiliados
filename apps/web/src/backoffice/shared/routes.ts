@@ -14,6 +14,8 @@ export const QUEUE_PATH = '/admin/afiliados';
 /** O download da planilha com todos os afiliados, servido por route handler. */
 export const QUEUE_SHEET_PATH = '/admin/afiliados/planilha';
 export const CAMPAIGNS_PATH = '/admin/campanhas';
+/** Os saques via PIX dos afiliados — a seção "Pagamentos" do menu. */
+export const PAYOUTS_PATH = '/admin/pagamentos';
 
 /**
  * Para onde a leitura manda quem a API recusou. Não é o login direto: o cookie
