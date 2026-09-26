@@ -2,7 +2,7 @@ import { WithdrawalStatusEnum } from '@porto/contracts';
 import { PayoutTransitionEnum, resolvePayoutTransition } from './payout-transition.util';
 
 const { REQUESTED, PROCESSING, PAID, FAILED, RETURNED } = WithdrawalStatusEnum;
-const { APPLY, DUPLICATE, IGNORE } = PayoutTransitionEnum;
+const { APPLY, DUPLICATE, IGNORE, DIVERGE } = PayoutTransitionEnum;
 
 describe('resolvePayoutTransition', () => {
   it.each([
@@ -28,13 +28,17 @@ describe('resolvePayoutTransition', () => {
   });
 
   it.each([
-    [FAILED, PAID],
     [RETURNED, PAID],
     [PAID, FAILED],
-    [FAILED, RETURNED],
     [RETURNED, FAILED],
   ] as const)('never reopens a closed withdrawal from %s to %s', (current, incoming) => {
     expect(resolvePayoutTransition(current, incoming)).toBe(IGNORE);
+  });
+
+  // As vendas de um saque falho já voltaram ao saldo e podem ter ido para outro
+  // saque: um PIX que caiu (ou voltou) depois disso é dinheiro fora do lugar.
+  it.each([PAID, RETURNED] as const)('flags %s on a failed withdrawal as divergent', (incoming) => {
+    expect(resolvePayoutTransition(FAILED, incoming)).toBe(DIVERGE);
   });
 
   it('ignores the intermediate statuses the provider sends on the way', () => {

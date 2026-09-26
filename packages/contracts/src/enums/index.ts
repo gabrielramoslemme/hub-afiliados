@@ -212,6 +212,11 @@ export enum PayoutEventOutcomeEnum {
   DUPLICATE = 'DUPLICATE',
   IGNORED = 'IGNORED',
   UNKNOWN_WITHDRAWAL = 'UNKNOWN_WITHDRAWAL',
+  /**
+   * Pago ou devolvido chegando num saque já falho: as vendas dele voltaram ao
+   * saldo e podem estar em outro saque. Nada muda; alguém precisa conferir.
+   */
+  DIVERGENT = 'DIVERGENT',
 }
 
 /** De onde veio a mudança: o webhook do fornecedor ou a reconciliação agendada. */

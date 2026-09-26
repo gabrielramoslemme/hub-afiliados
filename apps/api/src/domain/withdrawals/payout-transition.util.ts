@@ -5,6 +5,8 @@ export enum PayoutTransitionEnum {
   APPLY = 'APPLY',
   DUPLICATE = 'DUPLICATE',
   IGNORE = 'IGNORE',
+  /** Pago ou devolvido num saque já falho: nada muda, mas alguém precisa conferir. */
+  DIVERGE = 'DIVERGE',
 }
 
 const { REQUESTED, PROCESSING, PAID, FAILED, RETURNED } = WithdrawalStatusEnum;
@@ -30,6 +32,12 @@ export function resolvePayoutTransition(
 ): PayoutTransitionEnum {
   if (incoming === null) return PayoutTransitionEnum.IGNORE;
   if (current === incoming) return PayoutTransitionEnum.DUPLICATE;
+  /*
+    As vendas do saque falho já voltaram ao saldo e podem estar em outro saque.
+    Um PIX que caiu (ou voltou) depois disso não pode sumir como "sem efeito":
+    é dinheiro fora do lugar, e reabrir o saque pagaria as vendas duas vezes.
+  */
+  if (current === FAILED && incoming !== FAILED) return PayoutTransitionEnum.DIVERGE;
 
   return ALLOWED_FROM[incoming].includes(current)
     ? PayoutTransitionEnum.APPLY

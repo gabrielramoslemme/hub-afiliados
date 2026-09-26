@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Logger, Post, UseGuards } from '@nestjs/common';
 import {
   ApiBody,
   ApiHeader,
@@ -33,6 +33,8 @@ import { TransfeeraEventResponseDto } from './dtos/transfeera-event.response.dto
 @UseGuards(PayoutWebhookSignatureGuard)
 @Controller('webhooks/transfeera')
 export class TransfeeraWebhookController {
+  private readonly logger = new Logger(TransfeeraWebhookController.name);
+
   constructor(
     private readonly applyPayoutEventUseCase: ApplyPayoutEventUseCase,
     private readonly recordIgnoredPayoutEventUseCase: RecordIgnoredPayoutEventUseCase,
@@ -63,10 +65,21 @@ export class TransfeeraWebhookController {
       return { outcome: PayoutEventOutcomeEnum.IGNORED };
     }
 
-    return this.applyPayoutEventUseCase.execute({
-      update: toPayoutUpdate(event.data, payload),
+    const update = toPayoutUpdate(event.data, payload);
+    const result = await this.applyPayoutEventUseCase.execute({
+      update,
       source: PayoutEventSourceEnum.WEBHOOK,
       eventId: event.id ?? null,
     });
+
+    // 200 mesmo assim: a trilha já guardou o evento, e a Transfeera reenviar
+    // não mudaria nada. Quem resolve é gente — ver o runbook do webhook.
+    if (result.outcome === PayoutEventOutcomeEnum.DIVERGENT) {
+      this.logger.error(
+        `Desfecho ${update.providerStatus} num saque já falho: ${update.reference} — conferir à mão`,
+      );
+    }
+
+    return result;
   }
 }

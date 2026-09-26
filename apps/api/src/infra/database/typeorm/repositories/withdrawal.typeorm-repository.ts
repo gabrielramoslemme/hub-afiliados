@@ -40,6 +40,7 @@ const OUTCOME_BY_TRANSITION: Record<PayoutTransitionEnum, PayoutEventOutcomeEnum
   [PayoutTransitionEnum.APPLY]: PayoutEventOutcomeEnum.APPLIED,
   [PayoutTransitionEnum.DUPLICATE]: PayoutEventOutcomeEnum.DUPLICATE,
   [PayoutTransitionEnum.IGNORE]: PayoutEventOutcomeEnum.IGNORED,
+  [PayoutTransitionEnum.DIVERGE]: PayoutEventOutcomeEnum.DIVERGENT,
 };
 
 /** A data que o desfecho grava. */

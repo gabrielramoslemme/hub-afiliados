@@ -92,22 +92,19 @@ describe('ReconcileWithdrawalsUseCase', () => {
     expect(withdrawalRepository.markProcessing).toHaveBeenCalledWith(requested.publicId, null);
   });
 
-  it('closes as failed a retry the provider refuses', async () => {
+  // Só o primeiro pedido pode fechar como falho. Na repetição, o primeiro pode
+  // ter sido aceito sem resposta — e a idempotência repetida, lida como recusa,
+  // devolveria ao saldo vendas de um PIX que ainda vai cair.
+  it('keeps a refused retry open and reports it, without giving the balance back', async () => {
     stale(WithdrawalStatusEnum.REQUESTED, [requested]);
     payoutGateway.requestPayout.mockRejectedValue(new PayoutRefusedError('Chave inexistente'));
 
     const result = await useCase.execute(INPUT);
 
-    expect(withdrawalRepository.applyPayoutUpdate).toHaveBeenCalledWith({
-      update: expect.objectContaining({
-        reference: requested.publicId,
-        status: WithdrawalStatusEnum.FAILED,
-      }),
-      at: NOW,
-      event: null,
-    });
+    expect(withdrawalRepository.applyPayoutUpdate).not.toHaveBeenCalled();
     expect(withdrawalRepository.markProcessing).not.toHaveBeenCalled();
     expect(result.retried).toBe(0);
+    expect(result.failed).toEqual([requested.publicId]);
   });
 
   it('leaves a retry for the next round while the provider is down, and goes on', async () => {
@@ -179,6 +176,30 @@ describe('ReconcileWithdrawalsUseCase', () => {
       expect.objectContaining({ template: MailTemplateEnum.WITHDRAWAL_PAID }),
     );
     expect(result.settled).toBe(1);
+  });
+
+  it('reports a settlement that diverges from a closed withdrawal, without telling the affiliate', async () => {
+    stale(WithdrawalStatusEnum.PROCESSING, [processing]);
+    payoutGateway.findPayout.mockResolvedValue({
+      reference: processing.publicId,
+      status: WithdrawalStatusEnum.PAID,
+      providerStatus: 'FINALIZADO',
+      providerTransferId: '60040',
+      endToEndId: 'E123',
+      receiptUrl: 'https://r',
+      failureReason: null,
+      payload: {},
+    });
+    withdrawalRepository.applyPayoutUpdate.mockResolvedValue({
+      outcome: PayoutEventOutcomeEnum.DIVERGENT,
+      withdrawal: { ...processing, status: WithdrawalStatusEnum.FAILED },
+    });
+
+    const result = await useCase.execute(INPUT);
+
+    expect(mailer.send).not.toHaveBeenCalled();
+    expect(result.settled).toBe(0);
+    expect(result.failed).toEqual([processing.publicId]);
   });
 
   it('does not write anything while the provider still has the transfer on its way', async () => {

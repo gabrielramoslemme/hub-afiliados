@@ -20,6 +20,7 @@ const OUTCOME_LABELS: Record<PayoutEventOutcomeEnum, string> = {
   [PayoutEventOutcomeEnum.DUPLICATE]: 'Repetido',
   [PayoutEventOutcomeEnum.IGNORED]: 'Sem efeito',
   [PayoutEventOutcomeEnum.UNKNOWN_WITHDRAWAL]: 'Saque desconhecido',
+  [PayoutEventOutcomeEnum.DIVERGENT]: 'Divergente — conferir',
 };
 
 function DataRow({ label, children }: { label: string; children: ReactNode }) {

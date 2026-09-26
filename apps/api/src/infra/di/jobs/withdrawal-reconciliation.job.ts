@@ -73,10 +73,11 @@ export class WithdrawalReconciliationJob {
             `Reconciliação: ${result.retried} reenviado(s), ${result.settled} liquidado(s)`,
           );
         }
-        // Só o `publicId`: é o que a regra deixa passar de uma linha que quebrou
-        // de um jeito que nem recusa nem indisponibilidade explicam.
+        // Só o `publicId`: é o que a regra deixa passar. A lista junta falha
+        // imprevista, repetição recusada e desfecho divergente — o runbook do
+        // `TRANSFEERA-webhook.md` diz o que conferir em cada caso.
         if (result.failed.length > 0) {
-          this.logger.error(`Reconciliação: falha inesperada em ${result.failed.join(', ')}`);
+          this.logger.error(`Reconciliação: conferir à mão ${result.failed.join(', ')}`);
         }
       } finally {
         try {

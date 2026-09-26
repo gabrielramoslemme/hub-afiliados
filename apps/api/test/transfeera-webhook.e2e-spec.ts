@@ -8,6 +8,7 @@ describe('Transfeera webhook (e2e)', () => {
   let e2e: E2eApp;
   let token: string;
   let withdrawalId: string;
+  let affiliateCoupon: string;
 
   function api() {
     return request(e2e.app.getHttpServer());
@@ -67,6 +68,7 @@ describe('Transfeera webhook (e2e)', () => {
     const operatorToken = await signInOperator(e2e.app, e2e.dataSource);
     const affiliate = await signInAffiliate(e2e, operatorToken, MARINA);
     token = affiliate.token;
+    affiliateCoupon = affiliate.coupon;
     await settleSale(e2e.app, affiliate.coupon, 'Conserto de fogão', 'LIBERADO', { valor: 40 });
     const withdrawal = await api()
       .post('/v1/affiliate/me/withdrawals')
@@ -134,6 +136,34 @@ describe('Transfeera webhook (e2e)', () => {
         .sentTo(MARINA.email)
         .some((mail) => mail.subject === 'Seu saque via PIX foi devolvido'),
     ).toBe(true);
+  });
+
+  // O PIX recusado devolveu as vendas ao saldo; um FINALIZADO depois disso é
+  // dinheiro fora do lugar — a trilha guarda, o saldo não muda, alguém confere.
+  it('flags a payment arriving on a failed withdrawal as divergent, without touching the balance', async () => {
+    await settleSale(e2e.app, affiliateCoupon, 'Troca de chuveiro', 'LIBERADO', { valor: 27 });
+    e2e.payouts.respondNext('refuse');
+    await api()
+      .post('/v1/affiliate/me/withdrawals')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(409);
+    const [failed] = await e2e.dataSource.query(
+      `SELECT "public_id" FROM "affiliate_withdrawals" WHERE "status" = 'FAILED'`,
+    );
+    const before = (await wallet().expect(200)).body;
+
+    const response = await transfeera(transferEvent('FINALIZADO', failed.public_id)).expect(200);
+
+    expect(response.body.outcome).toBe('DIVERGENT');
+    const after = (await wallet().expect(200)).body;
+    expect(after.availableCents).toBe(before.availableCents);
+    expect(after.withdrawnCents).toBe(before.withdrawnCents);
+    const [row] = await e2e.dataSource.query(
+      `SELECT "status" FROM "affiliate_withdrawals" WHERE "public_id" = $1`,
+      [failed.public_id],
+    );
+    expect(row.status).toBe('FAILED');
+    expect((await trail()).map((event) => event.outcome)).toEqual(['DIVERGENT']);
   });
 
   it('answers 404 for a reference that is no withdrawal, even when it is not a uuid', async () => {
