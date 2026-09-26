@@ -96,7 +96,7 @@ describe('ReconcileWithdrawalsUseCase', () => {
     stale(WithdrawalStatusEnum.REQUESTED, [requested]);
     payoutGateway.requestPayout.mockRejectedValue(new PayoutRefusedError('Chave inexistente'));
 
-    await useCase.execute(INPUT);
+    const result = await useCase.execute(INPUT);
 
     expect(withdrawalRepository.applyPayoutUpdate).toHaveBeenCalledWith({
       update: expect.objectContaining({
@@ -106,6 +106,8 @@ describe('ReconcileWithdrawalsUseCase', () => {
       at: NOW,
       event: null,
     });
+    expect(withdrawalRepository.markProcessing).not.toHaveBeenCalled();
+    expect(result.retried).toBe(0);
   });
 
   it('leaves a retry for the next round while the provider is down, and goes on', async () => {
@@ -120,6 +122,29 @@ describe('ReconcileWithdrawalsUseCase', () => {
     expect(withdrawalRepository.markProcessing).toHaveBeenCalledTimes(1);
     expect(withdrawalRepository.markProcessing).toHaveBeenCalledWith(second.publicId, 'batch-2');
     expect(result.retried).toBe(1);
+  });
+
+  // `listStale` ordena por `updatedAt`, e uma linha que quebra sem ser recusa
+  // nem indisponibilidade nunca muda esse campo: sem isolar por linha, ela
+  // travaria toda rodada futura atrás dela, para sempre.
+  it('collects an unexpected failure on a requested row without stopping the round', async () => {
+    const second = buildWithdrawal({ status: WithdrawalStatusEnum.REQUESTED });
+    withdrawalRepository.listStale.mockImplementation(async (input) => {
+      if (input.status === WithdrawalStatusEnum.REQUESTED) return [requested, second];
+      if (input.status === WithdrawalStatusEnum.PROCESSING) return [processing];
+      return [];
+    });
+    payoutGateway.requestPayout
+      .mockRejectedValueOnce(new Error('unexpected'))
+      .mockResolvedValueOnce({ batchId: 'batch-2' });
+
+    const result = await useCase.execute(INPUT);
+
+    expect(withdrawalRepository.markProcessing).toHaveBeenCalledTimes(1);
+    expect(withdrawalRepository.markProcessing).toHaveBeenCalledWith(second.publicId, 'batch-2');
+    expect(payoutGateway.findPayout).toHaveBeenCalledWith('1426');
+    expect(result.retried).toBe(1);
+    expect(result.failed).toEqual([requested.publicId]);
   });
 
   it('settles a stale processing withdrawal from the provider batch, and tells the affiliate', async () => {
@@ -172,6 +197,33 @@ describe('ReconcileWithdrawalsUseCase', () => {
     await useCase.execute(INPUT);
 
     expect(withdrawalRepository.applyPayoutUpdate).not.toHaveBeenCalled();
+  });
+
+  it('collects an unexpected failure from findPayout without stopping the round', async () => {
+    const secondProcessing = buildWithdrawal({
+      status: WithdrawalStatusEnum.PROCESSING,
+      providerBatchId: '9000',
+    });
+    stale(WithdrawalStatusEnum.PROCESSING, [processing, secondProcessing]);
+    payoutGateway.findPayout.mockRejectedValueOnce(new Error('unexpected')).mockResolvedValueOnce({
+      reference: 'whatever-the-provider-says',
+      status: WithdrawalStatusEnum.PAID,
+      providerStatus: 'FINALIZADO',
+      providerTransferId: '60041',
+      endToEndId: 'E124',
+      receiptUrl: 'https://r',
+      failureReason: null,
+      payload: {},
+    });
+    withdrawalRepository.applyPayoutUpdate.mockResolvedValue({
+      outcome: PayoutEventOutcomeEnum.APPLIED,
+      withdrawal: { ...secondProcessing, status: WithdrawalStatusEnum.PAID },
+    });
+
+    const result = await useCase.execute(INPUT);
+
+    expect(result.settled).toBe(1);
+    expect(result.failed).toEqual([processing.publicId]);
   });
 
   it('does nothing while payouts are off', async () => {

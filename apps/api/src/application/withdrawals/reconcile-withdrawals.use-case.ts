@@ -28,6 +28,8 @@ export interface ReconcileWithdrawalsInput {
 export interface ReconcileWithdrawalsOutput {
   retried: number;
   settled: number;
+  /** `publicId` de quem quebrou de um jeito que nem recusa nem indisponibilidade explicam. */
+  failed: string[];
 }
 
 const MINUTE_MS = 60_000;
@@ -61,9 +63,13 @@ export class ReconcileWithdrawalsUseCase
   ) {}
 
   async execute(input: ReconcileWithdrawalsInput): Promise<ReconcileWithdrawalsOutput> {
-    if (!this.payoutGateway.isEnabled()) return { retried: 0, settled: 0 };
+    if (!this.payoutGateway.isEnabled()) return { retried: 0, settled: 0, failed: [] };
 
     const now = this.clock.now();
+    // Uma linha que quebra de um jeito imprevisto não pode travar a rodada
+    // inteira: `listStale` ordena por `updatedAt`, e uma linha que nunca muda
+    // esse campo travaria todo o resto atrás dela, rodada após rodada.
+    const failed: string[] = [];
 
     const requested = await this.withdrawalRepository.listStale({
       status: WithdrawalStatusEnum.REQUESTED,
@@ -72,7 +78,11 @@ export class ReconcileWithdrawalsUseCase
     });
     let retried = 0;
     for (const withdrawal of requested) {
-      if (await this.retry(withdrawal, now)) retried += 1;
+      try {
+        if (await this.retry(withdrawal, now)) retried += 1;
+      } catch {
+        failed.push(withdrawal.publicId);
+      }
     }
 
     const processing = await this.withdrawalRepository.listStale({
@@ -82,10 +92,14 @@ export class ReconcileWithdrawalsUseCase
     });
     let settled = 0;
     for (const withdrawal of processing) {
-      if (await this.settle(withdrawal, now)) settled += 1;
+      try {
+        if (await this.settle(withdrawal, now)) settled += 1;
+      } catch {
+        failed.push(withdrawal.publicId);
+      }
     }
 
-    return { retried, settled };
+    return { retried, settled, failed };
   }
 
   private async retry(withdrawal: WithdrawalWithAffiliate, now: Date): Promise<boolean> {
