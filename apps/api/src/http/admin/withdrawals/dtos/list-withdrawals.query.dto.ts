@@ -1,0 +1,50 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { IsEnum, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import { WithdrawalStatusEnum } from '@porto/contracts';
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+export class ListWithdrawalsQueryDto {
+  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @Type(() => Number)
+  @IsInt({ message: 'A página precisa ser um número inteiro.' })
+  @Min(1, { message: 'A página começa em 1.' })
+  @IsOptional()
+  page = 1;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 10 })
+  @Type(() => Number)
+  @IsInt({ message: 'O tamanho da página precisa ser um número inteiro.' })
+  @Min(1, { message: 'O tamanho da página começa em 1.' })
+  @Max(100, { message: 'O tamanho da página vai até 100.' })
+  @IsOptional()
+  limit = 10;
+
+  @ApiPropertyOptional({ enum: WithdrawalStatusEnum })
+  @IsEnum(WithdrawalStatusEnum, { message: 'Status inválido.' })
+  @IsOptional()
+  status?: WithdrawalStatusEnum;
+
+  @ApiPropertyOptional({ maxLength: 120, description: 'Nome do afiliado ou CPF' })
+  @IsString()
+  @MaxLength(120, { message: 'A busca deve ter no máximo 120 caracteres.' })
+  @IsOptional()
+  search?: string;
+
+  @ApiPropertyOptional({
+    example: '2026-09-01',
+    description: 'Pedidos a partir deste dia (Brasília)',
+  })
+  @Matches(DAY, { message: 'Use a data no formato AAAA-MM-DD.' })
+  @IsOptional()
+  from?: string;
+
+  @ApiPropertyOptional({
+    example: '2026-09-30',
+    description: 'Pedidos até este dia, inclusive (Brasília)',
+  })
+  @Matches(DAY, { message: 'Use a data no formato AAAA-MM-DD.' })
+  @IsOptional()
+  until?: string;
+}

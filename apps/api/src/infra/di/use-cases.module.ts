@@ -22,6 +22,8 @@ import { GetAffiliateReferralsUseCase } from '@Application/sales/get-affiliate-r
 import { GetAffiliateWalletUseCase } from '@Application/sales/get-affiliate-wallet.use-case';
 import { RecordInvalidIncentiveNotificationUseCase } from '@Application/sales/record-invalid-incentive-notification.use-case';
 import { ApplyPayoutEventUseCase } from '@Application/withdrawals/apply-payout-event.use-case';
+import { GetWithdrawalUseCase } from '@Application/withdrawals/get-withdrawal.use-case';
+import { ListWithdrawalsUseCase } from '@Application/withdrawals/list-withdrawals.use-case';
 import { ReconcileWithdrawalsUseCase } from '@Application/withdrawals/reconcile-withdrawals.use-case';
 import { RecordIgnoredPayoutEventUseCase } from '@Application/withdrawals/record-ignored-payout-event.use-case';
 import { RequestWithdrawalUseCase } from '@Application/withdrawals/request-withdrawal.use-case';
@@ -155,6 +157,12 @@ const USE_CASES = [
     MAILER,
     LINK_BUILDER,
     CLOCK,
+  ]),
+  provideUseCase(ListWithdrawalsUseCase, [WITHDRAWAL_REPOSITORY]),
+  provideUseCase(GetWithdrawalUseCase, [
+    WITHDRAWAL_REPOSITORY,
+    SALE_REPOSITORY,
+    PAYOUT_EVENT_REPOSITORY,
   ]),
 ];
 
