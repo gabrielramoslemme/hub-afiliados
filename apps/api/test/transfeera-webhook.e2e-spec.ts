@@ -184,6 +184,16 @@ describe('Transfeera webhook (e2e)', () => {
     expect(row.failure_reason).toContain('não pertence');
   });
 
+  // Um id numérico invalidava o corpo inteiro: o evento virava "sem efeito",
+  // respondia 200 e a Transfeera nunca mais mandava.
+  it('applies an event whose top-level id comes as a number', async () => {
+    const response = await transfeera({ ...transferEvent('FINALIZADO'), id: 918273 }).expect(200);
+
+    expect(response.body.outcome).toBe('APPLIED');
+    const [event] = await e2e.dataSource.query(`SELECT "event_id" FROM "payout_events"`);
+    expect(event.event_id).toBe('918273');
+  });
+
   it('answers 404 for a reference that is no withdrawal, even when it is not a uuid', async () => {
     await transfeera(transferEvent('FINALIZADO', randomUUID())).expect(404);
     await transfeera(transferEvent('FINALIZADO', 'lote-manual-42')).expect(404);

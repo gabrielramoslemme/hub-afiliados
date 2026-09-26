@@ -46,10 +46,14 @@ export class TransfeeraTransferDto implements TransfeeraTransfer {
 }
 
 export class TransfeeraEventRequestDto {
-  @ApiPropertyOptional({ description: 'O id do evento na Transfeera' })
-  @IsOptional()
-  @IsString()
-  id?: string;
+  // Número aqui não pode invalidar o corpo: o evento seria gravado como sem
+  // efeito, responderia 200 e a Transfeera não mandaria de novo.
+  @ApiPropertyOptional({
+    description: 'O id do evento na Transfeera',
+    oneOf: [{ type: 'string' }, { type: 'number' }],
+  })
+  @Allow()
+  id?: string | number | null;
 
   @ApiProperty({ example: 'Transfer' })
   @IsString()

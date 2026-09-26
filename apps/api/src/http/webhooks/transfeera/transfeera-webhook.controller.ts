@@ -59,7 +59,10 @@ export class TransfeeraWebhookController {
 
     if (event instanceof InvalidWebhookBody || event.object !== 'Transfer' || !event.data) {
       await this.recordIgnoredPayoutEventUseCase.execute({
-        eventId: typeof payload.id === 'string' ? payload.id : null,
+        eventId:
+          typeof payload.id === 'string' || typeof payload.id === 'number'
+            ? String(payload.id)
+            : null,
         payload: redactTransfeeraPayload(payload),
       });
       return { outcome: PayoutEventOutcomeEnum.IGNORED };
@@ -69,7 +72,7 @@ export class TransfeeraWebhookController {
     const result = await this.applyPayoutEventUseCase.execute({
       update,
       source: PayoutEventSourceEnum.WEBHOOK,
-      eventId: event.id ?? null,
+      eventId: event.id == null ? null : String(event.id),
     });
 
     // 200 mesmo assim: a trilha já guardou o evento, e a Transfeera reenviar
