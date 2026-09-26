@@ -1,9 +1,20 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { WithdrawalStatusEnum } from '@porto/contracts';
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const DAY_MESSAGE = { message: 'Use a data no formato AAAA-MM-DD.' };
 
 export class ListWithdrawalsQueryDto {
   @ApiPropertyOptional({ minimum: 1, default: 1 })
@@ -36,7 +47,11 @@ export class ListWithdrawalsQueryDto {
     example: '2026-09-01',
     description: 'Pedidos a partir deste dia (Brasília)',
   })
-  @Matches(DAY, { message: 'Use a data no formato AAAA-MM-DD.' })
+  @Matches(DAY, DAY_MESSAGE)
+  // O regex acima só confere o formato; `strict` recusa dia que não existe
+  // no calendário (ex.: 2026-02-30), que o `Date` do JS aceitaria rolando
+  // para o mês seguinte em silêncio.
+  @IsDateString({ strict: true }, DAY_MESSAGE)
   @IsOptional()
   from?: string;
 
@@ -44,7 +59,8 @@ export class ListWithdrawalsQueryDto {
     example: '2026-09-30',
     description: 'Pedidos até este dia, inclusive (Brasília)',
   })
-  @Matches(DAY, { message: 'Use a data no formato AAAA-MM-DD.' })
+  @Matches(DAY, DAY_MESSAGE)
+  @IsDateString({ strict: true }, DAY_MESSAGE)
   @IsOptional()
   until?: string;
 }

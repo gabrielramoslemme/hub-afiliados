@@ -69,7 +69,7 @@ describe('Admin withdrawals (e2e)', () => {
       new Date(),
     );
     const fromToday = await list({ from: today }).expect(200);
-    const untilYesterday = await list({ until: '2026-01-01' }).expect(200);
+    const untilBeforeAnyWithdrawal = await list({ until: '2026-01-01' }).expect(200);
 
     expect(failed.body.data.map((row: { affiliateName: string }) => row.affiliateName)).toEqual([
       'Cleide Nakamura',
@@ -77,7 +77,7 @@ describe('Admin withdrawals (e2e)', () => {
     expect(byName.body.total).toBe(1);
     expect(byCpf.body.data[0].affiliateName).toBe('Marina Ferraz');
     expect(fromToday.body.total).toBe(2);
-    expect(untilYesterday.body.total).toBe(0);
+    expect(untilBeforeAnyWithdrawal.body.total).toBe(0);
   });
 
   it('pages the list', async () => {
@@ -90,6 +90,10 @@ describe('Admin withdrawals (e2e)', () => {
   it('refuses a malformed filter', async () => {
     await list({ from: '25/09/2026' }).expect(400);
     await list({ status: 'LOST' }).expect(400);
+    // Mês 13 não existe: passaria pelo regex de formato e viraria um 500 no Postgres.
+    await list({ from: '2026-13-45' }).expect(400);
+    // Fevereiro não tem dia 30: o `Date` do JS rolaria em silêncio para 2 de março.
+    await list({ until: '2026-02-30' }).expect(400);
   });
 
   it('shows the detail with the masked key and the sales it paid', async () => {
