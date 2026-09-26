@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { PixKeyTypeEnum } from '@porto/contracts';
+import { redactSensitive } from '@Domain/shared/redaction.util';
 import {
   PayoutGateway,
   PayoutRequestResult,
@@ -56,28 +57,6 @@ function isRepeatedRequest(status: number, text: string): boolean {
 }
 
 /**
- * Onze dígitos no molde do CPF, pontuação opcional — pega a Transfeera
- * devolvendo o número formatado (`529.982.247-25`) mesmo quando mandamos só
- * dígitos, sem depender de bater byte a byte com o que enviamos.
- */
-const CPF_SHAPED = /\d{3}\.?\d{3}\.?\d{3}-?\d{2}/g;
-
-/** Escapa o segredo para valer como texto literal na regex, não como padrão. */
-function escapeForRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Troca toda ocorrência do segredo por `[removido]`, sem diferenciar
- * maiúsculas de minúsculas — a chave de e-mail pode voltar com outra caixa.
- */
-function redactSecret(text: string, secret: string): string {
-  if (!secret) return text;
-
-  return text.replace(new RegExp(escapeForRegExp(secret), 'gi'), '[removido]');
-}
-
-/**
  * O motivo da recusa, sem a chave nem o CPF que a Transfeera às vezes cita —
  * nem os valores exatos que mandamos (a chave, e a formatada quando é
  * telefone, e o CPF), nem qualquer sequência que se pareça com um CPF.
@@ -93,8 +72,7 @@ function scrubbedReason(text: string, secrets: string[]): string {
     // Corpo que não é JSON: fica o motivo genérico, e o status vai para o log.
   }
 
-  const withoutSecrets = secrets.reduce(redactSecret, reason);
-  return withoutSecrets.replace(CPF_SHAPED, '[removido]');
+  return redactSensitive(reason, secrets);
 }
 
 /**

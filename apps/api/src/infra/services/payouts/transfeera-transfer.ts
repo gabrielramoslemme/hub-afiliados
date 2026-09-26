@@ -1,4 +1,5 @@
 import { WithdrawalStatusEnum } from '@porto/contracts';
+import { redactSensitive } from '@Domain/shared/redaction.util';
 import { PayoutUpdate, PayoutUpdateStatus } from '@Domain/withdrawals/payout-gateway';
 
 /**
@@ -42,6 +43,12 @@ const HOLDER_FIELDS = new Set([
   'account_digit',
 ]);
 
+/*
+  Texto livre do fornecedor: pode citar a chave, e aqui não se sabe qual ela é.
+  Na trilha some inteiro; o motivo, já limpo, fica no saque.
+*/
+const FREE_TEXT_KEYS = new Set(['status_description', 'error']);
+
 const REDACTED = '[removido]';
 
 function errorMessage(error: unknown): string | null {
@@ -73,7 +80,11 @@ export function redactTransfeeraPayload<T>(payload: T): T {
   return Object.fromEntries(
     Object.entries(payload).map(([key, value]) => [
       key,
-      ACCOUNT_KEYS.has(key) ? redactAccount(value) : redactTransfeeraPayload(value),
+      ACCOUNT_KEYS.has(key)
+        ? redactAccount(value)
+        : FREE_TEXT_KEYS.has(key) && value != null
+          ? REDACTED
+          : redactTransfeeraPayload(value),
     ]),
   ) as T;
 }
@@ -83,6 +94,7 @@ export function toPayoutUpdate(
   payload: Record<string, unknown>,
 ): PayoutUpdate {
   const providerStatus = transfer.status ?? '';
+  const reason = transfer.status_description ?? errorMessage(transfer.error);
 
   return {
     reference: transfer.integration_id ?? '',
@@ -91,7 +103,8 @@ export function toPayoutUpdate(
     providerTransferId: transfer.id == null ? null : String(transfer.id),
     endToEndId: transfer.pix_end2end_id ?? null,
     receiptUrl: transfer.receipt_url ?? transfer.bank_receipt_url ?? null,
-    failureReason: transfer.status_description ?? errorMessage(transfer.error),
+    // Só o molde do CPF: a chave exata o adapter tira, que é quem conhece o saque.
+    failureReason: reason === null ? null : redactSensitive(reason),
     payload: redactTransfeeraPayload(payload),
   };
 }

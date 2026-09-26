@@ -15,6 +15,7 @@ import {
   PayoutEventOutcomeEnum,
   WithdrawalStatusEnum,
 } from '@porto/contracts';
+import { redactSensitive } from '@Domain/shared/redaction.util';
 import {
   PayoutTransitionEnum,
   RELEASING_STATUSES,
@@ -177,7 +178,11 @@ export class WithdrawalTypeormRepository implements WithdrawalRepository {
             providerTransferId: update.providerTransferId ?? withdrawal.providerTransferId,
             endToEndId: update.endToEndId ?? withdrawal.endToEndId,
             receiptUrl: update.receiptUrl ?? withdrawal.receiptUrl,
-            failureReason: releases ? update.failureReason : withdrawal.failureReason,
+            // O motivo aparece no painel e vem do texto livre do fornecedor,
+            // que pode citar a chave deste saque.
+            failureReason: releases
+              ? update.failureReason && redactSensitive(update.failureReason, [withdrawal.pixKey])
+              : withdrawal.failureReason,
           },
         );
 

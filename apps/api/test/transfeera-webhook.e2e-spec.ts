@@ -166,6 +166,24 @@ describe('Transfeera webhook (e2e)', () => {
     expect((await trail()).map((event) => event.outcome)).toEqual(['DIVERGENT']);
   });
 
+  it('keeps the pix key and a cpf quoted by the provider out of the reason and the trail', async () => {
+    const event = transferEvent('DEVOLVIDO');
+    event.data.status_description = `Chave ${MARINA.pixKey} não pertence ao CPF 529.982.247-25`;
+
+    await transfeera(event).expect(200);
+
+    const [row] = await e2e.dataSource.query(
+      `SELECT "status", "failure_reason" FROM "affiliate_withdrawals" WHERE "public_id" = $1`,
+      [withdrawalId],
+    );
+    expect(row.status).toBe('RETURNED');
+    for (const text of [row.failure_reason, JSON.stringify(await trail())]) {
+      expect(text).not.toContain(MARINA.pixKey);
+      expect(text).not.toContain('529.982.247-25');
+    }
+    expect(row.failure_reason).toContain('não pertence');
+  });
+
   it('answers 404 for a reference that is no withdrawal, even when it is not a uuid', async () => {
     await transfeera(transferEvent('FINALIZADO', randomUUID())).expect(404);
     await transfeera(transferEvent('FINALIZADO', 'lote-manual-42')).expect(404);

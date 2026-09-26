@@ -56,6 +56,18 @@ describe('toPayoutUpdate', () => {
 
     expect(update.failureReason).toBe('Conta encerrada');
   });
+
+  // O motivo aparece no painel e o corpo fica na trilha: o CPF que o banco de
+  // destino cita no texto não pode ir para nenhum dos dois.
+  it('keeps a cpf quoted by the provider out of the reason and of the trail', () => {
+    const description = 'Chave não pertence ao titular 529.982.247-25';
+    const returned = { ...EVENT.data, status: 'DEVOLVIDO', status_description: description };
+
+    const update = toPayoutUpdate(returned, { ...EVENT, data: returned });
+
+    expect(update.failureReason).toBe('Chave não pertence ao titular [removido]');
+    expect(JSON.stringify(update.payload)).not.toContain('529.982.247-25');
+  });
 });
 
 describe('redactTransfeeraPayload', () => {
@@ -68,6 +80,17 @@ describe('redactTransfeeraPayload', () => {
     expect(text).not.toContain('529.982.247-25');
     expect(text).not.toContain('Marina Ferraz');
     expect(text).toContain('FINALIZADO');
+  });
+
+  // O texto livre do fornecedor pode citar a chave, e aqui não se sabe qual
+  // ela é: o motivo limpo vai para o saque; na trilha, o texto some.
+  it('drops the free-text description of the provider', () => {
+    const payload = {
+      ...EVENT,
+      data: { ...EVENT.data, status_description: 'Chave pix.marina@email.com inválida' },
+    };
+
+    expect(JSON.stringify(redactTransfeeraPayload(payload))).not.toContain('pix.marina');
   });
 
   it('does not touch the object it was given', () => {
