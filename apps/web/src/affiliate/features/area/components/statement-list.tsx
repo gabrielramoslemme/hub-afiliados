@@ -1,13 +1,12 @@
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
-import { type AffiliateStatementEntry, StatementEntryKindEnum } from '@porto/contracts';
+import {
+  type AffiliateStatementEntry,
+  StatementEntryKindEnum,
+  WithdrawalStatusEnum,
+} from '@porto/contracts';
 import { cn } from '@/shared/lib/cn';
 import { formatBRL, formatDate } from '@/shared/lib/format';
-
-/** O que a linha é, embaixo do serviço que a gerou: "Conserto de fogão" · "Incentivo". */
-const KIND_LABELS: Record<StatementEntryKindEnum, string> = {
-  [StatementEntryKindEnum.INCENTIVE]: 'Incentivo',
-  [StatementEntryKindEnum.PAYOUT]: 'Pagamento',
-};
+import { statementCaption } from '@/shared/lib/withdrawal-status';
 
 export function StatementList({ entries }: { entries: AffiliateStatementEntry[] }) {
   if (entries.length === 0) {
@@ -30,6 +29,11 @@ export function StatementList({ entries }: { entries: AffiliateStatementEntry[] 
       {entries.map((entry) => {
         const isIncentive = entry.kind === StatementEntryKindEnum.INCENTIVE;
         const Icon = isIncentive ? ArrowDownLeft : ArrowUpRight;
+        // O saque que falhou ou voltou não saiu da conta: o valor riscado diz
+        // isso antes mesmo de a pessoa ler o status por extenso.
+        const reverted =
+          entry.withdrawalStatus === WithdrawalStatusEnum.FAILED ||
+          entry.withdrawalStatus === WithdrawalStatusEnum.RETURNED;
 
         return (
           <li
@@ -60,6 +64,7 @@ export function StatementList({ entries }: { entries: AffiliateStatementEntry[] 
                   className={cn(
                     'whitespace-nowrap font-semibold',
                     isIncentive ? 'text-[var(--status-approved)]' : 'text-ink-700',
+                    reverted && 'text-ink-400 line-through',
                   )}
                   data-tabular
                 >
@@ -73,8 +78,18 @@ export function StatementList({ entries }: { entries: AffiliateStatementEntry[] 
               </div>
 
               <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 text-[0.8125rem] text-ink-500">
-                <span>{KIND_LABELS[entry.kind]}</span>
-                <span className="whitespace-nowrap" data-tabular>
+                <span>{statementCaption(entry)}</span>
+                <span className="flex items-baseline gap-3 whitespace-nowrap" data-tabular>
+                  {entry.receiptUrl && (
+                    <a
+                      href={entry.receiptUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-blue-600 underline-offset-2 hover:underline"
+                    >
+                      Comprovante
+                    </a>
+                  )}
                   {formatDate(entry.occurredAt)}
                 </span>
               </div>

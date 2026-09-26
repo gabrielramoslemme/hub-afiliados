@@ -16,8 +16,6 @@ export const pendingFromPorto = {
   customerDiscount: null as string | null,
   /** Prazo de análise do cadastro, fechado pela Porto na validação de 04/09/2026. */
   reviewWindow: 'até 72 horas' as string | null,
-  /** Ex.: 'todo dia 10' — quando o incentivo é pago. */
-  payoutSchedule: null as string | null,
 };
 
 export const site = {

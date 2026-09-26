@@ -1,7 +1,8 @@
 import { Landmark } from 'lucide-react';
 import type { AffiliateWalletResponse, PixKeyTypeEnum } from '@porto/contracts';
 import { CountUp } from '@/affiliate/shared/components/count-up';
-import { formatDateTime } from '@/shared/lib/format';
+import { formatBRL, formatDateTime } from '@/shared/lib/format';
+import { WithdrawDialog } from './withdraw-dialog';
 
 const PIX_LABELS: Record<PixKeyTypeEnum, string> = {
   EMAIL: 'E-mail',
@@ -16,18 +17,14 @@ interface WalletCardProps {
 }
 
 /**
- * Não há botão de saque, ao contrário da referência que serviu de base: neste
- * programa o incentivo é pago pela Porto direto na chave cadastrada, sem a
- * pessoa pedir. Um botão que não corresponde a nada seria pior que a ausência
- * dele — o que o cartão faz é dizer quanto foi liberado e para onde vai.
- *
- * Também não há "saldo" nem "já pago": os pagamentos da Porto ainda não chegam
- * à Mesa, e um saldo que ignora o que já foi pago mentiria no primeiro deles.
+ * O saldo é o que o botão saca, inteiro: incentivos liberados que nenhum saque
+ * reservou. O que está a caminho e o que já foi pago ficam embaixo, para a
+ * pessoa não achar que o saque "sumiu" com o dinheiro.
  */
 export function WalletCard({ wallet, pixKeyType, maskedPixKey }: WalletCardProps) {
   return (
     <section className="surface-brand surface-mesh relative isolate overflow-hidden rounded-panel p-6 text-white shadow-float sm:p-8">
-      <p className="text-eyebrow uppercase text-blue-200">Incentivo liberado</p>
+      <p className="text-eyebrow uppercase text-blue-200">Saldo disponível</p>
 
       <CountUp
         cents={wallet.availableCents}
@@ -53,11 +50,30 @@ export function WalletCard({ wallet, pixKeyType, maskedPixKey }: WalletCardProps
               <span className="ml-2 font-normal text-blue-200">{PIX_LABELS[pixKeyType]}</span>
             </dd>
             <p className="mt-1 text-[0.8125rem] text-blue-200">
-              A Porto paga direto nesta chave, sem você precisar pedir.
+              O saque vai para esta chave. Para trocar, use o perfil.
             </p>
           </div>
         </div>
+
+        {wallet.inFlightCents > 0 && (
+          <div className="mt-4 flex items-baseline justify-between gap-3">
+            <dt className="text-[0.8125rem] text-blue-200">Em processamento</dt>
+            <dd className="font-semibold" data-tabular>
+              {formatBRL(wallet.inFlightCents)}
+            </dd>
+          </div>
+        )}
+        {wallet.withdrawnCents > 0 && (
+          <div className="mt-2 flex items-baseline justify-between gap-3">
+            <dt className="text-[0.8125rem] text-blue-200">Já sacado</dt>
+            <dd className="font-semibold" data-tabular>
+              {formatBRL(wallet.withdrawnCents)}
+            </dd>
+          </div>
+        )}
       </dl>
+
+      <WithdrawDialog availableCents={wallet.availableCents} maskedPixKey={maskedPixKey} />
     </section>
   );
 }
