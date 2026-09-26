@@ -3,7 +3,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { WithdrawalDetail } from '@porto/contracts';
-import { fetchWithdrawal, PayoutDetail } from '@/backoffice/features/payouts';
+import { PayoutDetail } from '@/backoffice/features/payouts';
+import { fetchWithdrawal } from '@/backoffice/features/payouts/data';
 import { PAYOUTS_PATH } from '@/backoffice/shared/routes';
 import { ApiError } from '@/shared/http/api-error';
 

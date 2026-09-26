@@ -16,7 +16,6 @@ export default function PayoutsTableLoading() {
 
         {ROWS.map((row) => (
           <div key={row} className="flex items-center gap-6 border-b border-ink-200 px-4 py-4">
-            <Skeleton className="size-9 shrink-0 rounded-full" />
             <Skeleton className="h-5 flex-1" />
             <Skeleton className="h-5 w-48" />
             <Skeleton className="h-6 w-24 rounded-full" />
