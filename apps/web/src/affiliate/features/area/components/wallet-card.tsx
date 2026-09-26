@@ -30,7 +30,7 @@ export function WalletCard({ wallet, pixKeyType, maskedPixKey }: WalletCardProps
       <p className="text-eyebrow uppercase text-blue-200">Incentivo liberado</p>
 
       <CountUp
-        cents={wallet.releasedCents}
+        cents={wallet.availableCents}
         className="mt-3 text-[2.75rem] font-extrabold leading-none tracking-[-0.035em] sm:text-[3.25rem]"
       />
 

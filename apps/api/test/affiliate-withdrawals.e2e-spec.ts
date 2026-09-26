@@ -16,6 +16,12 @@ describe('Affiliate withdrawals (e2e)', () => {
       .set('Authorization', `Bearer ${token}`);
   }
 
+  function wallet(token: string) {
+    return request(e2e.app.getHttpServer())
+      .get('/v1/affiliate/me/wallet')
+      .set('Authorization', `Bearer ${token}`);
+  }
+
   beforeAll(async () => {
     e2e = await createE2eApp();
   });
@@ -120,5 +126,38 @@ describe('Affiliate withdrawals (e2e)', () => {
 
   it('refuses a panel session', async () => {
     await withdraw(operatorToken).expect(403);
+  });
+
+  it('moves the balance to in flight on request and shows the withdrawal in the statement', async () => {
+    const { token, coupon } = await signInAffiliate(e2e, operatorToken, MARINA);
+    await settleSale(e2e.app, coupon, 'Conserto de fogão', 'LIBERADO', { valor: 27 });
+    await withdraw(token).expect(201);
+
+    const response = await wallet(token).expect(200);
+
+    expect(response.body).toEqual(
+      expect.objectContaining({ availableCents: 0, withdrawnCents: 0, inFlightCents: 2700 }),
+    );
+    expect(response.body.entries[0]).toEqual(
+      expect.objectContaining({
+        kind: 'PAYOUT',
+        title: 'Saque via PIX',
+        cents: 2700,
+        withdrawalStatus: 'PROCESSING',
+      }),
+    );
+  });
+
+  it('shows a refused withdrawal in the statement and its amount back in the balance', async () => {
+    const { token, coupon } = await signInAffiliate(e2e, operatorToken, MARINA);
+    await settleSale(e2e.app, coupon, 'Conserto de fogão', 'LIBERADO', { valor: 27 });
+    e2e.payouts.respondNext('refuse');
+    await withdraw(token).expect(409);
+
+    const response = await wallet(token).expect(200);
+
+    expect(response.body.availableCents).toBe(2700);
+    expect(response.body.inFlightCents).toBe(0);
+    expect(response.body.entries[0].withdrawalStatus).toBe('FAILED');
   });
 });

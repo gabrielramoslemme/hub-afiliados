@@ -13,6 +13,12 @@ describe('Transfeera webhook (e2e)', () => {
     return request(e2e.app.getHttpServer());
   }
 
+  function wallet() {
+    return request(e2e.app.getHttpServer())
+      .get('/v1/affiliate/me/wallet')
+      .set('Authorization', `Bearer ${token}`);
+  }
+
   function transfeera(body: object | string, secret = E2E_TRANSFEERA_WEBHOOK_SECRET) {
     const raw = typeof body === 'string' ? body : JSON.stringify(body);
     const timestamp = Date.now();
@@ -95,6 +101,15 @@ describe('Transfeera webhook (e2e)', () => {
       .filter((mail) => mail.subject === 'Seu saque via PIX foi pago');
     expect(paidMails).toHaveLength(1);
     expect(paidMails[0].text).toContain('40,00');
+
+    const paid = await wallet().expect(200);
+    expect(paid.body.withdrawnCents).toBe(4000);
+    expect(paid.body.entries[0]).toEqual(
+      expect.objectContaining({
+        withdrawalStatus: 'PAID',
+        receiptUrl: 'https://cdn.transfeera.com/r/60040.pdf',
+      }),
+    );
   });
 
   it('never keeps the pix key or the cpf in the trail', async () => {

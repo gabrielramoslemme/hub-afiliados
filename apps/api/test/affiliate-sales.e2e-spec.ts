@@ -75,7 +75,9 @@ describe('Affiliate wallet and referrals (e2e)', () => {
     const response = await wallet(token).expect(200);
 
     expect(response.body).toEqual({
-      releasedCents: 2700,
+      availableCents: 2700,
+      withdrawnCents: 0,
+      inFlightCents: 0,
       updatedAt: expect.any(String),
       entries: [
         {
@@ -84,6 +86,8 @@ describe('Affiliate wallet and referrals (e2e)', () => {
           title: 'Conserto de fogão',
           cents: 2700,
           occurredAt: expect.any(String),
+          withdrawalStatus: null,
+          receiptUrl: null,
         },
       ],
     });

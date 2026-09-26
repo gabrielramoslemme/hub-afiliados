@@ -128,7 +128,12 @@ const USE_CASES = [
   provideUseCase(ChangeEmailUseCase, [USER_REPOSITORY, PASSWORD_HASHER, MAILER]),
   provideUseCase(ChangeOccupationUseCase, [USER_REPOSITORY, AFFILIATE_REPOSITORY]),
   provideUseCase(GetAffiliateReferralsUseCase, [USER_REPOSITORY, SALE_REPOSITORY, CLOCK]),
-  provideUseCase(GetAffiliateWalletUseCase, [USER_REPOSITORY, SALE_REPOSITORY, CLOCK]),
+  provideUseCase(GetAffiliateWalletUseCase, [
+    USER_REPOSITORY,
+    SALE_REPOSITORY,
+    WITHDRAWAL_REPOSITORY,
+    CLOCK,
+  ]),
   provideUseCase(ApplyIncentiveEventUseCase, [
     COUPON_REPOSITORY,
     SALE_REPOSITORY,

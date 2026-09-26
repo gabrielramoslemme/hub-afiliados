@@ -68,7 +68,7 @@ export class AffiliateMeController {
     );
   }
 
-  /** Os incentivos liberados do afiliado. Sem saldo: os pagamentos ainda não chegam aqui. */
+  /** O saldo para sacar, o que já foi sacado e o extrato. */
   @Get('wallet')
   @ApiOkResponse({ type: AffiliateWalletResponseDto })
   async wallet(@Actor() actor: ActorInfo): Promise<AffiliateWalletResponseDto> {

@@ -6,6 +6,7 @@ import type {
   ReferralStatusEnum,
   StatementEntryKindEnum,
   UserTypeEnum,
+  WithdrawalStatusEnum,
 } from '../enums';
 import { OccupationEnum, PixKeyTypeEnum, SocialNetworkEnum } from '../enums';
 import type { CouponSummary } from './coupon.dto';
@@ -114,21 +115,29 @@ export interface AffiliateMeResponse {
 export interface AffiliateStatementEntry {
   id: string;
   kind: StatementEntryKindEnum;
-  /** De onde a linha veio: o serviço vendido, no caso de um incentivo. */
+  /** De onde a linha veio: o serviço vendido no incentivo, "Saque via PIX" no saque. */
   title: string;
   /** Centavos, sempre positivo. O sinal quem dá é o `kind`. */
   cents: number;
   occurredAt: string;
+  /** Só nas linhas de saque; nulo no incentivo. */
+  withdrawalStatus: WithdrawalStatusEnum | null;
+  /** O comprovante do saque pago; nulo no resto. */
+  receiptUrl: string | null;
 }
 
 /*
-  Sem saldo e sem "já pago": os pagamentos da Porto na chave do afiliado ainda
-  não chegam à Mesa, e um saldo calculado sem eles ficaria errado no primeiro
-  pagamento. O extrato, por ora, só tem entradas.
+  O saldo é o que o botão de saque leva: os incentivos liberados que nenhum
+  saque reservou. O saque que falhou ou voltou continua no extrato, mas o
+  valor dele já está de novo no saldo.
 */
 export interface AffiliateWalletResponse {
-  /** Soma dos incentivos liberados, em centavos. Dinheiro em float acumula erro na soma. */
-  releasedCents: number;
+  /** Soma dos incentivos liberados e livres, em centavos. */
+  availableCents: number;
+  /** Soma dos saques pagos. */
+  withdrawnCents: number;
+  /** Soma dos saques pedidos que ainda não caíram: já saíram do saldo, ainda não chegaram. */
+  inFlightCents: number;
   updatedAt: string;
   entries: AffiliateStatementEntry[];
 }

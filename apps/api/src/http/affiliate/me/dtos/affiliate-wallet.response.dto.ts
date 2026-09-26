@@ -3,6 +3,7 @@ import {
   AffiliateStatementEntry,
   AffiliateWalletResponse,
   StatementEntryKindEnum,
+  WithdrawalStatusEnum,
 } from '@porto/contracts';
 import {
   AffiliateStatementEntryOutput,
@@ -22,8 +23,21 @@ export class AffiliateStatementEntryDto implements AffiliateStatementEntry {
   @ApiProperty({ description: 'Centavos, sempre positivo; o sinal vem do `kind`' })
   cents: number;
 
-  @ApiProperty({ format: 'date-time', description: 'Quando o incentivo foi liberado' })
+  @ApiProperty({
+    format: 'date-time',
+    description: 'Quando o incentivo foi liberado, ou o saque pago (pedido, enquanto não pago)',
+  })
   occurredAt: string;
+
+  @ApiProperty({
+    enum: WithdrawalStatusEnum,
+    nullable: true,
+    description: 'Só nas linhas de saque',
+  })
+  withdrawalStatus: WithdrawalStatusEnum | null;
+
+  @ApiProperty({ nullable: true, description: 'O comprovante do saque pago' })
+  receiptUrl: string | null;
 
   static from(output: AffiliateStatementEntryOutput): AffiliateStatementEntryDto {
     return {
@@ -32,13 +46,21 @@ export class AffiliateStatementEntryDto implements AffiliateStatementEntry {
       title: output.title,
       cents: output.cents,
       occurredAt: output.occurredAt.toISOString(),
+      withdrawalStatus: output.withdrawalStatus,
+      receiptUrl: output.receiptUrl,
     };
   }
 }
 
 export class AffiliateWalletResponseDto implements AffiliateWalletResponse {
-  @ApiProperty({ description: 'Soma dos incentivos liberados, em centavos' })
-  releasedCents: number;
+  @ApiProperty({ description: 'Incentivos liberados e livres, em centavos — o que o saque leva' })
+  availableCents: number;
+
+  @ApiProperty({ description: 'Soma dos saques pagos, em centavos' })
+  withdrawnCents: number;
+
+  @ApiProperty({ description: 'Soma dos saques que ainda não caíram, em centavos' })
+  inFlightCents: number;
 
   @ApiProperty({ format: 'date-time' })
   updatedAt: string;
@@ -48,7 +70,9 @@ export class AffiliateWalletResponseDto implements AffiliateWalletResponse {
 
   static from(output: AffiliateWalletOutput): AffiliateWalletResponseDto {
     return {
-      releasedCents: output.releasedCents,
+      availableCents: output.availableCents,
+      withdrawnCents: output.withdrawnCents,
+      inFlightCents: output.inFlightCents,
       updatedAt: output.updatedAt.toISOString(),
       entries: output.entries.map((entry) => AffiliateStatementEntryDto.from(entry)),
     };
