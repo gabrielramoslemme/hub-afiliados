@@ -1,3 +1,4 @@
+import type { INestApplication } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { UserRoleEnum, UserTypeEnum } from '@porto/contracts';
 import { PASSWORD_HASHER, PasswordHasher } from '../src/domain/auth/password-hasher';
@@ -10,12 +11,13 @@ import { createE2eTestingModule } from './e2e-app';
  * contra o banco de verdade, e não só chamado à mão depois do deploy.
  */
 describe('seedOperators (integration)', () => {
+  let app: INestApplication;
   let dataSource: DataSource;
   let hasher: PasswordHasher;
 
   beforeAll(async () => {
     const moduleRef = await createE2eTestingModule().compile();
-    const app = moduleRef.createNestApplication();
+    app = moduleRef.createNestApplication();
     await app.init();
     dataSource = app.get(DataSource);
     hasher = app.get<PasswordHasher>(PASSWORD_HASHER);
@@ -26,7 +28,9 @@ describe('seedOperators (integration)', () => {
   });
 
   afterAll(async () => {
-    await dataSource.destroy();
+    // `app.close()`, não só `dataSource.destroy()`: é o que desliga o cron do
+    // `JobsModule` — sem isso o timer da reconciliação prende o Jest de pé.
+    await app.close();
   });
 
   it('creates the three panel operators, all owing a password change', async () => {

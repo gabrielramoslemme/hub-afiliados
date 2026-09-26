@@ -22,6 +22,7 @@ import { GetAffiliateReferralsUseCase } from '@Application/sales/get-affiliate-r
 import { GetAffiliateWalletUseCase } from '@Application/sales/get-affiliate-wallet.use-case';
 import { RecordInvalidIncentiveNotificationUseCase } from '@Application/sales/record-invalid-incentive-notification.use-case';
 import { ApplyPayoutEventUseCase } from '@Application/withdrawals/apply-payout-event.use-case';
+import { ReconcileWithdrawalsUseCase } from '@Application/withdrawals/reconcile-withdrawals.use-case';
 import { RecordIgnoredPayoutEventUseCase } from '@Application/withdrawals/record-ignored-payout-event.use-case';
 import { RequestWithdrawalUseCase } from '@Application/withdrawals/request-withdrawal.use-case';
 import { AFFILIATE_REPOSITORY } from '@Domain/affiliates/affiliate.repository';
@@ -143,6 +144,13 @@ const USE_CASES = [
   ]),
   provideUseCase(ApplyPayoutEventUseCase, [WITHDRAWAL_REPOSITORY, MAILER, LINK_BUILDER, CLOCK]),
   provideUseCase(RecordIgnoredPayoutEventUseCase, [PAYOUT_EVENT_REPOSITORY, CLOCK]),
+  provideUseCase(ReconcileWithdrawalsUseCase, [
+    WITHDRAWAL_REPOSITORY,
+    PAYOUT_GATEWAY,
+    MAILER,
+    LINK_BUILDER,
+    CLOCK,
+  ]),
 ];
 
 @Module({

@@ -7,6 +7,7 @@ import { AuthenticatedGuard } from '@Http/shared/guards/authenticated.guard';
 import { WebhookModule } from '@Http/webhooks/webhook.module';
 import { AppConfigModule } from '@Infra/config/config.module';
 import { DatabaseModule } from '@Infra/database/typeorm/typeorm.module';
+import { JobsModule } from '@Infra/di/jobs/jobs.module';
 import { AuthServicesModule } from '@Infra/services/auth/auth-services.module';
 import { ClockModule } from '@Infra/services/clock/clock.module';
 import { CouponGatewayModule } from '@Infra/services/coupons/coupon-gateway.module';
@@ -26,6 +27,7 @@ import { PayoutGatewayModule } from '@Infra/services/payouts/payout-gateway.modu
     AffiliateChannelModule,
     AdminModule,
     WebhookModule,
+    JobsModule,
   ],
   // Negação por omissão: rota nova nasce protegida, e liberar exige o
   // `@Public()` escrito. O contrário — proteger rota a rota — falha em silêncio
