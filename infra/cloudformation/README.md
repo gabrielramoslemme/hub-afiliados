@@ -347,6 +347,25 @@ PORTO_WEBHOOK_SECRET=<segredo>
 Ele é opcional: sem a linha a API sobe, e `POST /v1/webhooks/porto/incentives`
 recusa toda chamada com 401. Gere com `openssl rand -hex 32`.
 
+As credenciais da Transfeera (saque via PIX) entram do mesmo jeito, mais três
+linhas:
+
+```
+TRANSFEERA_CLIENT_ID=<client_id>
+TRANSFEERA_CLIENT_SECRET=<client_secret>
+TRANSFEERA_WEBHOOK_SECRET=<segredo>
+```
+
+`TRANSFEERA_CLIENT_ID` e `TRANSFEERA_CLIENT_SECRET` são a credencial da
+integração; sem elas o saque fica desligado (`WDR-003`), sem derrubar o
+deploy. `TRANSFEERA_WEBHOOK_SECRET` é o `signature_secret` devolvido pelo
+`POST /webhook` da Transfeera ao cadastrar o endereço do webhook; vazio, a
+rota recusa toda chamada com 401.
+
+**Webhook da Transfeera.** Cadastre `https://<host>/v1/webhooks/transfeera` na Transfeera
+(`POST /webhook`) e grave o segredo devolvido em `TRANSFEERA_WEBHOOK_SECRET`. O contrato
+está em `apps/api/docs/TRANSFEERA-webhook.md`.
+
 Sem as duas credenciais o deploy falha: linha ausente para o `install-release.sh` com
 `unbound variable` antes de tocar nos containers; linha vazia chega à API, que
 recusa subir, e o deploy volta para a release anterior. Os endereços do gateway

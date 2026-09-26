@@ -129,6 +129,12 @@ PORTO_CLIENT_SECRET=${PORTO_CLIENT_SECRET}
 # O segredo do webhook de incentivos é opcional de propósito: sem a linha no
 # parâmetro, a API sobe e a rota recusa toda chamada com 401.
 PORTO_WEBHOOK_SECRET=${PORTO_WEBHOOK_SECRET:-}
+# Transfeera (saque via PIX). As três linhas são opcionais de propósito: sem
+# credencial a API sobe com o saque desligado (WDR-003), e sem o segredo a
+# rota do webhook recusa tudo com 401.
+TRANSFEERA_CLIENT_ID=${TRANSFEERA_CLIENT_ID:-}
+TRANSFEERA_CLIENT_SECRET=${TRANSFEERA_CLIENT_SECRET:-}
+TRANSFEERA_WEBHOOK_SECRET=${TRANSFEERA_WEBHOOK_SECRET:-}
 ENV
 
     # Nada de segredo aqui, e é essa a fronteira: a web não tem o que vazar.

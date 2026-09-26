@@ -25,7 +25,7 @@ Identidade unificada em `users`, perfil 1:1 em `affiliates`. **Esquecer de checa
 
 **Trocar de canal é 403, nos dois sentidos**, e há e2e para isso: token de afiliado em `/v1/admin/coupons/availability` e token de operador em `/v1/affiliate/me`. Além disso, o `route-protection.e2e-spec.ts` percorre as rotas registradas e confere que toda rota `admin/...` tem o `AdminGuard` e toda `affiliate/...` o `AffiliateGuard` — o guard do canal certo, e não só algum.
 
-Hoje `@Public()` marca exatamente dez rotas: `GET /v1/health`, `POST /v1/affiliates`, os dois `POST .../auth/login`, `POST /v1/affiliate/auth/set-password`, os dois pares `POST .../auth/forgot-password` e `POST .../auth/reset-password`, um em cada canal, e `POST /v1/webhooks/porto/incentives`. As de senha são públicas porque são o que a pessoa tem **antes** de ter senha — ou depois de perdê-la: quem autentica a chamada é o token de uso único no corpo, e quem pede recuperação não tem sessão nenhuma para apresentar. A de webhook é pública só para o JWT: quem a fecha é o `WebhookSignatureGuard`, e o mesmo spec reprova rota `webhooks/...` sem ele. Acrescentar a próxima é decisão de segurança, não de conveniência; a lista literal em `test/route-protection.e2e-spec.ts` é o que obriga a decisão a passar por um diff.
+Hoje `@Public()` marca exatamente onze rotas: `GET /v1/health`, `POST /v1/affiliates`, os dois `POST .../auth/login`, `POST /v1/affiliate/auth/set-password`, os dois pares `POST .../auth/forgot-password` e `POST .../auth/reset-password`, um em cada canal, `POST /v1/webhooks/porto/incentives` e `POST /v1/webhooks/transfeera`. As de senha são públicas porque são o que a pessoa tem **antes** de ter senha — ou depois de perdê-la: quem autentica a chamada é o token de uso único no corpo, e quem pede recuperação não tem sessão nenhuma para apresentar. As duas de webhook são públicas só para o JWT: quem as fecha é o guard do fornecedor de cada uma — `WebhookSignatureGuard` na da Porto, `PayoutWebhookSignatureGuard` na da Transfeera —, e o mesmo spec reprova rota `webhooks/...` sem o guard certo. Acrescentar a próxima é decisão de segurança, não de conveniência; a lista literal em `test/route-protection.e2e-spec.ts` é o que obriga a decisão a passar por um diff.
 
 **As duas rotas de recuperação existem em cada canal, e o canal é quem diz a audiência.** O `RequestPasswordResetUseCase` e o `ResetPasswordUseCase` recebem `AuthAudienceEnum` na entrada, nunca no corpo: é isso que faz o link do painel não redefinir senha pela tela do afiliado. Os dois ficam em silêncio — 204 — para conta que não existe, não pode entrar ou pediu demais, porque responder diferente entregaria quem participa do programa.
 
@@ -99,6 +99,8 @@ Quem liga token a implementação é `*.module.ts`, em dois passos: o `Repositor
 | bcrypt | `PasswordHasher` (`src/domain/auth/`) | `BcryptPasswordHasher` |
 | `node:crypto` | `TokenGenerator` (`src/domain/auth/`) | `CryptoTokenGenerator` |
 | HMAC do webhook e `PORTO_WEBHOOK_SECRET` | `WebhookSignatureVerifier` (`src/domain/auth/`) | `HmacWebhookSignatureVerifier` |
+| Transfeera (saque via PIX) | `PayoutGateway` (`src/domain/withdrawals/`) | `TransfeeraPayoutGateway` e o `TransfeeraTokenProvider` |
+| Assinatura do webhook da Transfeera | `PayoutWebhookSignatureVerifier` (`src/domain/auth/`) | `TransfeeraWebhookSignatureVerifier` |
 | O relógio | `Clock` (`src/domain/shared/`) | `SystemClock` |
 | `APP_BASE_URL` | `LinkBuilder` (`src/domain/notifications/`) | `AppLinkBuilder` |
 | Nest, como container de DI | nada — o use case é classe comum | `src/infra/di/use-cases.module.ts` |
@@ -394,6 +396,42 @@ O que sobra é o registro **e** a consulta ficarem sem resposta seguidas: o cupo
 - **Campo desconhecido é descartado, não recusado.** O `@WebhookBody()` valida com um `ValidationPipe` próprio, sem `forbidNonWhitelisted`; o global não alcança decorator customizado. Um 400 porque a Porto acrescentou um campo derrubaria a integração, e ela não reenvia sozinha. Pelo mesmo motivo `valorVenda` não tem limite de casas decimais: sobra de float vira centavos arredondados, não 400.
 - **Corpo fora do contrato também entra na trilha.** O `@WebhookBody()` devolve `InvalidWebhookBody` em vez de lançar, e o controller grava a chamada pelo `RecordInvalidIncentiveNotificationUseCase` antes de responder 400 `INC-006` — com o `idEvento` e o `venda.id` que der para ler, e o corpo inteiro. Só essa recusa deixa nulos os campos lidos do payload; o `CHECK` `ck_porto_incentive_events_readable` cobra isso.
 - **O valor do incentivo é o da Porto, nunca calculado aqui.** `incentivo.valor` e `venda.dataVenda` são obrigatórios; sem eles o corpo é `INC-006`. O valor vai para `incentive_cents` em todo evento aplicado — o do encerramento substitui o do registro, porque é ele que a Porto paga. A data da venda (`sold_at`) só o registro grava.
+
+## Saque via PIX (Transfeera)
+
+**O afiliado saca o saldo inteiro, sem aprovação, e a Mesa paga pela Transfeera.** O saldo é a soma
+dos incentivos das vendas `RELEASED` que nenhum saque reservou (`affiliate_sales.withdrawal_id IS NULL`).
+Não há livro-razão: reservar é a venda apontar para o saque, e falha ou devolução a solta.
+Spec: `porto-hub-afiliados-docs/docs/specs/22-saque-via-pix.md`.
+
+- **O PIX sai depois do commit.** `reserve` trava as vendas e grava o saque `REQUESTED`; só então o
+  `PayoutGateway` é chamado. Ao contrário — a referência fazia assim —, um commit que falha depois do
+  PIX devolve ao saldo dinheiro já pago.
+- **`public_id` do saque é `integration_id` e `idempotency_key` na Transfeera.** Repetir o pedido com
+  ele nunca paga duas vezes; é o que deixa a reconciliação reenviar sem medo.
+- **Sem resposta não é falha.** Timeout, 5xx e credencial recusada deixam o saque `REQUESTED`, fora do
+  saldo, e a rota responde 202. Só a recusa definitiva (400/422) encerra como `FAILED` e devolve o valor.
+- **Webhook** `POST /v1/webhooks/transfeera`, `Transfeera-Signature: t=<ms>,v1=<hex>`. A decisão de
+  aplicar, repetir ou ignorar é `resolvePayoutTransition`, tomada debaixo do lock. `DEVOLVIDO` depois de
+  `FINALIZADO` devolve o valor ao saldo. Referência desconhecida é 404, para a Transfeera tentar de novo.
+- **Reconciliação** a cada 10 minutos (`src/infra/di/jobs/`), com advisory lock: reenvia `REQUESTED`
+  parado e consulta o lote de `PROCESSING` sem webhook. A Transfeera só reenvia uma notificação duas vezes.
+  Cada saque é tratado por si: um erro inesperado num não trava os demais da rodada, e o `publicId` dele
+  entra logado como falha, nunca a exceção. Se nem o `pg_advisory_unlock` nem o `unlock_all` de socorro
+  confirmarem que a sessão soltou o lock, a conexão é descartada em vez de voltar ao pool — devolvê-la
+  presa travaria toda rodada futura. O cron só é registrado fora de `NODE_ENV=test` (`jobs.module.ts`);
+  dentro dele, o `AppModule` de cada e2e spec criaria doze `CronJob` reais e prenderia o Jest de pé.
+- **Sem credencial o saque fica desligado** (WDR-003) e a reconciliação não roda. `TRANSFEERA_*` é opcional
+  de propósito.
+- **`payout_events` guarda o corpo sem chave PIX nem CPF** (`redactTransfeeraPayload`). Nenhum log leva
+  os dois: a recusa da Transfeera passa por `scrubbedReason` antes de virar log ou `failure_reason` — a
+  chave enviada, a chave já traduzida para o formato da Transfeera (o telefone ganha `+55`) e qualquer
+  sequência com a cara de um CPF, mesmo que a Transfeera a devolva formatada e não igual ao que mandamos.
+- **O painel filtra por dia, não por instante.** `ListWithdrawalsQueryDto` recusa data que não existe no
+  calendário (`IsDateString({ strict: true })`, 400) antes de `toRequestedRange` (`http/admin/withdrawals/`)
+  converter o dia, em Brasília, para o intervalo UTC que a consulta usa.
+- **E2e:** o `createE2eApp` troca o `PAYOUT_GATEWAY` pelo `FakePayoutGateway`, e o teste escolhe a
+  resposta com `e2e.payouts.respondNext('refuse' | 'unavailable' | 'repeated')`.
 
 ## Testes
 
