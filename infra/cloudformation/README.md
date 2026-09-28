@@ -493,7 +493,8 @@ aws ec2 describe-availability-zones --region ca-central-1 \
   --query 'AvailabilityZones[].[ZoneName,ZoneId]' --output text
 ```
 
-Escolha duas cujo id **não** seja `cac1-az3`. O prefix list do CloudFront também
+Escolha duas cujo id **não** seja `cac1-az3`. A stack recusa prod sem as duas, ou
+com as duas iguais (regra `ProdRequiresDistinctZones`). O prefix list do CloudFront também
 tem id próprio na região — o padrão do template é o de `us-east-1`, e a stack
 recusa ele fora de lá:
 

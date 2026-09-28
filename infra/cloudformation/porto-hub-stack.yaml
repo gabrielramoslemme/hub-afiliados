@@ -326,6 +326,24 @@ Rules:
           passe CloudFrontPrefixListId com o id desta regiao - o comando esta
           na descricao do parametro.
 
+  # Vazias, o `!GetAZs` pode cair na cac1-az3, onde VPC origin nao funciona - e
+  # o erro so aparece no VpcOrigin, 30 a 40 minutos depois, no meio do create
+  # Multi-AZ. Iguais, o DbSubnetGroup recusa: o RDS exige duas zonas.
+  ProdRequiresDistinctZones:
+    RuleCondition: !Equals [!Ref EnvironmentName, 'prod']
+    Assertions:
+      - Assert: !And
+          - !Not [!Equals [!Ref PrimaryAvailabilityZone, '']]
+          - !Not [!Equals [!Ref SecondaryAvailabilityZone, '']]
+        AssertDescription: >
+          Producao exige PrimaryAvailabilityZone e SecondaryAvailabilityZone.
+          Escolha duas cujo ZoneId nao seja cac1-az3 - o comando esta na
+          descricao do parametro.
+      - Assert: !Not [!Equals [!Ref PrimaryAvailabilityZone, !Ref SecondaryAvailabilityZone]]
+        AssertDescription: >
+          PrimaryAvailabilityZone e SecondaryAvailabilityZone precisam ser
+          diferentes: o RDS Multi-AZ exige subnets em duas zonas.
+
   ProdRequiresAlertEmail:
     RuleCondition: !Equals [!Ref EnvironmentName, 'prod']
     Assertions:
