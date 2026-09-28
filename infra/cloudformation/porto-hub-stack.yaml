@@ -1106,8 +1106,10 @@ Resources:
                 # Dois `sub`, e nao um, porque o GitHub monta a claim de dois
                 # jeitos: job comum vira `ref:refs/heads/<branch>`; job com
                 # `environment:` declarado vira `environment:<nome>` e perde a
-                # referencia da branch. O primeiro e o job que publica as
-                # imagens, o segundo e o deploy. Lista em StringEquals e OU.
+                # referencia da branch. Hoje os dois jobs que assumem a role -
+                # imagens e deploy - sao do primeiro tipo: o `environment` do
+                # CD fica num job de aprovacao que nao toca a AWS. O segundo
+                # valor fica para um job com ambiente que precise da role.
                 #
                 # A branch some do segundo valor, entao quem garante que so a
                 # DeployBranch chega la e a regra de protecao do ambiente no

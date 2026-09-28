@@ -238,11 +238,12 @@ de entrada.
 - o ambiente **`development`** em *Settings → Environments*, com
   *Deployment branches* em **Selected branches: `development`**.
 
-O ambiente não é enfeite. O job de deploy declara `environment: development`, e
-o GitHub monta o `sub` do token OIDC como `repo:OWNER/REPO:environment:development`
-— sem a referência da branch. A trust policy aceita esse valor; quem garante que
-só a `development` chega até ele é a regra de proteção do ambiente. Sem ela,
-qualquer branch pode pedir o deploy deste ambiente.
+O ambiente não é enfeite. O CD tem um job `approve` que declara
+`environment: development` e só depois o `deploy`, que assume a role. É a regra
+de proteção do ambiente que impede outra branch de pedir o deploy; em prod, é
+também onde fica o revisor obrigatório. O `deploy` não declara ambiente, então
+o `sub` do token OIDC leva a branch (`ref:refs/heads/development`), e a trust
+policy só aceita a `DeployBranch` da stack.
 
 **5. Publicar.** Um push na `development` roda a CI; os jobs de verificação, o
 de infra e o que publica as imagens rodam em paralelo, e o deploy só existe como
@@ -810,7 +811,7 @@ aplicação e deixar o master fora de circulação.
 | Senha do master | output `ReadDbPasswordCommand` — só para o que exige DDL |
 | Senha inicial do painel | output `ReadSeedPasswordCommand` |
 | Logs | CloudWatch, grupo `/porto-hub/dev`, streams `api`, `web` e `caddy` |
-| Rollback | *Actions → CD → Run workflow*, com o `imageTag` anterior (o ECR guarda as 10 últimas) |
+| Rollback | *Actions → CD → Run workflow* **na branch do ambiente** (`development`; em prod, `main` com `stackName=porto-hub-prod` e `environment=production`), com o `imageTag` anterior (o ECR guarda as 10 últimas). De outra branch a role recusa o token |
 | Certificados | copiados para `s3://<bucket-de-deploy>/caddy-data.tgz` a cada release e restaurados em instância nova |
 
 O seed roda a cada deploy e é idempotente (`ON CONFLICT DO NOTHING`): não

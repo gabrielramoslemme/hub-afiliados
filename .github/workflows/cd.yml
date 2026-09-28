@@ -36,12 +36,6 @@ on:
         type: string
         default: development
 
-# Por ambiente: um deploy de dev nao espera o de prod, e dois do mesmo
-# ambiente nunca rodam juntos.
-concurrency:
-  group: deploy-${{ inputs.environment }}
-  cancel-in-progress: false
-
 permissions:
   contents: read
   id-token: write
@@ -53,16 +47,37 @@ env:
   AWS_REGION: ${{ inputs.environment == 'production' && 'ca-central-1' || 'us-east-1' }}
 
 jobs:
+  # A espera pelo revisor do environment fica num job proprio, fora da
+  # concorrencia. Run esperando aprovacao conta como em andamento: no mesmo job
+  # do deploy, um deploy de prod sem aprovar prendia o grupo, e um rollback
+  # manual ficava na fila atras dele - ou era cancelado em silencio quando
+  # outro push chegava, porque o GitHub guarda um so pendente por grupo.
+  #
+  # O nome tem que ser o mesmo do parametro GitHubEnvironment da stack. E a
+  # regra "Selected branches" do environment que impede outra branch de pedir
+  # o deploy.
+  approve:
+    name: Aprovacao
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: ${{ inputs.environment }}
+    permissions: {}
+    steps:
+      - run: echo "Deploy de ${{ inputs.imageTag }} liberado em ${{ inputs.environment }}"
+
   deploy:
+    needs: approve
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Da historico de deploy na aba Deployments e um lugar para pendurar
-    # revisor obrigatorio no dia em que existir um ambiente que precise disso.
-    # ATENCAO: com `environment`, o `sub` do token OIDC vira
-    # `repo:OWNER/REPO:environment:<nome>` — a trust policy da role na stack
-    # aceita esse valor e o de `ref:refs/heads/<DeployBranch>`, os dois. O nome
-    # aqui tem que ser o mesmo do parametro GitHubEnvironment da stack.
-    environment: ${{ inputs.environment }}
+    # Por ambiente, e so depois da aprovacao: um deploy de dev nao espera o de
+    # prod, dois do mesmo ambiente nunca rodam juntos, e a fila so tem o que
+    # alguem ja liberou.
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    # Sem `environment` aqui, o `sub` do token OIDC e
+    # `repo:OWNER/REPO:ref:refs/heads/<branch>`, que a trust policy so aceita
+    # para a DeployBranch da stack. Rollback manual roda a partir dela.
 
     steps:
       - uses: actions/checkout@v4
