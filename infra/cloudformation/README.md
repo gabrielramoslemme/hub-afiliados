@@ -1,8 +1,12 @@
-# Infraestrutura — ambiente de desenvolvimento
+# Infraestrutura — desenvolvimento e produção
 
-Stack única em `porto-hub-dev-stack.yaml`. Sobe uma EC2 com Docker Compose
-(Caddy + web + API), um RDS Postgres em subnets privadas, dois repositórios no
-ECR, uma distribuição CloudFront na frente e o deploy por documento SSM.
+Um template, `porto-hub-stack.yaml`, e uma stack por ambiente: `porto-hub-dev`
+e `porto-hub-prod`. Sobe uma EC2 com Docker Compose (Caddy + web + API), um RDS
+Postgres em subnets privadas, dois repositórios no ECR, uma distribuição
+CloudFront na frente e o deploy por documento SSM.
+
+Quase tudo abaixo descreve o **desenvolvimento**, que é o caminho de base. O que
+produção faz diferente — e por quê — está em [*Produção*](#produção).
 
 ## O caminho de uma requisição
 
@@ -134,7 +138,7 @@ ambiente sobe no domínio do próprio CloudFront, com o certificado padrão da A
 
 ```bash
 aws cloudformation deploy \
-  --template-file infra/cloudformation/porto-hub-dev-stack.yaml \
+  --template-file infra/cloudformation/porto-hub-stack.yaml \
   --stack-name porto-hub-dev \
   --region us-east-1 \
   --capabilities CAPABILITY_NAMED_IAM \
@@ -184,7 +188,9 @@ uma vez, tire a flag.
 Não há parâmetro de CIDR de entrada: a instância aceita **só a 80, e só das
 faixas do CloudFront**, pela prefix list gerenciada da AWS. O
 `CloudFrontPrefixListId` tem o id de `us-east-1` como padrão; se um dia a AWS
-mudá-lo, o comando para conferir está na descrição do parâmetro.
+mudá-lo, o comando para conferir está na descrição do parâmetro. Em qualquer
+outra região — a de prod é `ca-central-1` — o id é outro, e a regra
+`PrefixListMatchesRegion` recusa o padrão.
 
 Se a conta já tiver o provider OIDC do GitHub, acrescente
 `CreateGitHubOidcProvider=false` — o segundo faz a stack falhar com
@@ -208,11 +214,10 @@ dig +short api-dev.hubafiliados.com.br @1.1.1.1  # idem
 Com a Imperva na frente o CNAME é dela, e o CloudFront aparece só como origin
 na RDM — nesse caso o que se confirma é que a resposta **não** é o Elastic IP.
 
-**3. Escrever as credenciais da Porto e injetar a chave do Resend.** As
+**3. Gravar as credenciais da Porto e injetar a chave do Resend.** As
 credenciais **antes do primeiro deploy**: a API sempre fala com o gateway
-Sensedia, e o deploy falha sem `PORTO_CLIENT_ID` e `PORTO_CLIENT_SECRET` no
-parâmetro `/porto-hub/dev/config`. O passo a passo está em *Credenciais da
-Porto*, mais abaixo.
+Sensedia, e o deploy falha enquanto o segredo `PortoSecret` tiver `REPLACE_ME`.
+O passo a passo está em *Credenciais da Porto*, mais abaixo.
 
 A chave do Resend nasce `REPLACE_ME`, e só precisa de valor para usar
 `MailProvider=resend`:
@@ -233,11 +238,12 @@ de entrada.
 - o ambiente **`development`** em *Settings → Environments*, com
   *Deployment branches* em **Selected branches: `development`**.
 
-O ambiente não é enfeite. O job de deploy declara `environment: development`, e
-o GitHub monta o `sub` do token OIDC como `repo:OWNER/REPO:environment:development`
-— sem a referência da branch. A trust policy aceita esse valor; quem garante que
-só a `development` chega até ele é a regra de proteção do ambiente. Sem ela,
-qualquer branch pode pedir o deploy deste ambiente.
+O ambiente não é enfeite. O CD tem um job `approve` que declara
+`environment: development` e só depois o `deploy`, que assume a role. É a regra
+de proteção do ambiente que impede outra branch de pedir o deploy; em prod, é
+também onde fica o revisor obrigatório. O `deploy` não declara ambiente, então
+o `sub` do token OIDC leva a branch (`ref:refs/heads/development`), e a trust
+policy só aceita a `DeployBranch` da stack.
 
 **5. Publicar.** Um push na `development` roda a CI; os jobs de verificação, o
 de infra e o que publica as imagens rodam em paralelo, e o deploy só existe como
@@ -257,7 +263,7 @@ coisas que não têm flag equivalente.
 
 | Console | Conferir | Se der ruim |
 |---|---|---|
-| Seletor de região | **N. Virginia (us-east-1)** | O ACM do CloudFront exige, e o origin é montado como `ec2-<ip>.compute-1.amazonaws.com`, que é o sufixo dessa região. Fora dela nada funciona |
+| Seletor de região | Dev: **N. Virginia (us-east-1)**. Prod: **Canada (Central) (ca-central-1)** | Em dev o origin é montado como `ec2-<ip>.compute-1.amazonaws.com`, que é o sufixo de us-east-1: fora dela o CloudFront não acha a instância. Prod usa VPC origin e não depende disso. O certificado do ACM fica em us-east-1 nos dois casos |
 | **IAM → Identity providers** | Existe `token.actions.githubusercontent.com`? Se sim, abra e confirme que *Audiences* contém `sts.amazonaws.com` | Existindo, use `CreateGitHubOidcProvider=false`: criar o segundo falha com `EntityAlreadyExists` e o rollback leva a stack inteira. Audience diferente faz o assume-role ser recusado sem dizer por quê |
 | Prefix list do CloudFront | O id de `com.amazonaws.global.cloudfront.origin-facing` **nesta** região | Prefix list gerenciada tem id diferente por região, e o console da VPC esconde as da AWS. O comando está na descrição do parâmetro `CloudFrontPrefixListId`. Errando, o security group não cria e a stack para em segundos com `InvalidPrefixListID.NotFound` — antes do RDS e do CloudFront |
 
@@ -265,7 +271,7 @@ coisas que não têm flag equivalente.
 
 1. **CloudFormation → Stacks → Create stack → With new resources (standard)**.
 2. *Prepare template* → **Choose an existing template** → **Upload a template
-   file** → `infra/cloudformation/porto-hub-dev-stack.yaml`. O console o guarda
+   file** → `infra/cloudformation/porto-hub-stack.yaml`. O console o guarda
    sozinho num bucket `cf-templates-*`.
 3. *Stack name*: `porto-hub-dev`.
 4. Parâmetros: **deixe `DomainName`, `ApiDomainName` e `CertificateArn`
@@ -327,39 +333,37 @@ nenhuma — não aponta para lá sozinho.
 ### Credenciais da Porto (cupons, INT-01)
 
 A API sempre fala com o gateway Sensedia — não há emissor falso fora dos
-testes. As credenciais não passam pelo template: são **duas linhas escritas à
-mão** no fim do parâmetro `/porto-hub/dev/config`, **antes do primeiro deploy**.
-Pelo console, em **Systems Manager → Parameter Store →
-`/porto-hub/dev/config` → Edit**:
+testes. As credenciais moram no segredo `PortoSecret`, que nasce com
+`REPLACE_ME` e é preenchido **antes do primeiro deploy**. Por arquivo, nunca por
+argv:
 
-```
-PORTO_CLIENT_ID=<client_id>
-PORTO_CLIENT_SECRET=<client_secret>
-```
-
-O segredo do webhook de incentivos entra do mesmo jeito, numa terceira linha —
-combinado com a Porto, com no mínimo 32 caracteres:
-
-```
-PORTO_WEBHOOK_SECRET=<segredo>
+```bash
+cat > porto_secret.json <<'JSON'
+{"client_id":"<client_id>","client_secret":"<client_secret>","webhook_secret":"<segredo>"}
+JSON
+# O comando exato sai no output SetPortoSecretCommand; ele apaga o arquivo no fim.
 ```
 
-Ele é opcional: sem a linha a API sobe, e `POST /v1/webhooks/porto/incentives`
-recusa toda chamada com 401. Gere com `openssl rand -hex 32`.
+Pelo console: **Secrets Manager** → o segredo descrito *"Credenciais do gateway
+da Porto…"* → *Retrieve secret value* → *Edit*.
 
-Sem as duas credenciais o deploy falha: linha ausente para o `install-release.sh` com
-`unbound variable` antes de tocar nos containers; linha vazia chega à API, que
-recusa subir, e o deploy volta para a release anterior. Os endereços do gateway
-não entram no parâmetro: valem os padrões da API, que são os de homologação.
+`webhook_secret` é o segredo do webhook de incentivos, combinado com a Porto,
+com no mínimo 32 caracteres (`openssl rand -hex 32`). Vazio é válido: a API
+sobe, e `POST /v1/webhooks/porto/incentives` recusa toda chamada com 401.
 
-⚠️ **Update de stack pode apagar as linhas escritas à mão.** O CloudFormation só regrava o
-parâmetro quando o valor dele no template muda — trocar `MailProvider`,
-`MailFromEmail`, `ApiMocking`, `DomainName`, `ApiDomainName`, ou um endpoint novo
-do RDS. Depois de um update desses, confira o parâmetro e escreva as linhas de
-novo antes do deploy.
+Com `REPLACE_ME` no `client_id` ou no `client_secret`, o `install-release.sh`
+para antes de tocar nos containers e diz o que fazer.
 
-⚠️ **O parâmetro é `String`**: quem tem `ssm:GetParameter` nesse nome lê o
-`client_secret` em claro.
+Os endereços do gateway são parâmetros da stack, `PortoOAuthUrl` e
+`PortoApiBaseUrl`. Em dev ficam vazios, e valem os padrões da API — os de
+**homologação**. Em prod são obrigatórios: a stack não cria sem eles.
+
+> Até este template, as credenciais eram linhas escritas à mão no fim do
+> `/porto-hub/dev/config`. Elas saíram de lá por dois motivos: todo update de
+> stack que regravasse o parâmetro as apagava, e o parâmetro é `String`, legível
+> por quem tem `ssm:GetParameter`. O primeiro update da `porto-hub-dev` com o
+> template novo regrava o parâmetro — as linhas antigas somem, e o segredo
+> precisa estar preenchido antes do deploy seguinte.
 
 Se a aprovação responder *"A Porto Serviços recusou o acesso da integração"*
 (`CPN-004`), o gateway recusou a credencial do segredo — errada, revogada, sem
@@ -412,25 +416,252 @@ origin que a Imperva registra e o alvo dos dois CNAMEs. O Elastic IP não vai
 para eles — virou detalhe interno, e é justamente isso que o CloudFront comprou:
 recriar a stack não obriga ninguém da Porto a mexer em nada.
 
+## Produção
+
+Mesmo template, `EnvironmentName=prod`. O desenho é o de dev, endurecido — não
+outra plataforma. Decisões e o porquê de cada uma na spec 21 do repositório de
+docs (`specs/21-ambiente-de-producao.md`).
+
+| | dev | prod |
+|---|---|---|
+| Região | `us-east-1` | **`ca-central-1`** (Montreal) |
+| Instância | subnet pública, Elastic IP | **subnet privada, sem IP público** |
+| CloudFront → instância | HTTP pela internet, SG só aceita o CloudFront | **VPC origin**: rede interna da AWS, até o IP privado |
+| Saída para a internet | internet gateway, pelo Elastic IP | **NAT Gateway**; o IP de saída é o output `EgressIp` |
+| VPC | `10.0.0.0/16` | `10.1.0.0/16` |
+| RDS | single-AZ, backup 1 dia | **Multi-AZ**, backup 14 dias, `DeletionProtection`, disco até 100 GB |
+| Acesso direto ao banco | `DbAccessCidr` opcional | `DbAccessCidr` opcional, com **subnets próprias do banco**, senhas de **64** caracteres, TLS obrigatório no parameter group e **log de cada conexão** no CloudWatch |
+| Gateway da Porto | padrões da API (HML) | `PortoOAuthUrl` e `PortoApiBaseUrl` **obrigatórios** |
+| Seed de operadores | a cada deploy | **não roda**, e o `SeedSecret` não existe |
+| Alarmes | nenhum | SNS por e-mail: status check (recover e reboot), CPU, disco e conexões do RDS; o 5xx do CloudFront numa stack à parte, em `us-east-1` |
+| Logs | 14 dias | 90 dias |
+| Deploy | push na `development` | push na `main` + **aprovação** no environment `production` |
+
+`DeletionPolicy` e `UpdateReplacePolicy` do RDS são `Snapshot` **nos dois**:
+variar por ambiente exigiria o transform `AWS::LanguageExtensions`, que não
+documenta o caso e proíbe o *Use existing template* dos updates.
+
+### Antes de tudo: migrar o dev para o template novo
+
+O template novo muda o `/porto-hub/dev/config` (chaves `PORTO_*` novas) e o
+`install-release.sh` passa a exigi-las. **Atualize a `porto-hub-dev` e preencha
+o `PortoSecret` dela antes do merge deste template na `development`**: o merge
+dispara o deploy, e ele falha, com mensagem clara, se a stack ainda estiver no
+template antigo.
+
+```bash
+# Cada parâmetro que a stack já tem, com o valor que está nela. Os novos
+# (PortoOAuthUrl, AlertEmail, zonas...) entram com o padrão, que é vazio.
+params="$(aws cloudformation describe-stacks --stack-name porto-hub-dev --region us-east-1 \
+  --query 'Stacks[0].Parameters[].ParameterKey' --output text \
+  | tr '\t' '\n' | sed 's/.*/ParameterKey=&,UsePreviousValue=true/')"
+
+# shellcheck disable=SC2086 — a lista é para ser quebrada em palavras
+aws cloudformation create-change-set --stack-name porto-hub-dev --change-set-name prod-template \
+  --template-body file://infra/cloudformation/porto-hub-stack.yaml \
+  --parameters $params --capabilities CAPABILITY_NAMED_IAM --region us-east-1
+
+aws cloudformation describe-change-set --stack-name porto-hub-dev --change-set-name prod-template \
+  --region us-east-1 --query 'Changes[].ResourceChange.[LogicalResourceId,Action,Replacement]' --output table
+```
+
+Pelo console é **Update → Replace current template**, mantendo os parâmetros.
+
+O change set esperado tem `Add` em `PortoSecret` e nos três handles de
+dependência (`DatabaseRoutesReady`, `OriginAddressReady`, `PrivateRoutesReady`
+— não criam nada na conta), e `Modify` em `ConfigParameter`,
+`InstanceRole` e `Database` (só o atributo de exclusão), mais `Distribution` e
+`Instance` por metadado. **`Replacement: True` em qualquer coisa que não seja a
+`Instance`, pare** — o template deveria resolver para o mesmo recurso em dev. Na
+`Instance`, replacement só é aceitável se vier do `LatestAmiId` (AMI nova
+publicada desde o último update); aí o deploy seguinte reinstala a release.
+
+Depois do execute: as linhas manuais `PORTO_*` do parâmetro somem (é o
+esperado); grave as mesmas credenciais no `PortoSecret` pelo
+`SetPortoSecretCommand`. Aí o merge pode seguir.
+
+### Subir pela primeira vez
+
+Produção roda em **`ca-central-1`**. Tudo abaixo leva `--region ca-central-1`,
+menos duas coisas que continuam em `us-east-1` porque o CloudFront é global e
+só olha para lá: o certificado do ACM e a stack do alarme de 5xx (passo 4).
+
+**1. Escolher as zonas e o prefix list.** VPC origin não funciona na
+`cac1-az3`, e o nome `ca-central-1x` aponta para um id diferente em cada conta:
+
+```bash
+aws ec2 describe-availability-zones --region ca-central-1 \
+  --query 'AvailabilityZones[].[ZoneName,ZoneId]' --output text
+```
+
+Escolha duas cujo id **não** seja `cac1-az3`. A stack recusa prod sem as duas, ou
+com as duas iguais (regra `ProdRequiresDistinctZones`). O prefix list do CloudFront também
+tem id próprio na região — o padrão do template é o de `us-east-1`, e a stack
+recusa ele fora de lá:
+
+```bash
+aws ec2 describe-managed-prefix-lists --region ca-central-1 \
+  --filters Name=prefix-list-name,Values=com.amazonaws.global.cloudfront.origin-facing \
+  --query 'PrefixLists[0].PrefixListId' --output text
+```
+
+**2. Criar a stack.** Sem domínio, como o dev nasceu: ele entra depois, com o
+certificado.
+
+```bash
+aws cloudformation deploy \
+  --template-file infra/cloudformation/porto-hub-stack.yaml \
+  --stack-name porto-hub-prod \
+  --region ca-central-1 \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --disable-rollback \
+  --parameter-overrides \
+    EnvironmentName=prod \
+    InstanceType=t3.small \
+    DBInstanceClass=db.t4g.small \
+    DeployBranch=main \
+    GitHubEnvironment=production \
+    CreateGitHubOidcProvider=false \
+    PrimaryAvailabilityZone=<zona-a> \
+    SecondaryAvailabilityZone=<zona-b> \
+    CloudFrontPrefixListId=<id do passo 1> \
+    PortoOAuthUrl=<endpoint de token de produção> \
+    PortoApiBaseUrl=<base da API de produção> \
+    AlertEmail=<quem recebe os alarmes> \
+    DbAccessCidr=<faixa de quem acessa o banco>
+```
+
+`DbAccessCidr` abre o Postgres para conexão direta, sem túnel — ver *Acesso
+direto ao banco, sem túnel*. Para `0.0.0.0/0`, some
+`AcknowledgeDbOpenToInternet=true`.
+
+`CreateGitHubOidcProvider=false` porque o provider é da conta, e o dev já o
+criou. `MailProvider` fica `logger` até o domínio do remetente estar verificado
+no Resend. Conte 30 a 40 minutos: Multi-AZ e VPC origin são os lentos.
+
+**3. Confirmar a assinatura do SNS** no e-mail que chega ao `AlertEmail`. Sem
+isso, alarme nenhum avisa ninguém.
+
+**4. Alarme de 5xx do CloudFront**, numa stack à parte e **em `us-east-1`**: o
+CloudFront só publica métrica lá, e alarme não lê métrica de outra região. A
+stack recusa subir fora de `us-east-1`.
+
+```bash
+aws cloudformation deploy \
+  --template-file infra/cloudformation/porto-hub-edge-alarms.yaml \
+  --stack-name porto-hub-prod-edge-alarms \
+  --region us-east-1 \
+  --parameter-overrides \
+    EnvironmentName=prod \
+    DistributionId=<output DistributionId da porto-hub-prod> \
+    AlertEmail=<quem recebe os alarmes>
+```
+
+O tópico é outro, e a assinatura também chega por e-mail para confirmar.
+
+**5. Gravar as credenciais de produção** no `PortoSecret` (`SetPortoSecretCommand`)
+e, quando houver, a chave do Resend no `AppSecret` (`SetResendKeyCommand`).
+
+**6. Ligar o GitHub.** Três coisas, todas obrigatórias:
+
+- environment **`production`** com *Required reviewers* e *Deployment branches:
+  Selected branches → `main`*;
+- secret **`AWS_PROD_DEPLOY_ROLE_ARN`** = output `GitHubOidcRoleArn` da stack de prod;
+- variável de repositório **`PRODUCTION_READY`** = `true`.
+
+**7. Publicar.** O próximo merge na `main` publica as imagens no ECR de prod e
+para no deploy esperando aprovação. A instância está vazia até ele.
+
+### Operadores do painel
+
+Produção **não roda seed**. Até a gestão de usuários existir (SIS-519), operador
+de produção é criado à mão, direto no banco, quando for necessário. Um painel sem ninguém para entrar é o estado esperado de uma stack
+recém-criada.
+
+### Domínio
+
+`influencersportoservico.com.br` (web, e a API em `/v1/*`) e
+`api.influencersportoservico.com.br` (a API sem a web, nome estável do webhook
+INT-03). A ordem:
+
+1. **Certificado** da segurança da informação da Porto: `*.influencersportoservico.com.br`
+   **com o apex como SAN** — o curinga não cobre o apex. PEM + chave, importados
+   no ACM de `us-east-1`, e não em `ca-central-1`: CloudFront só aceita
+   certificado de lá.
+2. **Update da stack** com `DomainName=influencersportoservico.com.br`,
+   `ApiDomainName=api.influencersportoservico.com.br` e `CertificateArn`. É este
+   passo que cadastra os dois nomes nos **Alternate Domain Names (CNAMEs)** da
+   distribuição — o CloudFront só os aceita com o certificado que os cobre. O
+   `dxxxx.cloudfront.net` continua existindo, e é o output `CloudFrontDomainName`.
+3. **Um deploy**, para o Caddy pegar os nomes.
+4. **DNS e RDM da Imperva**, com o `CloudFrontDomainName` de prod como origin.
+   Dois requisitos que vão escritos no pedido:
+   - **o apex não aceita CNAME** — são A records para os IPs da Imperva. Se o DNS
+     deles não fizer isso no apex, a web vai para `www.` com redirect;
+   - **a Imperva encaminha o `Host` original.** O CloudFront casa o Host com os
+     Alternate Domain Names, o Caddy roteia por ele e o Next valida as Server
+     Actions com ele. Host reescrito para o `dxxxx.cloudfront.net` vira 403 no
+     CloudFront ou 404 no Caddy.
+
+Além do domínio, a Porto entrega: credenciais Sensedia de **produção** (com
+permissão em `/porto-assistencia/campanhasneo`) e as URLs de produção; o segredo
+do webhook, cadastrando do lado deles
+`https://api.influencersportoservico.com.br/v1/webhooks/porto/incentives`; e SPF,
+DKIM e DMARC do remetente no Resend. **Sem o e-mail nenhum afiliado define
+senha** — isso decide o go-live, não o ambiente. Se a Sensedia pedir allowlist
+de IP, é o output `EgressIp`.
+
+### O que vigiar num update de prod
+
+- **Sempre por change set**, e nunca executar um que traga `Replacement: True` em
+  `Database`.
+- **`Instance` com replacement** acontece sozinho quando a AWS publica AMI nova
+  (o `LatestAmiId` é reresolvido a cada operação). Em prod isso é indisponibilidade:
+  a instância nova nasce vazia até o próximo deploy, e o `VpcOrigin` precisa
+  apontar para ela. Faça em janela, e rode o deploy da tag no ar logo depois.
+- **O CloudFront aceita tráfego que não passou pela Imperva.** Quem descobrir o
+  `dxxxx.cloudfront.net` contorna o WAF. Travar por faixa de IP ou header da
+  Imperva é pendência aberta com o time do WAF.
+
+### Derrubar produção
+
+O `DeletionProtection` do RDS faz o delete da stack parar. É de propósito:
+desligue-o num update (`modify-db-instance --no-deletion-protection`) só quando a
+decisão for tomada, e o snapshot final fica.
+
+### Custo aproximado de prod
+
+Valores de `us-east-1`. Em `ca-central-1` os mesmos itens saem um pouco mais
+caros; confira na calculadora da AWS antes de repassar o número.
+
+
+| Item | US$/mês |
+|---|---|
+| EC2 t3.small | ~15 |
+| RDS db.t4g.small Multi-AZ + 20 GB gp3 | ~52 |
+| NAT Gateway + Elastic IP (sem contar dados) | ~37 |
+| Secrets Manager (5), alarmes, logs, CloudFront, ECR | ~8 |
+| **Total** | **~112** |
+
 ## Branches e ambientes
 
 | Branch | Ambiente | Stack | Environment do GitHub |
 |---|---|---|---|
 | `development` | desenvolvimento | `porto-hub-dev` | `development` |
-| `main` | produção | — ainda não existe | — |
+| `main` | produção | `porto-hub-prod` | `production` (com revisor obrigatório) |
 
 O fluxo é `feature/*` → PR para `development` → CI verde → merge → deploy em
-dev; e `development` → PR para `main` quando a release estiver pronta.
+dev; e `development` → PR para `main` quando a release estiver pronta → CI
+verde → deploy em prod **esperando aprovação** na aba *Actions*.
 
-Push na `main` hoje roda a verificação inteira e **não** faz deploy: não há
-stack de produção. O job está escrito e comentado no fim do `ci.yml`, junto com
-o que falta antes de descomentá-lo.
+A `main` só publica imagem e faz deploy com a variável de repositório
+`PRODUCTION_READY=true`. Sem ela, push na `main` roda a verificação inteira e
+para aí — é o que impede a CI de quebrar antes de a stack de produção existir.
 
 O parâmetro `DeployBranch` da stack é o que amarra uma coisa na outra: a role
-OIDC desta stack só aceita token vindo da branch nomeada ali. Uma stack de
-produção usaria o mesmo template com `DeployBranch=main` e
-`GitHubEnvironment=production` — e é por isso que os dois são parâmetro, e não
-literal no YAML.
+OIDC desta stack só aceita token vindo da branch nomeada ali. A de produção usa
+o mesmo template com `DeployBranch=main` e `GitHubEnvironment=production` — e é
+por isso que os dois são parâmetro, e não literal no YAML.
 
 ## Mudar configuração
 
@@ -447,10 +678,6 @@ aws ssm send-command --document-name porto-hub-dev-deploy \
 
 O passo 2 é o que aplica: o update de stack reescreve o parâmetro, o deploy
 reescreve os arquivos de env e reinicia os containers.
-
-⚠️ Reescrever o parâmetro apaga as credenciais da Porto, que foram escritas à mão
-nele. Entre o passo 1 e o 2, escreva as duas linhas de novo — ver *Credenciais
-da Porto*.
 
 Foi para isso que a configuração saiu do UserData. Lá, mudar um valor ou
 **substituiria a instância**, ou não teria efeito nenhum — o `cloud-init` roda
@@ -482,7 +709,7 @@ gateway, a instância recebe IP público e o security group libera o CIDR.
 
 ```bash
 aws cloudformation deploy \
-  --template-file infra/cloudformation/porto-hub-dev-stack.yaml \
+  --template-file infra/cloudformation/porto-hub-stack.yaml \
   --stack-name porto-hub-dev \
   --region us-east-1 \
   --capabilities CAPABILITY_NAMED_IAM \
@@ -503,7 +730,21 @@ para listar, então a camada de rede não está disponível como restrição. Co
 só.
 
 Depois é conectar direto no `RdsEndpoint`, porta 5432, com **`hub_rw`** e a
-senha de `npm run db:password`.
+senha de `npm run db:password` (em prod, `STACK_NAME=porto-hub-prod npm run db:password`).
+
+**Em prod** o mesmo parâmetro vale, com três diferenças:
+
+- o banco mora em **subnets próprias** (`DbSubnetA` e `DbSubnetB`). A instância
+  fica na `PrivateSubnetA` e sai pelo NAT; como uma subnet só tem uma rota
+  default, abrir o banco não pode mexer na dela;
+- as senhas do master e do `hub_rw` têm **64 caracteres** alfanuméricos
+  (~380 bits; em dev são 32, ~190 bits). Com o banco na internet, a senha é o
+  único controle de quem entra;
+- um **parameter group** próprio fixa `rds.force_ssl=1` e liga
+  `log_connections` e `log_disconnections`, exportados para o CloudWatch no
+  grupo `/aws/rds/instance/porto-hub-prod-db/postgresql`. É a trilha de quem
+  entrou, de qual IP e com qual usuário — o que substitui o registro por pessoa
+  do `ssm:StartSession`.
 
 O usuário não é o master. O `hub_rw` tem `SELECT`, `INSERT`, `UPDATE` e `DELETE`
 no schema `public` e nada de DDL: o que vazar dele não cria papel, não dropa
@@ -527,23 +768,24 @@ para o endpoint do RDS e o cliente fala com `localhost`, então `verify-full`
 falharia por hostname.
 
 O servidor recusa conexão sem TLS porque o `rds.force_ssl` vem em `1` no
-parameter group padrão do PostgreSQL 16. **Isso é default da AWS, não garantia
-deste template** — a stack não define `DBParameterGroupName`, então quem trocar
-o `DBEngineVersion` para uma família mais antiga, ou apontar um parameter group
-próprio, perde a obrigatoriedade sem nenhum aviso.
+parameter group padrão do PostgreSQL 16. **Em dev isso é default da AWS, não
+garantia deste template** — a stack de dev não define `DBParameterGroupName`,
+então quem trocar o `DBEngineVersion` para uma família mais antiga perde a
+obrigatoriedade sem nenhum aviso. Em prod o parameter group a fixa, com a
+família `postgres16`: trocar a versão maior exige trocar a família junto.
 
 Para fechar de novo, `DbAccessCidr=''` no mesmo comando. Nenhum dos dois sentidos
 substitui a instância nem perde dado: é `modify-db-instance` mais rota e regra de
 security group.
 
 Antes do primeiro deploy real, confirme isso com um change set em vez de confiar
-na afirmação. O `Database` carrega `DeletionPolicy: Delete` e
-`UpdateReplacePolicy: Delete` com `BackupRetentionPeriod: 1`: se a premissa não
-valesse, o banco iria embora sem snapshot.
+na afirmação. O `Database` carrega `UpdateReplacePolicy: Snapshot`, mas em dev
+com `BackupRetentionPeriod: 1`: se a premissa não valesse, o banco seria
+substituído por um vazio, e o dado voltaria só restaurando o snapshot à mão.
 
 ```bash
 aws cloudformation create-change-set --stack-name porto-hub-dev --change-set-name open-db \
-  --template-body file://infra/cloudformation/porto-hub-dev-stack.yaml \
+  --template-body file://infra/cloudformation/porto-hub-stack.yaml \
   --parameters ParameterKey=DbAccessCidr,ParameterValue=200.201.202.0/24 \
   --capabilities CAPABILITY_NAMED_IAM
 
@@ -569,7 +811,7 @@ aplicação e deixar o master fora de circulação.
 | Senha do master | output `ReadDbPasswordCommand` — só para o que exige DDL |
 | Senha inicial do painel | output `ReadSeedPasswordCommand` |
 | Logs | CloudWatch, grupo `/porto-hub/dev`, streams `api`, `web` e `caddy` |
-| Rollback | *Actions → CD → Run workflow*, com o `imageTag` anterior (o ECR guarda as 10 últimas) |
+| Rollback | *Actions → CD → Run workflow* **na branch do ambiente** (`development`; em prod, `main` com `stackName=porto-hub-prod` e `environment=production`), com o `imageTag` anterior (o ECR guarda as 10 últimas). De outra branch a role recusa o token |
 | Certificados | copiados para `s3://<bucket-de-deploy>/caddy-data.tgz` a cada release e restaurados em instância nova |
 
 O seed roda a cada deploy e é idempotente (`ON CONFLICT DO NOTHING`): não
@@ -623,10 +865,19 @@ poucos meses, e a falha não se parece com falta de espaço.
 aws cloudformation delete-stack --stack-name porto-hub-dev --region us-east-1
 ```
 
-Sai tudo: o RDS (`DeletionPolicy: Delete`, sem proteção), os repositórios do ECR
-(`EmptyOnDelete`), o bucket e o log group. Os três segredos ficam **agendados
-para exclusão** com janela de recuperação — é assim que o Secrets Manager
-funciona, não dá para apagar na hora pelo CloudFormation.
+Sai tudo: o RDS, os repositórios do ECR (`EmptyOnDelete`), o bucket e o log
+group. O RDS deixa um **snapshot final** (`DeletionPolicy: Snapshot`, a mesma
+nos dois ambientes — ver *Produção*); em dev, apague-o à mão se não servir:
+
+```bash
+aws rds describe-db-snapshots --region us-east-1 \
+  --query "DBSnapshots[?starts_with(DBSnapshotIdentifier,'porto-hub-dev-db')].DBSnapshotIdentifier"
+aws rds delete-db-snapshot --db-snapshot-identifier <id> --region us-east-1
+```
+
+Os segredos ficam **agendados para exclusão** com janela de recuperação — é
+assim que o Secrets Manager funciona, não dá para apagar na hora pelo
+CloudFormation.
 
 Por isso nenhum deles tem nome fixo no template: com nome fixo, recriar a stack
 falharia por 30 dias com `already scheduled for deletion`. Com nome gerado,

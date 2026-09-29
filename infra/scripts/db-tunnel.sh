@@ -7,7 +7,12 @@
 set -euo pipefail
 
 STACK_NAME="${STACK_NAME:-porto-hub-dev}"
-AWS_REGION="${AWS_REGION:-us-east-1}"
+# Cada stack na sua regiao: dev em us-east-1, prod em ca-central-1.
+if [ "${STACK_NAME}" = "porto-hub-prod" ]; then
+  AWS_REGION="${AWS_REGION:-ca-central-1}"
+else
+  AWS_REGION="${AWS_REGION:-us-east-1}"
+fi
 LOCAL_PORT="${LOCAL_PORT:-5433}"
 
 # Os nomes dos segredos são gerados pelo CloudFormation, então o ARN sai do
