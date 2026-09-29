@@ -6,6 +6,8 @@ export { MaterialsScreen } from './components/materials-screen';
 export { ChangeOccupationDialog } from './components/occupation-dialog';
 export { PageHeading } from './components/page-heading';
 export { ChangePixKeyDialog } from './components/pix-key-dialog';
+export { RevealableValue } from './components/revealable-value';
 export { StatementList } from './components/statement-list';
 export { WalletCard } from './components/wallet-card';
+export { type ProfileField, profileRows } from './lib/profile-rows';
 export { parseReferralPeriod, type RawSearchParams } from './lib/referral-period';
