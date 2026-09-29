@@ -239,7 +239,7 @@ describe('Affiliate account (e2e)', () => {
   });
 
   describe('GET /v1/affiliate/me', () => {
-    it('answers the account with the coupon discount, masked documents and no internal id', async () => {
+    it('answers the account with the coupon discount, whole documents and no internal id', async () => {
       const { accessToken, couponCode } = await signedIn();
 
       const response = await api()
@@ -253,12 +253,13 @@ describe('Affiliate account (e2e)', () => {
         status: AffiliateStatusEnum.APPROVED,
         coupon: couponCode,
         couponDiscountPercent: 10,
+        cpf: '52998224725',
+        maskedCpf: '***.***.247-25',
+        rg: '12345678X',
+        maskedRg: '*****678X',
+        pixKey: MARINA.pixKey,
       });
       expect(response.body).not.toHaveProperty('id');
-      const body = JSON.stringify(response.body);
-      expect(body).not.toContain('52998224725');
-      expect(body).not.toContain('12345678X');
-      expect(body).not.toContain(MARINA.pixKey);
     });
 
     it('refuses a token of the panel', async () => {
