@@ -10,7 +10,7 @@ O primeiro nível de `src/` é o **dono**, não o domínio. Três fatias, e o Bi
 |---|---|
 | `src/affiliate/features/<nome>/` | `landing`, `registration`, `auth`, `area` — as telas do afiliado |
 | `src/affiliate/shared/` | o que a fatia inteira divide: `content.ts` (toda a copy), `routes.ts`, `components/` |
-| `src/backoffice/features/<nome>/` | `auth`, `affiliates`, `campaigns`, `dashboard`, `shell` — as telas da Porto |
+| `src/backoffice/features/<nome>/` | `auth`, `affiliates`, `campaigns`, `dashboard`, `materials`, `shell` — as telas da Porto |
 | `src/backoffice/shared/routes.ts` | as rotas do painel |
 | `src/shared/` | transversal de verdade: `components/ui/` (shadcn), `components/porto-logo`, `hooks/`, `lib/`, `http/` |
 | `src/app/` | só casca de rota, espelhando as fatias em `(affiliate)/` e `(backoffice)/` |
@@ -154,6 +154,12 @@ Toda a copy da landing está em `src/affiliate/shared/content.ts`, num arquivo s
 
 O extrato do hero é a exceção declarada: `showcase` guarda valores de exemplo e a peça imprime `showcase.disclaimer` colado no saldo, não em nota de rodapé. As linhas somam exatamente `totalCents` — extrato ilustrativo que não fecha a conta ensina a não conferir o extrato de verdade. Quando `pendingFromPorto` for preenchido, este bloco sai.
 
+## Materiais: o Hub guarda o endereço, não o arquivo
+
+A aba Materiais do afiliado (`/minha-conta/materiais`) e a tela que a alimenta no painel (`/admin/materiais`) falam com `/v1/affiliate/me/materials` e `/v1/admin/training-modules|promotional-materials`. **Vídeo e arquivo ficam onde a Porto os hospeda**: o operador cola a URL, e o formulário pede o tamanho em MB — o `promotionalMaterialFormSchema` converte para bytes, então o Server Action recebe o formulário cru, não o valor já convertido.
+
+O vídeo toca num diálogo, e `lib/video-embed.ts` decide como: YouTube (pelo `youtube-nocookie.com`) e Vimeo em `<iframe>`, arquivo `.mp4`/`.webm` no `<video>`, qualquer outro endereço como link em nova aba. **Player novo exige entrada no `frame-src` do CSP**, em `next.config.mjs` — sem ela o diálogo abre vazio e o console só acusa a política. "Marcar como assistido" é a palavra do afiliado: o player é de outro domínio e o Hub não sabe o que ele tocou.
+
 ## Sessão e acesso
 
 Cookie `httpOnly`, `sameSite=lax`, `secure` fora de dev, oito horas. Nomes em `src/shared/lib/session-cookie.ts` — módulo neutro porque o `middleware` roda no Edge e não pode importar nada `server-only`.
@@ -226,12 +232,13 @@ rastreamento.
 
 O ambiente provisionado tem CloudFront (e a Imperva da Porto na frente dele). O
 Next compara o header `Origin` com `X-Forwarded-Host` e **aborta a ação** quando
-divergem — `Invalid Server Actions request`, HTTP 500. Como são catorze actions e
-elas são todo o caminho de escrita — cadastro, os dois logins, definir senha, os
-dois pedidos de recuperação e as duas redefinições, aprovar/reprovar, a consulta
-de disponibilidade e a alteração do cupom, a troca da chave PIX pelo afiliado, e
-os dois logouts —, errar isso derruba a aplicação inteira com a tela carregando
-normalmente.
+divergem — `Invalid Server Actions request`, HTTP 500. Como são vinte e duas
+actions e elas são todo o caminho de escrita — cadastro, os dois logins, definir
+senha, os dois pedidos de recuperação e as duas redefinições, aprovar/reprovar, a
+consulta de disponibilidade e a alteração do cupom, as trocas de chave PIX, e-mail
+e ocupação pelo afiliado, o "marcar como assistido" da trilha, salvar e apagar
+módulo e material no painel, e os dois logouts —, errar isso derruba a aplicação
+inteira com a tela carregando normalmente.
 
 `next.config.mjs` resolve com `experimental.serverActions.allowedOrigins`,
 alimentado por `PUBLIC_DOMAIN_NAME`, que o `install-release.sh` grava no

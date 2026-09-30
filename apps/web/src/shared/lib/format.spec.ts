@@ -4,6 +4,7 @@ import {
   formatCpfDisplay,
   formatDate,
   formatDateTime,
+  formatFileSize,
   formatPixKeyDisplay,
   formatSocialProfile,
   formatTime,
@@ -110,5 +111,18 @@ describe('formatSocialProfile', () => {
   it('has nothing to show when half of the pair is missing', () => {
     expect(formatSocialProfile(SocialNetworkEnum.INSTAGRAM, null)).toBeNull();
     expect(formatSocialProfile(null, 'marina')).toBeNull();
+  });
+});
+
+describe('formatFileSize', () => {
+  it.each([
+    [2_400_000, '2,4 MB'],
+    [18_700_000, '18,7 MB'],
+    [3_000_000, '3 MB'],
+    [1_049_999, '1 MB'],
+    [850_000, '850 KB'],
+    [400, '1 KB'],
+  ])('renders %i bytes as %s', (bytes, expected) => {
+    expect(formatFileSize(bytes)).toBe(expected);
   });
 });

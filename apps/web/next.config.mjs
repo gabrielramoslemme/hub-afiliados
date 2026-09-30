@@ -29,6 +29,11 @@ const contentSecurityPolicy = [
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
+  // Os vídeos da trilha de formação: os players do YouTube (o domínio sem
+  // cookie) e do Vimeo, e o arquivo direto em qualquer host https que o
+  // operador cadastrar — a API só aceita endereço https.
+  'frame-src https://www.youtube-nocookie.com https://player.vimeo.com',
+  "media-src 'self' https:",
   // `next/font` serve a Open Sans da própria origem.
   "font-src 'self'",
   // `ws:` é o socket do Fast Refresh.

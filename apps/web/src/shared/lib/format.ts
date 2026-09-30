@@ -89,6 +89,19 @@ export function formatBRL(cents: number): string {
   return currencyFormatter.format(cents / 100);
 }
 
+const megabyteFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
+
+/**
+ * Tamanho de arquivo como o Finder e o Explorer o mostram, em base decimal: é
+ * com esse número que o operador cadastrou, e é o que o afiliado vai ver ao
+ * baixar. Abaixo de 1 MB, em KB inteiros — "0,4 MB" ninguém lê de primeira.
+ */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1_000_000) return `${Math.max(1, Math.round(bytes / 1_000))} KB`;
+
+  return `${megabyteFormatter.format(bytes / 1_000_000)} MB`;
+}
+
 export function formatDateTime(iso: string): string {
   return dateTimeFormatter.format(new Date(iso)).replace(',', '');
 }
