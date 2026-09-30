@@ -115,7 +115,7 @@ function ModuleRow({
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full items-start gap-3 rounded-card border border-ink-200 bg-ink-50 p-3 text-left transition-colors hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+      className="group/cover flex w-full items-start gap-3 rounded-card border border-ink-200 bg-ink-50 p-3 text-left transition-colors hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
     >
       <VideoCover thumbnail={thumbnail} className="w-24 sm:w-36" />
 

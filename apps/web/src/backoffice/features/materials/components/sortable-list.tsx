@@ -166,8 +166,9 @@ function SortableRow({
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn(
-        'relative flex items-start gap-2 bg-white py-4 pr-5 pl-2',
-        isDragging && 'z-10 rounded-card shadow-pop',
+        'group/row relative flex items-start gap-2 bg-white py-4 pr-4 pl-2 transition-colors duration-200 hover:bg-ink-50',
+        // Erguido e com o fio da marca: quem arrasta vê qual item está na mão.
+        isDragging && 'z-10 rounded-card bg-white shadow-pop ring-1 ring-blue-300 hover:bg-white',
       )}
     >
       <button
@@ -176,7 +177,14 @@ function SortableRow({
         {...attributes}
         {...listeners}
         aria-label={`Reordenar ${title}`}
-        className="mt-1 flex h-8 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-sm text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-700 focus-visible:outline-2 focus-visible:outline-blue-600 active:cursor-grabbing disabled:cursor-not-allowed"
+        title="Arraste para reordenar"
+        className={cn(
+          'mt-1 flex h-8 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-sm text-ink-300 transition-colors duration-200',
+          'group-hover/row:text-ink-500 hover:bg-ink-200/60 hover:text-ink-700',
+          'focus-visible:text-ink-700 focus-visible:outline-2 focus-visible:outline-blue-600',
+          'active:cursor-grabbing disabled:cursor-not-allowed',
+          isDragging && 'text-blue-600',
+        )}
       >
         <GripVertical className="size-4" aria-hidden />
       </button>

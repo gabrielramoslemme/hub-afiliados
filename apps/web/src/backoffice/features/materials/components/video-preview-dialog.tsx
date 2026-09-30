@@ -54,9 +54,14 @@ function DialogTriggerCover({ module, thumbnail }: VideoPreviewProps) {
       <button
         type="button"
         aria-label={`Assistir à prévia de ${module.title}`}
-        className="hidden shrink-0 rounded-md transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:block"
+        title="Assistir à prévia"
+        className="group/cover hidden shrink-0 cursor-pointer rounded-md outline-none sm:block"
       >
-        <VideoCover thumbnail={thumbnail} className="w-28" />
+        <VideoCover
+          thumbnail={thumbnail}
+          durationMinutes={module.durationMinutes}
+          className="w-32"
+        />
       </button>
     </DialogTrigger>
   );

@@ -67,7 +67,10 @@ function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className={cn('rounded-panel border border-ink-200 bg-white', className)}>
+    // `overflow-hidden`: o fundo das linhas não pode passar por cima do canto arredondado.
+    <section
+      className={cn('overflow-hidden rounded-panel border border-ink-200 bg-white', className)}
+    >
       <header className="flex items-start justify-between gap-4 border-b border-ink-200 px-5 py-4">
         <div className="min-w-0">
           <h2 className="font-semibold text-ink-900">{title}</h2>

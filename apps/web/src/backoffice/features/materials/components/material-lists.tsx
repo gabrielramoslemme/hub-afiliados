@@ -3,7 +3,7 @@
 import { Clock, ExternalLink, FileDown, PlayCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { AdminPromotionalMaterial, AdminTrainingModule } from '@porto/contracts';
-import { Badge } from '@/shared/components/ui/badge';
+import { FileFormatIcon } from '@/shared/components/file-format-icon';
 import { formatFileSize } from '@/shared/lib/format';
 import type { ResolvedVideoThumbnail } from '@/shared/lib/video';
 import { reorderPromotionalMaterials } from '../actions/promotional-material.action';
@@ -15,6 +15,10 @@ import { VideoPreview } from './video-preview-dialog';
 /*
   As duas listas da tela. São cliente inteiras porque arrastar precisa do
   estado da ordem na mão; o resto da tela continua Server Component.
+
+  A linha responde ao cursor em camadas: o fundo clareia, a alça e as ações
+  ganham contraste, o número e o link acendem na cor da marca. Nada muda de
+  lugar — o hover só diz "isto aqui é mexível".
 */
 
 export function TrainingModuleList({
@@ -41,20 +45,23 @@ export function TrainingModuleList({
         <>
           <PositionBadge position={index + 1} />
           <VideoPreview module={module} thumbnail={thumbnails[module.id] ?? { kind: 'none' }} />
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold text-ink-900">{module.title}</p>
-            <p className="mt-0.5 line-clamp-2 text-[0.875rem] text-ink-500">{module.description}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.8125rem] text-ink-500">
-              <span className="inline-flex items-center gap-1.5">
-                <Clock className="size-3.5" aria-hidden />
-                {module.durationMinutes} min
-              </span>
-              <ExternalAddress
-                href={module.videoUrl}
-                icon={<PlayCircle className="size-3.5" aria-hidden />}
-              />
-            </div>
-          </div>
+          <ItemText
+            title={module.title}
+            description={module.description}
+            meta={
+              <>
+                {/* Com a capa na tela, a duração já está no selo dela. */}
+                <span className="inline-flex items-center gap-1.5 sm:hidden">
+                  <Clock className="size-3.5" aria-hidden />
+                  {module.durationMinutes} min
+                </span>
+                <ExternalAddress
+                  href={module.videoUrl}
+                  icon={<PlayCircle className="size-3.5" aria-hidden />}
+                />
+              </>
+            }
+          />
           <TrainingModuleRowActions module={module} />
         </>
       )}
@@ -72,24 +79,49 @@ export function PromotionalMaterialList({ materials }: { materials: AdminPromoti
       renderItem={(material, index) => (
         <>
           <PositionBadge position={index + 1} />
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold text-ink-900">{material.title}</p>
-            <p className="mt-0.5 line-clamp-2 text-[0.875rem] text-ink-500">
-              {material.description}
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.8125rem] text-ink-500">
-              <Badge>{material.fileFormat}</Badge>
-              <span data-tabular>{formatFileSize(material.fileSizeBytes)}</span>
-              <ExternalAddress
-                href={material.fileUrl}
-                icon={<FileDown className="size-3.5" aria-hidden />}
-              />
-            </div>
-          </div>
+          <FileFormatIcon format={material.fileFormat} />
+          <ItemText
+            title={material.title}
+            description={material.description}
+            meta={
+              <>
+                <span className="font-semibold text-ink-700">{material.fileFormat}</span>
+                <span data-tabular>{formatFileSize(material.fileSizeBytes)}</span>
+                <ExternalAddress
+                  href={material.fileUrl}
+                  icon={<FileDown className="size-3.5" aria-hidden />}
+                />
+              </>
+            }
+          />
           <PromotionalMaterialRowActions material={material} />
         </>
       )}
     />
+  );
+}
+
+function ItemText({
+  title,
+  description,
+  meta,
+}: {
+  title: string;
+  description: string;
+  meta: ReactNode;
+}) {
+  return (
+    <div className="min-w-0 flex-1 pt-0.5">
+      <p className="truncate font-semibold text-ink-900" title={title}>
+        {title}
+      </p>
+      <p className="mt-0.5 line-clamp-2 text-[0.8125rem] leading-relaxed text-ink-500">
+        {description}
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.8125rem] text-ink-500">
+        {meta}
+      </div>
+    </div>
   );
 }
 
@@ -101,7 +133,7 @@ function EmptyState({ children }: { children: ReactNode }) {
 function PositionBadge({ position }: { position: number }) {
   return (
     <span
-      className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-pill bg-blue-50 text-sm font-semibold text-blue-700"
+      className="mt-1.5 flex size-6 shrink-0 items-center justify-center rounded-pill bg-ink-100 text-[0.75rem] font-semibold text-ink-700 transition-colors duration-200 group-hover/row:bg-blue-50 group-hover/row:text-blue-700"
       data-tabular
     >
       {position}
@@ -117,7 +149,7 @@ function ExternalAddress({ href, icon }: { href: string; icon: ReactNode }) {
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="inline-flex min-w-0 max-w-full items-center gap-1.5 font-medium text-blue-600 hover:underline"
+      className="inline-flex min-w-0 max-w-full items-center gap-1.5 font-medium underline-offset-2 transition-colors duration-200 hover:underline group-hover/row:text-blue-600"
     >
       {icon}
       <span className="truncate">{new URL(href).hostname}</span>

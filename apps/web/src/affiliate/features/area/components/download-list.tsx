@@ -1,26 +1,8 @@
-import {
-  Download,
-  FileArchive,
-  FileImage,
-  FileText,
-  FileVideo,
-  type LucideIcon,
-} from 'lucide-react';
-import { MaterialFileFormatEnum, type PromotionalMaterial } from '@porto/contracts';
+import { Download } from 'lucide-react';
+import type { PromotionalMaterial } from '@porto/contracts';
+import { FileFormatIcon } from '@/shared/components/file-format-icon';
 import { Button } from '@/shared/components/ui/button';
-import { cn } from '@/shared/lib/cn';
 import { formatFileSize } from '@/shared/lib/format';
-
-const FORMAT_ICONS: Record<MaterialFileFormatEnum, { icon: LucideIcon; tile: string }> = {
-  [MaterialFileFormatEnum.PDF]: {
-    icon: FileText,
-    tile: 'bg-[var(--status-approved-surface)] text-[var(--status-approved)]',
-  },
-  [MaterialFileFormatEnum.ZIP]: { icon: FileArchive, tile: 'bg-blue-50 text-blue-600' },
-  [MaterialFileFormatEnum.PNG]: { icon: FileImage, tile: 'bg-blue-50 text-blue-600' },
-  [MaterialFileFormatEnum.JPG]: { icon: FileImage, tile: 'bg-blue-50 text-blue-600' },
-  [MaterialFileFormatEnum.MP4]: { icon: FileVideo, tile: 'bg-blue-50 text-blue-600' },
-};
 
 /**
  * Os arquivos que a Porto disponibiliza. O download sai direto do endereço onde
@@ -43,22 +25,13 @@ export function DownloadList({ materials }: { materials: PromotionalMaterial[] }
       ) : (
         <ul className="mt-4 flex flex-col gap-4">
           {materials.map((material) => {
-            const { icon: Icon, tile } = FORMAT_ICONS[material.fileFormat];
-
             return (
               <li
                 key={material.id}
                 className="rounded-panel border border-ink-200 bg-white p-5 shadow-card"
               >
                 <div className="flex items-start gap-3.5">
-                  <span
-                    className={cn(
-                      'flex size-10 shrink-0 items-center justify-center rounded-card',
-                      tile,
-                    )}
-                  >
-                    <Icon className="size-5" aria-hidden />
-                  </span>
+                  <FileFormatIcon format={material.fileFormat} />
                   <div className="min-w-0">
                     <h3 className="font-semibold text-ink-900">{material.title}</h3>
                     <p className="mt-1 text-[0.875rem] leading-relaxed text-ink-500">
