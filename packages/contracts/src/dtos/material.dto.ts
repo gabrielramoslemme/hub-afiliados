@@ -74,14 +74,11 @@ const descriptionField = z
   .min(3, 'A descrição precisa de ao menos 3 caracteres')
   .max(500, 'A descrição pode ter até 500 caracteres');
 
-// `coerce` porque o `input[type=number]` do painel entrega string.
-const positionField = z.coerce
-  .number({ message: 'Informe a posição' })
-  .int('A posição deve ser um número inteiro')
-  .min(1, 'A posição começa em 1')
-  .max(999, 'A posição vai até 999');
-
-/** `POST` e `PUT /v1/admin/training-modules` — o PUT troca o módulo inteiro. */
+/**
+ * `POST` e `PUT /v1/admin/training-modules` — o PUT troca o módulo inteiro. A
+ * posição não vem no corpo: item novo entra no fim, e a ordem muda pela rota
+ * `order`, que regrava a lista inteira de uma vez.
+ */
 export const trainingModuleSchema = z.object({
   title: titleField,
   description: descriptionField,
@@ -91,7 +88,6 @@ export const trainingModuleSchema = z.object({
     .int('A duração deve ser um número inteiro de minutos')
     .min(1, 'A duração começa em 1 minuto')
     .max(600, 'A duração vai até 600 minutos'),
-  position: positionField,
 });
 
 export type TrainingModuleRequest = z.infer<typeof trainingModuleSchema>;
@@ -111,7 +107,6 @@ export const promotionalMaterialSchema = z.object({
     .int('O tamanho deve ser um número inteiro de bytes')
     .min(1, 'Informe o tamanho do arquivo')
     .max(2_000 * BYTES_PER_MEGABYTE, 'O arquivo pode ter até 2000 MB'),
-  position: positionField,
 });
 
 export type PromotionalMaterialRequest = z.infer<typeof promotionalMaterialSchema>;
@@ -135,3 +130,19 @@ export const promotionalMaterialFormSchema = promotionalMaterialSchema
   }));
 
 export type PromotionalMaterialFormValues = z.input<typeof promotionalMaterialFormSchema>;
+
+/**
+ * `PUT /v1/admin/training-modules/order` e `/promotional-materials/order` — a
+ * lista inteira, na ordem nova. Inteira, e não "o item X foi para a posição Y":
+ * a API confere que são exatamente os itens que existem, e recusa a ordem se
+ * alguém criou ou apagou um item enquanto a tela estava aberta.
+ */
+export const reorderMaterialsSchema = z.object({
+  ids: z
+    .array(z.uuid({ message: 'Item inválido na ordem' }))
+    .min(1, 'Informe a ordem dos itens')
+    .max(999, 'A lista vai até 999 itens')
+    .refine((ids) => new Set(ids).size === ids.length, 'A ordem repete um item'),
+});
+
+export type ReorderMaterialsRequest = z.infer<typeof reorderMaterialsSchema>;
