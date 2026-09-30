@@ -24,4 +24,6 @@ export interface TrainingModuleRepository {
   listCompletedIds(affiliateId: number): Promise<number[]>;
   /** Idempotente: marcar de novo não muda nada, nem a data da primeira vez. */
   markCompleted(affiliateId: number, trainingModuleId: number, completedAt: Date): Promise<void>;
+  /** Idempotente: desmarcar o que não estava marcado não muda nada. */
+  unmarkCompleted(affiliateId: number, trainingModuleId: number): Promise<void>;
 }

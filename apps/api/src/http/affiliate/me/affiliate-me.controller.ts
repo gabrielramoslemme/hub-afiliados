@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -27,6 +28,7 @@ import { ChangePixKeyUseCase } from '@Application/affiliates/change-pix-key.use-
 import { GetAffiliateAccountUseCase } from '@Application/affiliates/get-affiliate-account.use-case';
 import { CompleteTrainingModuleUseCase } from '@Application/materials/complete-training-module.use-case';
 import { GetAffiliateMaterialsUseCase } from '@Application/materials/get-affiliate-materials.use-case';
+import { UncompleteTrainingModuleUseCase } from '@Application/materials/uncomplete-training-module.use-case';
 import { GetAffiliateReferralsUseCase } from '@Application/sales/get-affiliate-referrals.use-case';
 import { GetAffiliateWalletUseCase } from '@Application/sales/get-affiliate-wallet.use-case';
 import { ActorInfo } from '@Http/shared/authenticated-request';
@@ -56,6 +58,7 @@ export class AffiliateMeController {
     private readonly getAffiliateReferralsUseCase: GetAffiliateReferralsUseCase,
     private readonly getAffiliateMaterialsUseCase: GetAffiliateMaterialsUseCase,
     private readonly completeTrainingModuleUseCase: CompleteTrainingModuleUseCase,
+    private readonly uncompleteTrainingModuleUseCase: UncompleteTrainingModuleUseCase,
   ) {}
 
   @Get()
@@ -114,6 +117,21 @@ export class AffiliateMeController {
     @Actor() actor: ActorInfo,
   ): Promise<void> {
     await this.completeTrainingModuleUseCase.execute({
+      userPublicId: actor.publicId,
+      trainingModulePublicId: publicId,
+    });
+  }
+
+  /** Desfaz a marca de assistido. Repetir não é erro, como no PUT. */
+  @Delete('training-modules/:publicId/completion')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiNoContentResponse({ description: 'Marca de assistido removida' })
+  @ApiNotFoundResponse({ description: 'Módulo não encontrado' })
+  async uncompleteTrainingModule(
+    @Param('publicId', ParseUUIDPipe) publicId: string,
+    @Actor() actor: ActorInfo,
+  ): Promise<void> {
+    await this.uncompleteTrainingModuleUseCase.execute({
       userPublicId: actor.publicId,
       trainingModulePublicId: publicId,
     });

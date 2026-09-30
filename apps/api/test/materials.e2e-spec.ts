@@ -78,6 +78,12 @@ describe('Training modules and promotional materials (e2e)', () => {
       .set('Authorization', `Bearer ${token}`);
   }
 
+  function uncomplete(token: string, modulePublicId: string) {
+    return api()
+      .delete(`/v1/affiliate/me/training-modules/${modulePublicId}/completion`)
+      .set('Authorization', `Bearer ${token}`);
+  }
+
   beforeAll(async () => {
     e2e = await createE2eApp();
   });
@@ -200,6 +206,32 @@ describe('Training modules and promotional materials (e2e)', () => {
     ]);
     expect(marinaView.body.trainingModules[0].completed).toBe(true);
     expect(cleideView.body.trainingModules[0].completed).toBe(false);
+  });
+
+  it('clears only the mark of who unmarked it, and unmarking twice changes nothing', async () => {
+    const moduleId = await createModule();
+    const marina = await signedIn(MARINA);
+    const cleide = await signedIn(CLEIDE);
+    await complete(marina, moduleId).expect(204);
+    await complete(cleide, moduleId).expect(204);
+
+    await uncomplete(marina, moduleId).expect(204);
+    await uncomplete(marina, moduleId).expect(204);
+
+    const [marinaView, cleideView] = await Promise.all([
+      materials(marina).expect(200),
+      materials(cleide).expect(200),
+    ]);
+    expect(marinaView.body.trainingModules[0].completed).toBe(false);
+    expect(cleideView.body.trainingModules[0].completed).toBe(true);
+  });
+
+  it('refuses to unmark a module that does not exist', async () => {
+    const token = await signedIn(MARINA);
+
+    const response = await uncomplete(token, UNKNOWN_ID).expect(404);
+
+    expect(response.body.message).toBe('Módulo da trilha não encontrado.');
   });
 
   it('refuses to mark a module that does not exist', async () => {

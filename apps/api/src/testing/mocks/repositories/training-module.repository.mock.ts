@@ -9,4 +9,5 @@ export const trainingModuleRepositoryMock = (): jest.Mocked<TrainingModuleReposi
   reorder: jest.fn().mockResolvedValue(false),
   listCompletedIds: jest.fn().mockResolvedValue([]),
   markCompleted: jest.fn().mockResolvedValue(undefined),
+  unmarkCompleted: jest.fn().mockResolvedValue(undefined),
 });

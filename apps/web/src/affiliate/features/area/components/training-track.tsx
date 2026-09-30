@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Clock, Loader2 } from 'lucide-react';
+import { Check, Clock, Loader2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -18,13 +18,14 @@ import { VideoCover } from '@/shared/components/video-cover';
 import { VideoPlayer } from '@/shared/components/video-player';
 import { cn } from '@/shared/lib/cn';
 import type { ResolvedVideoThumbnail } from '@/shared/lib/video';
-import { completeTrainingModule } from '../actions/complete-training-module.action';
+import { setTrainingModuleCompletion } from '../actions/training-module-completion.action';
 import { trainingProgress } from '../lib/training-progress';
 
 /**
  * A trilha de formação. Cada módulo abre o vídeo num diálogo, sem sair da
  * página, e é a própria pessoa que marca o que assistiu: o player é de outro
- * domínio, e o Hub não sabe o que ele tocou.
+ * domínio, e o Hub não sabe o que ele tocou. A caixa de cada linha marca e
+ * desmarca direto, sem abrir o vídeo.
  */
 interface TrainingTrackProps {
   modules: AffiliateTrainingModule[];
@@ -111,38 +112,88 @@ function ModuleRow({
   thumbnail: ResolvedVideoThumbnail;
   onOpen: () => void;
 }) {
+  const { pending, setCompleted } = useModuleCompletion();
+
+  /*
+    A caixa é irmã do botão que abre o vídeo, não filha: botão dentro de botão
+    não é HTML válido, e o clique nela abriria o diálogo em vez de desmarcar.
+  */
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="group/cover flex w-full items-start gap-3 rounded-card border border-ink-200 bg-ink-50 p-3 text-left transition-colors hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-    >
-      <VideoCover thumbnail={thumbnail} className="w-24 sm:w-36" />
-
-      <span className="min-w-0 flex-1">
-        <span className="block text-[0.9375rem] font-semibold text-ink-900">{module.title}</span>
-        <span className="mt-0.5 line-clamp-2 text-[0.8125rem] leading-relaxed text-ink-500 sm:line-clamp-3">
-          {module.description}
-        </span>
-        <span className="mt-1.5 inline-flex items-center gap-1 text-[0.75rem] text-ink-500">
-          <Clock className="size-3" aria-hidden />
-          {module.durationMinutes} min
-        </span>
-      </span>
-
-      <span
-        className={cn(
-          'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border',
-          module.completed
-            ? 'border-transparent bg-[var(--status-approved-surface)] text-[var(--status-approved)]'
-            : 'border-ink-300 bg-white',
-        )}
+    <div className="flex items-start gap-3 rounded-card border border-ink-200 bg-ink-50 p-3 transition-colors hover:border-blue-300 hover:bg-blue-50">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="group/cover flex min-w-0 flex-1 items-start gap-3 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
       >
-        {module.completed && <Check className="size-3.5" strokeWidth={3} aria-hidden />}
-        <span className="sr-only">{module.completed ? 'Assistido' : 'Não assistido'}</span>
-      </span>
-    </button>
+        <VideoCover thumbnail={thumbnail} className="w-24 sm:w-36" />
+
+        <span className="min-w-0 flex-1">
+          <span className="block text-[0.9375rem] font-semibold text-ink-900">{module.title}</span>
+          <span className="mt-0.5 line-clamp-2 text-[0.8125rem] leading-relaxed text-ink-500 sm:line-clamp-3">
+            {module.description}
+          </span>
+          <span className="mt-1.5 inline-flex items-center gap-1 text-[0.75rem] text-ink-500">
+            <Clock className="size-3" aria-hidden />
+            {module.durationMinutes} min
+          </span>
+        </span>
+      </button>
+
+      {/* O padding do label aumenta a área de toque sem aumentar a caixa. */}
+      <label
+        title={module.completed ? 'Desmarcar como assistido' : 'Marcar como assistido'}
+        className="-m-2 cursor-pointer p-2 has-disabled:cursor-wait"
+      >
+        <input
+          type="checkbox"
+          className="peer sr-only"
+          aria-label={`${module.title}: assistido`}
+          checked={module.completed}
+          disabled={pending}
+          onChange={(event) => setCompleted(module, event.target.checked)}
+        />
+        <span
+          className={cn(
+            'mt-0.5 flex size-5 items-center justify-center rounded-sm border transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-600',
+            module.completed
+              ? 'border-transparent bg-[var(--status-approved-surface)] text-[var(--status-approved)]'
+              : 'border-ink-300 bg-white hover:border-blue-400',
+          )}
+        >
+          {pending ? (
+            <Loader2 className="size-3.5 animate-spin text-ink-500" aria-hidden />
+          ) : (
+            module.completed && <Check className="size-3.5" strokeWidth={3} aria-hidden />
+          )}
+        </span>
+      </label>
+    </div>
   );
+}
+
+/** Marca ou desmarca um módulo e recarrega a trilha; o `pending` é de quem chamou. */
+function useModuleCompletion() {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  function setCompleted(target: AffiliateTrainingModule, completed: boolean, onDone?: () => void) {
+    startTransition(async () => {
+      const result = await setTrainingModuleCompletion(target.id, completed);
+
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
+
+      onDone?.();
+      toast.success(
+        completed ? `${target.title} concluído.` : `${target.title} desmarcado como assistido.`,
+      );
+      router.refresh();
+    });
+  }
+
+  return { pending, setCompleted };
 }
 
 function ModuleDialog({
@@ -154,23 +205,7 @@ function ModuleDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-
-  function markWatched(target: AffiliateTrainingModule) {
-    startTransition(async () => {
-      const result = await completeTrainingModule(target.id);
-
-      if (!result.ok) {
-        toast.error(result.message);
-        return;
-      }
-
-      onOpenChange(false);
-      toast.success(`${target.title} concluído.`);
-      router.refresh();
-    });
-  }
+  const { pending, setCompleted } = useModuleCompletion();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -191,12 +226,21 @@ function ModuleDialog({
                 Fechar
               </Button>
               {module.completed ? (
-                <Button type="button" variant="secondary" disabled>
-                  <Check aria-hidden />
-                  Assistido
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setCompleted(module, false)}
+                  disabled={pending}
+                >
+                  {pending ? <Loader2 className="animate-spin" aria-hidden /> : <X aria-hidden />}
+                  Desmarcar como assistido
                 </Button>
               ) : (
-                <Button type="button" onClick={() => markWatched(module)} disabled={pending}>
+                <Button
+                  type="button"
+                  onClick={() => setCompleted(module, true, () => onOpenChange(false))}
+                  disabled={pending}
+                >
                   {pending ? (
                     <Loader2 className="animate-spin" aria-hidden />
                   ) : (

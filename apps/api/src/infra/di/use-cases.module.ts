@@ -27,6 +27,7 @@ import { ListPromotionalMaterialsUseCase } from '@Application/materials/list-pro
 import { ListTrainingModulesUseCase } from '@Application/materials/list-training-modules.use-case';
 import { ReorderPromotionalMaterialsUseCase } from '@Application/materials/reorder-promotional-materials.use-case';
 import { ReorderTrainingModulesUseCase } from '@Application/materials/reorder-training-modules.use-case';
+import { UncompleteTrainingModuleUseCase } from '@Application/materials/uncomplete-training-module.use-case';
 import { UpdatePromotionalMaterialUseCase } from '@Application/materials/update-promotional-material.use-case';
 import { UpdateTrainingModuleUseCase } from '@Application/materials/update-training-module.use-case';
 import { ApplyIncentiveEventUseCase } from '@Application/sales/apply-incentive-event.use-case';
@@ -163,6 +164,7 @@ const USE_CASES = [
     TRAINING_MODULE_REPOSITORY,
     CLOCK,
   ]),
+  provideUseCase(UncompleteTrainingModuleUseCase, [USER_REPOSITORY, TRAINING_MODULE_REPOSITORY]),
 ];
 
 @Module({

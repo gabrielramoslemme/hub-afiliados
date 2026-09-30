@@ -77,4 +77,8 @@ export class TrainingModuleTypeormRepository implements TrainingModuleRepository
       .orIgnore()
       .execute();
   }
+
+  async unmarkCompleted(affiliateId: number, trainingModuleId: number): Promise<void> {
+    await this.completionRepository.delete({ affiliateId, trainingModuleId });
+  }
 }
