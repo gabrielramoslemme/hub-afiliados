@@ -111,6 +111,22 @@ describe('TransfeeraPayoutGateway', () => {
       await expect(gateway.requestPayout(input)).resolves.toEqual({ batchId: null });
     });
 
+    // O formato da idempotência repetida não é documentado: se ela vier como
+    // 400 falando da chave, lida como recusa devolveria ao saldo um PIX pago.
+    it('confirms a repeated request the provider answers with a 400 about idempotency', async () => {
+      fetchMock.mockResolvedValue(json({ message: 'Idempotency key already used' }, 400));
+
+      await expect(gateway.requestPayout(input)).resolves.toEqual({ batchId: null });
+    });
+
+    // Lido como queda, o 422 deixaria o saque reservado à espera de uma
+    // reconciliação que nunca o fecha.
+    it('reads a 422 as a refusal', async () => {
+      fetchMock.mockResolvedValue(json({ message: 'Chave PIX inválida' }, 422));
+
+      await expect(gateway.requestPayout(input)).rejects.toBeInstanceOf(PayoutRefusedError);
+    });
+
     it('reads a 400 as a refusal, without the key or the cpf in the reason or the log', async () => {
       fetchMock.mockResolvedValue(
         json({ message: 'Chave pix.marina@email.com não pertence ao CPF 52998224725' }, 400),

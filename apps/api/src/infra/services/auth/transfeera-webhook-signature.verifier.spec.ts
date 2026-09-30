@@ -44,6 +44,14 @@ describe('TransfeeraWebhookSignatureVerifier', () => {
     expect(verifier().verify({ signatureHeader: sign(sixMinutesAgo), body: BODY })).toBe(false);
   });
 
+  // Sem o módulo da diferença, um `t` no futuro valeria para sempre: quem
+  // capturasse a chamada poderia reenviá-la quando quisesse.
+  it('refuses a timestamp from the future outside the window', () => {
+    const sixMinutesAhead = NOW.getTime() + 6 * 60 * 1000;
+
+    expect(verifier().verify({ signatureHeader: sign(sixMinutesAhead), body: BODY })).toBe(false);
+  });
+
   it('ignores schemes other than v1', () => {
     const header = sign(NOW.getTime()).replace('v1=', 'v0=');
 

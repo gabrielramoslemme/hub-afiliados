@@ -22,6 +22,7 @@ export class FakePayoutGateway implements PayoutGateway {
   readonly requests: RequestPayoutInput[] = [];
   enabled = true;
   private responses: FakePayoutResponse[] = [];
+  private pending: Array<(input: RequestPayoutInput) => Promise<void>> = [];
   private readonly updates = new Map<string, PayoutUpdate>();
   private batches = 0;
 
@@ -34,6 +35,14 @@ export class FakePayoutGateway implements PayoutGateway {
     this.responses.push(...responses);
   }
 
+  /**
+   * Roda antes de responder o próximo pedido — o webhook que chega enquanto o
+   * pedido ainda não voltou, por exemplo.
+   */
+  beforeAnswering(hook: (input: RequestPayoutInput) => Promise<void>): void {
+    this.pending.push(hook);
+  }
+
   /** O que a consulta do lote devolve a partir de agora. */
   settleBatch(batchId: string, update: PayoutUpdate): void {
     this.updates.set(batchId, update);
@@ -43,6 +52,7 @@ export class FakePayoutGateway implements PayoutGateway {
     if (!this.enabled) throw new PayoutsDisabledError();
 
     this.requests.push(input);
+    await this.pending.shift()?.(input);
     const response = this.responses.shift() ?? 'accept';
 
     if (response === 'refuse') throw new PayoutRefusedError('Chave PIX não encontrada (fake)');
@@ -60,6 +70,7 @@ export class FakePayoutGateway implements PayoutGateway {
   reset(): void {
     this.requests.length = 0;
     this.responses = [];
+    this.pending = [];
     this.updates.clear();
     this.enabled = true;
   }

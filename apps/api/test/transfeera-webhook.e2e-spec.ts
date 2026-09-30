@@ -166,6 +166,22 @@ describe('Transfeera webhook (e2e)', () => {
     expect((await trail()).map((event) => event.outcome)).toEqual(['DIVERGENT']);
   });
 
+  // A Transfeera leva toda FALHA a DEVOLVIDO logo em seguida: é o caminho normal
+  // de um PIX que não sai, e não pode acender o alarme de pagamento em dobro.
+  it('takes the return that follows a failure as a repetition', async () => {
+    await transfeera(transferEvent('FALHA')).expect(200);
+
+    const response = await transfeera(transferEvent('DEVOLVIDO')).expect(200);
+
+    expect(response.body.outcome).toBe('DUPLICATE');
+    const [row] = await e2e.dataSource.query(
+      `SELECT "status" FROM "affiliate_withdrawals" WHERE "public_id" = $1`,
+      [withdrawalId],
+    );
+    expect(row.status).toBe('FAILED');
+    expect((await wallet().expect(200)).body.availableCents).toBe(4000);
+  });
+
   it('keeps the pix key and a cpf quoted by the provider out of the reason and the trail', async () => {
     const event = transferEvent('DEVOLVIDO');
     event.data.status_description = `Chave ${MARINA.pixKey} não pertence ao CPF 529.982.247-25`;
@@ -182,6 +198,41 @@ describe('Transfeera webhook (e2e)', () => {
       expect(text).not.toContain('529.982.247-25');
     }
     expect(row.failure_reason).toContain('não pertence');
+  });
+
+  // O corpo que não passa na validação vai inteiro para a trilha, pelo caminho
+  // do evento sem efeito — e a conta de destino vem nele.
+  it('keeps the pix key and the cpf out of the trail of a malformed transfer', async () => {
+    const event = transferEvent('FINALIZADO');
+    const malformed = { ...event, data: { ...event.data, status: 42 } };
+
+    const response = await transfeera(malformed).expect(200);
+
+    expect(response.body.outcome).toBe('IGNORED');
+    const text = JSON.stringify(await trail());
+    expect(text).not.toContain(MARINA.pixKey);
+    expect(text).not.toContain('529.982.247-25');
+  });
+
+  // O webhook pode chegar antes da resposta do pedido: o saque já pago não pode
+  // voltar a "em processamento" quando o pedido enfim responde.
+  it('keeps a withdrawal the webhook settled while the request was still out', async () => {
+    await settleSale(e2e.app, affiliateCoupon, 'Troca de chuveiro', 'LIBERADO', { valor: 27 });
+    e2e.payouts.beforeAnswering(async (sent) => {
+      await transfeera(transferEvent('FINALIZADO', sent.reference)).expect(200);
+    });
+
+    const response = await api()
+      .post('/v1/affiliate/me/withdrawals')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(201);
+
+    const [row] = await e2e.dataSource.query(
+      `SELECT "status", "provider_batch_id" FROM "affiliate_withdrawals" WHERE "public_id" = $1`,
+      [response.body.id],
+    );
+    expect(row.status).toBe('PAID');
+    expect(row.provider_batch_id).not.toBeNull();
   });
 
   // Um id numérico invalidava o corpo inteiro: o evento virava "sem efeito",
