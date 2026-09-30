@@ -6,6 +6,14 @@ import type {
 } from '../enums';
 
 /**
+ * O pedido de saque. O valor não escolhe quanto sai — sai sempre o saldo
+ * inteiro —, só confirma que é o mesmo que a pessoa viu na tela.
+ */
+export interface RequestWithdrawalRequest {
+  expectedCents?: number;
+}
+
+/**
  * A resposta do pedido de saque. `REQUESTED` quer dizer, para a tela, "em
  * processamento": o pedido está gravado, e o PIX sai quando o fornecedor
  * responder.

@@ -5,6 +5,7 @@ import { UserRepository } from '@Domain/users/user.repository';
 import { PayoutGateway } from '@Domain/withdrawals/payout-gateway';
 import { WithdrawalRepository } from '@Domain/withdrawals/withdrawal.repository';
 import {
+  BalanceChangedError,
   NoBalanceToWithdrawError,
   PayoutProviderAccessDeniedError,
   PayoutProviderUnavailableError,
@@ -13,6 +14,12 @@ import {
 } from '@Domain/withdrawals/withdrawals.errors';
 import { UseCase } from '../use-case';
 import { refusalUpdate } from './payout-refusal';
+
+export interface RequestWithdrawalInput {
+  userPublicId: string;
+  /** O saldo que a pessoa viu e confirmou. Nulo: saca o que houver. */
+  expectedCents: number | null;
+}
 
 export interface RequestWithdrawalOutput {
   publicId: string;
@@ -32,7 +39,9 @@ export interface RequestWithdrawalOutput {
  * assim: não se sabe se o PIX foi, e a reconciliação repete o pedido com a
  * mesma referência, que ele não paga duas vezes.
  */
-export class RequestWithdrawalUseCase implements UseCase<string, RequestWithdrawalOutput> {
+export class RequestWithdrawalUseCase
+  implements UseCase<RequestWithdrawalInput, RequestWithdrawalOutput>
+{
   constructor(
     private readonly userRepository: UserRepository,
     private readonly withdrawalRepository: WithdrawalRepository,
@@ -40,7 +49,10 @@ export class RequestWithdrawalUseCase implements UseCase<string, RequestWithdraw
     private readonly clock: Clock,
   ) {}
 
-  async execute(userPublicId: string): Promise<RequestWithdrawalOutput> {
+  async execute({
+    userPublicId,
+    expectedCents,
+  }: RequestWithdrawalInput): Promise<RequestWithdrawalOutput> {
     if (!this.payoutGateway.isEnabled()) throw new PayoutsDisabledError();
 
     const user = await this.userRepository.findByPublicId(userPublicId);
@@ -50,14 +62,17 @@ export class RequestWithdrawalUseCase implements UseCase<string, RequestWithdraw
     if (!affiliate.coupon) throw new NoBalanceToWithdrawError();
 
     const now = this.clock.now();
-    const withdrawal = await this.withdrawalRepository.reserve({
+    const { withdrawal, availableCents } = await this.withdrawalRepository.reserve({
       affiliateId: affiliate.id,
       couponId: affiliate.coupon.id,
       pixKeyType: affiliate.pixKeyType,
       pixKey: affiliate.pixKey,
+      expectedCents,
       requestedAt: now,
     });
-    if (!withdrawal) throw new NoBalanceToWithdrawError();
+    if (!withdrawal) {
+      throw availableCents === 0 ? new NoBalanceToWithdrawError() : new BalanceChangedError();
+    }
 
     const output = {
       publicId: withdrawal.publicId,

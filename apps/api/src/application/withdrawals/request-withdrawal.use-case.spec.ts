@@ -1,6 +1,7 @@
 import { PixKeyTypeEnum, WithdrawalStatusEnum } from '@porto/contracts';
 import { UnknownAffiliateError } from '@Domain/auth/auth.errors';
 import {
+  BalanceChangedError,
   NoBalanceToWithdrawError,
   PayoutProviderAccessDeniedError,
   PayoutProviderUnavailableError,
@@ -34,13 +35,14 @@ describe('RequestWithdrawalUseCase', () => {
     coupon: buildCoupon({ id: 7 }),
   });
   const reserved = buildWithdrawal({ affiliateId: affiliate.id, amountCents: 4000 });
+  const INPUT = { userPublicId: user.publicId, expectedCents: 4000 };
 
   beforeEach(() => {
     userRepository = userRepositoryMock();
     withdrawalRepository = withdrawalRepositoryMock();
     payoutGateway = payoutGatewayMock();
     userRepository.findByPublicId.mockResolvedValue({ ...user, affiliate });
-    withdrawalRepository.reserve.mockResolvedValue(reserved);
+    withdrawalRepository.reserve.mockResolvedValue({ withdrawal: reserved, availableCents: 4000 });
     useCase = new RequestWithdrawalUseCase(
       userRepository,
       withdrawalRepository,
@@ -50,13 +52,14 @@ describe('RequestWithdrawalUseCase', () => {
   });
 
   it('reserves the balance, then asks the provider to pay it under the withdrawal reference', async () => {
-    const output = await useCase.execute(user.publicId);
+    const output = await useCase.execute(INPUT);
 
     expect(withdrawalRepository.reserve).toHaveBeenCalledWith({
       affiliateId: affiliate.id,
       couponId: 7,
       pixKeyType: PixKeyTypeEnum.EMAIL,
       pixKey: 'pix.marina@email.com',
+      expectedCents: 4000,
       requestedAt: NOW,
     });
     expect(payoutGateway.requestPayout).toHaveBeenCalledWith({
@@ -78,7 +81,7 @@ describe('RequestWithdrawalUseCase', () => {
   // A ordem é a regra: o PIX só sai de um saque já gravado. Ao contrário, um
   // commit que falhasse depois do PIX devolveria ao saldo dinheiro já pago.
   it('only calls the provider after the reservation is committed', async () => {
-    await useCase.execute(user.publicId);
+    await useCase.execute(INPUT);
 
     const [reserveOrder] = withdrawalRepository.reserve.mock.invocationCallOrder;
     const [payoutOrder] = payoutGateway.requestPayout.mock.invocationCallOrder;
@@ -86,9 +89,18 @@ describe('RequestWithdrawalUseCase', () => {
   });
 
   it('refuses without balance and never calls the provider', async () => {
-    withdrawalRepository.reserve.mockResolvedValue(null);
+    withdrawalRepository.reserve.mockResolvedValue({ withdrawal: null, availableCents: 0 });
 
-    await expect(useCase.execute(user.publicId)).rejects.toThrow(NoBalanceToWithdrawError);
+    await expect(useCase.execute(INPUT)).rejects.toThrow(NoBalanceToWithdrawError);
+    expect(payoutGateway.requestPayout).not.toHaveBeenCalled();
+  });
+
+  // A pessoa confirmou um valor na tela e o saque não se desfaz: se o saldo
+  // mudou nesse meio-tempo, ela precisa ver o novo antes de o PIX sair.
+  it('refuses a balance different from the one the affiliate confirmed, and never calls the provider', async () => {
+    withdrawalRepository.reserve.mockResolvedValue({ withdrawal: null, availableCents: 5500 });
+
+    await expect(useCase.execute(INPUT)).rejects.toThrow(BalanceChangedError);
     expect(payoutGateway.requestPayout).not.toHaveBeenCalled();
   });
 
@@ -98,21 +110,21 @@ describe('RequestWithdrawalUseCase', () => {
       affiliate: { ...affiliate, coupon: null },
     });
 
-    await expect(useCase.execute(user.publicId)).rejects.toThrow(NoBalanceToWithdrawError);
+    await expect(useCase.execute(INPUT)).rejects.toThrow(NoBalanceToWithdrawError);
     expect(withdrawalRepository.reserve).not.toHaveBeenCalled();
   });
 
   it('refuses when payouts are off in this environment, before reserving anything', async () => {
     payoutGateway.isEnabled.mockReturnValue(false);
 
-    await expect(useCase.execute(user.publicId)).rejects.toThrow(PayoutsDisabledError);
+    await expect(useCase.execute(INPUT)).rejects.toThrow(PayoutsDisabledError);
     expect(withdrawalRepository.reserve).not.toHaveBeenCalled();
   });
 
   it('closes the withdrawal as failed and gives the balance back when the provider refuses', async () => {
     payoutGateway.requestPayout.mockRejectedValue(new PayoutRefusedError('Chave inexistente'));
 
-    await expect(useCase.execute(user.publicId)).rejects.toThrow(PayoutRefusedError);
+    await expect(useCase.execute(INPUT)).rejects.toThrow(PayoutRefusedError);
     expect(withdrawalRepository.applyPayoutUpdate).toHaveBeenCalledWith({
       update: expect.objectContaining({
         reference: reserved.publicId,
@@ -133,7 +145,7 @@ describe('RequestWithdrawalUseCase', () => {
   ])('keeps the withdrawal requested when the provider is %s', async (_case, error) => {
     payoutGateway.requestPayout.mockRejectedValue(error);
 
-    const output = await useCase.execute(user.publicId);
+    const output = await useCase.execute(INPUT);
 
     expect(output.status).toBe(WithdrawalStatusEnum.REQUESTED);
     expect(withdrawalRepository.applyPayoutUpdate).not.toHaveBeenCalled();
@@ -143,6 +155,6 @@ describe('RequestWithdrawalUseCase', () => {
   it('refuses a token whose user has no affiliate profile', async () => {
     userRepository.findByPublicId.mockResolvedValue({ ...user, affiliate: null });
 
-    await expect(useCase.execute(user.publicId)).rejects.toThrow(UnknownAffiliateError);
+    await expect(useCase.execute(INPUT)).rejects.toThrow(UnknownAffiliateError);
   });
 });

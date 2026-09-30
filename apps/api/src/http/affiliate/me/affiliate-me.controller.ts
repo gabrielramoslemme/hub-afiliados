@@ -42,6 +42,7 @@ import { ChangeEmailRequestDto } from './dtos/change-email.request.dto';
 import { ChangeOccupationRequestDto } from './dtos/change-occupation.request.dto';
 import { ChangePixKeyRequestDto } from './dtos/change-pix-key.request.dto';
 import { ReferralsQueryDto } from './dtos/referrals.query.dto';
+import { RequestWithdrawalRequestDto } from './dtos/request-withdrawal.request.dto';
 
 @ApiTags('affiliate/me')
 @ApiBearerAuth()
@@ -146,13 +147,20 @@ export class AffiliateMeController {
     type: AffiliateWithdrawalResponseDto,
     description: 'PIX em processamento',
   })
-  @ApiConflictResponse({ description: 'Sem saldo (WDR-001) ou PIX recusado (WDR-002)' })
+  @ApiConflictResponse({
+    description:
+      'Sem saldo (WDR-001), PIX recusado (WDR-002) ou saldo diferente do confirmado (WDR-004)',
+  })
   @ApiServiceUnavailableResponse({ description: 'Saque desligado neste ambiente (WDR-003)' })
   async requestWithdrawal(
     @Actor() actor: ActorInfo,
+    @Body() body: RequestWithdrawalRequestDto,
     @Res({ passthrough: true }) response: Response,
   ): Promise<AffiliateWithdrawalResponseDto> {
-    const output = await this.requestWithdrawalUseCase.execute(actor.publicId);
+    const output = await this.requestWithdrawalUseCase.execute({
+      userPublicId: actor.publicId,
+      expectedCents: body.expectedCents ?? null,
+    });
 
     response.status(
       output.status === WithdrawalStatusEnum.REQUESTED ? HttpStatus.ACCEPTED : HttpStatus.CREATED,

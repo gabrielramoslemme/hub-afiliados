@@ -11,6 +11,20 @@ export class NoBalanceToWithdrawError extends DomainError {
 }
 
 /**
+ * O saldo debaixo do lock não é o que a pessoa confirmou na tela — um incentivo
+ * liberado, um saque devolvido no meio-tempo. O saque não se desfaz: nada é
+ * reservado, e ela confirma de novo vendo o valor certo.
+ */
+export class BalanceChangedError extends DomainError {
+  readonly kind = DomainErrorKindEnum.CONFLICT;
+  readonly code = WithdrawalErrorCodeEnum.BALANCE_CHANGED;
+
+  constructor() {
+    super('Seu saldo mudou. Confira o novo valor e confirme o saque de novo.');
+  }
+}
+
+/**
  * O fornecedor recusou o PIX de vez — chave inexistente, de outro titular. O
  * saque é encerrado e o valor volta ao saldo; `reason` é o motivo dele, já sem
  * chave nem CPF, para o painel.

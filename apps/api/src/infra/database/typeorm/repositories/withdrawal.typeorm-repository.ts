@@ -27,6 +27,7 @@ import {
   ApplyPayoutUpdateResult,
   ListStaleWithdrawalsInput,
   ReserveWithdrawalInput,
+  ReserveWithdrawalResult,
   SearchWithdrawalsInput,
   SearchWithdrawalsResult,
   WithdrawalRepository,
@@ -88,8 +89,9 @@ export class WithdrawalTypeormRepository implements WithdrawalRepository {
     couponId,
     pixKeyType,
     pixKey,
+    expectedCents,
     requestedAt,
-  }: ReserveWithdrawalInput): Promise<WithdrawalEntity | null> {
+  }: ReserveWithdrawalInput): Promise<ReserveWithdrawalResult> {
     return this.dataSource.transaction(async (manager) => {
       /*
         O lock é o que impede dois pedidos simultâneos de somar as mesmas
@@ -103,7 +105,9 @@ export class WithdrawalTypeormRepository implements WithdrawalRepository {
       });
 
       const amountCents = sales.reduce((total, sale) => total + sale.incentiveCents, 0);
-      if (amountCents === 0) return null;
+      if (amountCents === 0 || (expectedCents !== null && amountCents !== expectedCents)) {
+        return { withdrawal: null, availableCents: amountCents };
+      }
 
       const saved = await manager.save(
         manager.create(WithdrawalTypeormEntity, {
@@ -130,9 +134,12 @@ export class WithdrawalTypeormRepository implements WithdrawalRepository {
         { withdrawalId: saved.id },
       );
 
-      return withoutRelations(
-        await manager.findOneByOrFail(WithdrawalTypeormEntity, { id: saved.id }),
-      );
+      return {
+        withdrawal: withoutRelations(
+          await manager.findOneByOrFail(WithdrawalTypeormEntity, { id: saved.id }),
+        ),
+        availableCents: amountCents,
+      };
     });
   }
 
@@ -147,6 +154,17 @@ export class WithdrawalTypeormRepository implements WithdrawalRepository {
         WHERE "public_id" = $1`,
       [reference, batchId],
     );
+  }
+
+  async claimForAttempt(
+    publicId: string,
+    status: WithdrawalStatusEnum.REQUESTED | WithdrawalStatusEnum.PROCESSING,
+  ): Promise<boolean> {
+    // Condicional ao status: o UPDATE espera o lock de quem estiver aplicando um
+    // desfecho à linha, e só toca a que continua onde a lista a encontrou.
+    const result = await this.repository.update({ publicId, status }, { updatedAt: () => 'now()' });
+
+    return (result.affected ?? 0) > 0;
   }
 
   applyPayoutUpdate({

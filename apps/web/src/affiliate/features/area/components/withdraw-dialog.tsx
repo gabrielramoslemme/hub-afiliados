@@ -32,7 +32,7 @@ export function WithdrawDialog({ availableCents, maskedPixKey }: WithdrawDialogP
 
   function confirm() {
     startTransition(async () => {
-      const result = await requestWithdrawal();
+      const result = await requestWithdrawal(availableCents);
 
       if (result.status === 'failed') toast.error(result.message);
       else toast.success(result.message);

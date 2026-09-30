@@ -204,6 +204,8 @@ export enum WithdrawalErrorCodeEnum {
   REFUSED = 'WDR-002',
   /** O saque está desligado neste ambiente: a integração não tem credencial. */
   UNAVAILABLE = 'WDR-003',
+  /** O saldo mudou desde que a pessoa confirmou o valor. Nada foi reservado. */
+  BALANCE_CHANGED = 'WDR-004',
 }
 
 /** O que uma notificação ou consulta do fornecedor fez com o saque. */

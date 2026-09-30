@@ -26,14 +26,19 @@ beforeEach(() => {
 });
 
 describe('requestWithdrawal', () => {
-  it('asks the affiliate channel for the withdrawal, with no body', async () => {
-    await requestWithdrawal();
+  // O valor não escolhe quanto sai: só faz a API recusar se o saldo mudou
+  // desde que a pessoa o viu na tela.
+  it('asks the affiliate channel for the withdrawal of the balance the affiliate confirmed', async () => {
+    await requestWithdrawal(4000);
 
-    expect(apiFetch).toHaveBeenCalledWith('/affiliate/me/withdrawals', { method: 'POST' });
+    expect(apiFetch).toHaveBeenCalledWith('/affiliate/me/withdrawals', {
+      method: 'POST',
+      body: JSON.stringify({ expectedCents: 4000 }),
+    });
   });
 
   it('tells the pix was sent and refreshes the wallet', async () => {
-    await expect(requestWithdrawal()).resolves.toEqual({
+    await expect(requestWithdrawal(4000)).resolves.toEqual({
       status: 'sent',
       message: 'PIX enviado. Assim que ele cair, o comprovante aparece no extrato.',
     });
@@ -43,7 +48,7 @@ describe('requestWithdrawal', () => {
   it('tells a request still without answer is being processed, not that it failed', async () => {
     apiFetch.mockResolvedValue(withdrawal(WithdrawalStatusEnum.REQUESTED));
 
-    await expect(requestWithdrawal()).resolves.toEqual({
+    await expect(requestWithdrawal(4000)).resolves.toEqual({
       status: 'processing',
       message: 'Recebemos seu pedido. O PIX está em processamento.',
     });
@@ -53,7 +58,7 @@ describe('requestWithdrawal', () => {
   it('explains a refused pix and still refreshes the wallet', async () => {
     apiFetch.mockRejectedValue(new ApiError(409, WithdrawalErrorCodeEnum.REFUSED, 'x'));
 
-    await expect(requestWithdrawal()).resolves.toEqual({
+    await expect(requestWithdrawal(4000)).resolves.toEqual({
       status: 'failed',
       message: 'O PIX foi recusado. Confira sua chave PIX no perfil e tente de novo.',
     });
@@ -66,16 +71,34 @@ describe('requestWithdrawal', () => {
       WithdrawalErrorCodeEnum.UNAVAILABLE,
       'O saque está indisponível no momento. Tente mais tarde.',
     ],
+    [
+      WithdrawalErrorCodeEnum.BALANCE_CHANGED,
+      'Seu saldo mudou. Confira o novo valor e confirme o saque de novo.',
+    ],
   ])('translates %s', async (code, message) => {
     apiFetch.mockRejectedValue(new ApiError(409, code, 'texto da api'));
 
-    await expect(requestWithdrawal()).resolves.toEqual({ status: 'failed', message });
+    await expect(requestWithdrawal(4000)).resolves.toEqual({ status: 'failed', message });
   });
 
-  it('sends a refused session to sign in again', async () => {
-    apiFetch.mockRejectedValue(new ApiError(401, null, 'x'));
+  // O texto da API fala com o painel tanto quanto com a pessoa: fora do mapa,
+  // a tela mostra a mensagem genérica, nunca o que a API escreveu.
+  it.each([
+    ['an unknown code', new ApiError(409, null, 'texto interno da api')],
+    ['a failure that is no api error', new Error('socket hang up')],
+  ])('falls back to a generic message on %s', async (_case, error) => {
+    apiFetch.mockRejectedValue(error);
 
-    await expect(requestWithdrawal()).rejects.toThrow('NEXT_REDIRECT');
-    expect(redirect).toHaveBeenCalled();
+    await expect(requestWithdrawal(4000)).resolves.toEqual({
+      status: 'failed',
+      message: 'Não foi possível pedir o saque agora. Tente novamente em instantes.',
+    });
+  });
+
+  it.each([401, 403])('sends a %s session to sign in again', async (status) => {
+    apiFetch.mockRejectedValue(new ApiError(status, null, 'x'));
+
+    await expect(requestWithdrawal(4000)).rejects.toThrow('NEXT_REDIRECT');
+    expect(redirect).toHaveBeenCalledWith('/minha-conta/sessao-expirada');
   });
 });

@@ -2,7 +2,8 @@ import { PayoutEventOutcomeEnum } from '@porto/contracts';
 import { WithdrawalRepository } from '@Domain/withdrawals/withdrawal.repository';
 
 export const withdrawalRepositoryMock = (): jest.Mocked<WithdrawalRepository> => ({
-  reserve: jest.fn().mockResolvedValue(null),
+  reserve: jest.fn().mockResolvedValue({ withdrawal: null, availableCents: 0 }),
+  claimForAttempt: jest.fn().mockResolvedValue(true),
   markProcessing: jest.fn().mockResolvedValue(undefined),
   applyPayoutUpdate: jest
     .fn()

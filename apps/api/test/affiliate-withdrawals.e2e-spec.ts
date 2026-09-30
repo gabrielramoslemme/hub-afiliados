@@ -61,6 +61,21 @@ describe('Affiliate withdrawals (e2e)', () => {
     ]);
   });
 
+  // A tela mostrou um valor e o saque não se desfaz: se um incentivo foi
+  // liberado depois, a pessoa confirma de novo vendo o valor certo.
+  it('reserves nothing when the balance is not the one the affiliate confirmed', async () => {
+    const { token, coupon } = await signInAffiliate(e2e, operatorToken, MARINA);
+    await settleSale(e2e.app, coupon, 'Conserto de fogão', 'LIBERADO', { valor: 27 });
+    await settleSale(e2e.app, coupon, 'Guincho 24h', 'LIBERADO', { valor: 13 });
+
+    const response = await withdraw(token).send({ expectedCents: 2700 }).expect(409);
+
+    expect(response.body.code).toBe('WDR-004');
+    expect(e2e.payouts.requests).toEqual([]);
+    expect((await wallet(token).expect(200)).body.availableCents).toBe(4000);
+    await withdraw(token).send({ expectedCents: 4000 }).expect(201);
+  });
+
   it('leaves nothing to withdraw right after a withdrawal', async () => {
     const { token, coupon } = await signInAffiliate(e2e, operatorToken, MARINA);
     await settleSale(e2e.app, coupon, 'Conserto de fogão', 'LIBERADO');

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import {
   type AffiliateWithdrawalResponse,
   type ApiErrorCode,
+  type RequestWithdrawalRequest,
   WithdrawalErrorCodeEnum,
   WithdrawalStatusEnum,
 } from '@porto/contracts';
@@ -25,19 +26,25 @@ const MESSAGE_BY_CODE: Partial<Record<ApiErrorCode, string>> = {
   [WithdrawalErrorCodeEnum.REFUSED]:
     'O PIX foi recusado. Confira sua chave PIX no perfil e tente de novo.',
   [WithdrawalErrorCodeEnum.UNAVAILABLE]: 'O saque está indisponível no momento. Tente mais tarde.',
+  [WithdrawalErrorCodeEnum.BALANCE_CHANGED]:
+    'Seu saldo mudou. Confira o novo valor e confirme o saque de novo.',
 };
 
 /**
- * Pede o saque do saldo inteiro. Sem corpo: o valor e a chave são decididos
- * pela API, a partir do que está gravado — nada que a tela mande muda quanto
- * sai nem para onde.
+ * Pede o saque do saldo inteiro. O valor e a chave são decididos pela API, a
+ * partir do que está gravado — nada que a tela mande muda quanto sai nem para
+ * onde. `expectedCents` é o saldo que a pessoa confirmou: se ele mudou desde que
+ * a carteira abriu, a API recusa em vez de sacar um valor que ninguém viu.
  */
-export async function requestWithdrawal(): Promise<RequestWithdrawalResult> {
+export async function requestWithdrawal(expectedCents: number): Promise<RequestWithdrawalResult> {
+  const body: RequestWithdrawalRequest = { expectedCents };
+
   let withdrawal: AffiliateWithdrawalResponse;
 
   try {
     withdrawal = await affiliateApiFetch<AffiliateWithdrawalResponse>('/affiliate/me/withdrawals', {
       method: 'POST',
+      body: JSON.stringify(body),
     });
   } catch (error) {
     if (error instanceof ApiError && (error.statusCode === 401 || error.statusCode === 403)) {
