@@ -4,7 +4,10 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseUUIDPipe,
   Patch,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -13,6 +16,7 @@ import {
   ApiBearerAuth,
   ApiConflictResponse,
   ApiNoContentResponse,
+  ApiNotFoundResponse,
   ApiOkResponse,
   ApiTags,
   ApiUnauthorizedResponse,
@@ -21,12 +25,15 @@ import { ChangeEmailUseCase } from '@Application/affiliates/change-email.use-cas
 import { ChangeOccupationUseCase } from '@Application/affiliates/change-occupation.use-case';
 import { ChangePixKeyUseCase } from '@Application/affiliates/change-pix-key.use-case';
 import { GetAffiliateAccountUseCase } from '@Application/affiliates/get-affiliate-account.use-case';
+import { CompleteTrainingModuleUseCase } from '@Application/materials/complete-training-module.use-case';
+import { GetAffiliateMaterialsUseCase } from '@Application/materials/get-affiliate-materials.use-case';
 import { GetAffiliateReferralsUseCase } from '@Application/sales/get-affiliate-referrals.use-case';
 import { GetAffiliateWalletUseCase } from '@Application/sales/get-affiliate-wallet.use-case';
 import { ActorInfo } from '@Http/shared/authenticated-request';
 import { Actor } from '@Http/shared/decorators/actor.decorator';
 import { AffiliateGuard } from '@Http/shared/guards/affiliate.guard';
 import { AffiliateAccountResponseDto } from './dtos/affiliate-account.response.dto';
+import { AffiliateMaterialsResponseDto } from './dtos/affiliate-materials.response.dto';
 import { AffiliateReferralsResponseDto } from './dtos/affiliate-referrals.response.dto';
 import { AffiliateWalletResponseDto } from './dtos/affiliate-wallet.response.dto';
 import { ChangeEmailRequestDto } from './dtos/change-email.request.dto';
@@ -47,6 +54,8 @@ export class AffiliateMeController {
     private readonly changeOccupationUseCase: ChangeOccupationUseCase,
     private readonly getAffiliateWalletUseCase: GetAffiliateWalletUseCase,
     private readonly getAffiliateReferralsUseCase: GetAffiliateReferralsUseCase,
+    private readonly getAffiliateMaterialsUseCase: GetAffiliateMaterialsUseCase,
+    private readonly completeTrainingModuleUseCase: CompleteTrainingModuleUseCase,
   ) {}
 
   @Get()
@@ -81,6 +90,33 @@ export class AffiliateMeController {
         period: query.period,
       }),
     );
+  }
+
+  /** A aba Materiais: a trilha de formação com o progresso de quem pediu, e os arquivos. */
+  @Get('materials')
+  @ApiOkResponse({ type: AffiliateMaterialsResponseDto })
+  async materials(@Actor() actor: ActorInfo): Promise<AffiliateMaterialsResponseDto> {
+    return AffiliateMaterialsResponseDto.from(
+      await this.getAffiliateMaterialsUseCase.execute(actor.publicId),
+    );
+  }
+
+  /**
+   * Marca o módulo como assistido por quem assinou o token. PUT porque repetir
+   * não muda nada: a conclusão é um estado, e a data que fica é a da primeira vez.
+   */
+  @Put('training-modules/:publicId/completion')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiNoContentResponse({ description: 'Módulo marcado como assistido' })
+  @ApiNotFoundResponse({ description: 'Módulo não encontrado' })
+  async completeTrainingModule(
+    @Param('publicId', ParseUUIDPipe) publicId: string,
+    @Actor() actor: ActorInfo,
+  ): Promise<void> {
+    await this.completeTrainingModuleUseCase.execute({
+      userPublicId: actor.publicId,
+      trainingModulePublicId: publicId,
+    });
   }
 
   /**

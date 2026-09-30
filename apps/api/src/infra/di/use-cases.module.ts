@@ -17,6 +17,16 @@ import { ResetPasswordUseCase } from '@Application/auth/reset-password.use-case'
 import { SetPasswordUseCase } from '@Application/auth/set-password.use-case';
 import { ChangeAffiliateCouponUseCase } from '@Application/coupons/change-affiliate-coupon.use-case';
 import { CheckCouponAvailabilityUseCase } from '@Application/coupons/check-coupon-availability.use-case';
+import { CompleteTrainingModuleUseCase } from '@Application/materials/complete-training-module.use-case';
+import { CreatePromotionalMaterialUseCase } from '@Application/materials/create-promotional-material.use-case';
+import { CreateTrainingModuleUseCase } from '@Application/materials/create-training-module.use-case';
+import { DeletePromotionalMaterialUseCase } from '@Application/materials/delete-promotional-material.use-case';
+import { DeleteTrainingModuleUseCase } from '@Application/materials/delete-training-module.use-case';
+import { GetAffiliateMaterialsUseCase } from '@Application/materials/get-affiliate-materials.use-case';
+import { ListPromotionalMaterialsUseCase } from '@Application/materials/list-promotional-materials.use-case';
+import { ListTrainingModulesUseCase } from '@Application/materials/list-training-modules.use-case';
+import { UpdatePromotionalMaterialUseCase } from '@Application/materials/update-promotional-material.use-case';
+import { UpdateTrainingModuleUseCase } from '@Application/materials/update-training-module.use-case';
 import { ApplyIncentiveEventUseCase } from '@Application/sales/apply-incentive-event.use-case';
 import { GetAffiliateReferralsUseCase } from '@Application/sales/get-affiliate-referrals.use-case';
 import { GetAffiliateWalletUseCase } from '@Application/sales/get-affiliate-wallet.use-case';
@@ -29,6 +39,8 @@ import { PASSWORD_RESET_TOKEN_REPOSITORY } from '@Domain/auth/password-reset-tok
 import { TOKEN_GENERATOR } from '@Domain/auth/token-generator';
 import { COUPON_REPOSITORY } from '@Domain/coupons/coupon.repository';
 import { COUPON_GATEWAY } from '@Domain/coupons/coupon-gateway';
+import { PROMOTIONAL_MATERIAL_REPOSITORY } from '@Domain/materials/promotional-material.repository';
+import { TRAINING_MODULE_REPOSITORY } from '@Domain/materials/training-module.repository';
 import { LINK_BUILDER } from '@Domain/notifications/link-builder';
 import { MAILER } from '@Domain/notifications/mailer';
 import { INCENTIVE_EVENT_REPOSITORY } from '@Domain/sales/incentive-event.repository';
@@ -129,6 +141,24 @@ const USE_CASES = [
     CLOCK,
   ]),
   provideUseCase(RecordInvalidIncentiveNotificationUseCase, [INCENTIVE_EVENT_REPOSITORY, CLOCK]),
+  provideUseCase(ListTrainingModulesUseCase, [TRAINING_MODULE_REPOSITORY]),
+  provideUseCase(CreateTrainingModuleUseCase, [TRAINING_MODULE_REPOSITORY]),
+  provideUseCase(UpdateTrainingModuleUseCase, [TRAINING_MODULE_REPOSITORY]),
+  provideUseCase(DeleteTrainingModuleUseCase, [TRAINING_MODULE_REPOSITORY]),
+  provideUseCase(ListPromotionalMaterialsUseCase, [PROMOTIONAL_MATERIAL_REPOSITORY]),
+  provideUseCase(CreatePromotionalMaterialUseCase, [PROMOTIONAL_MATERIAL_REPOSITORY]),
+  provideUseCase(UpdatePromotionalMaterialUseCase, [PROMOTIONAL_MATERIAL_REPOSITORY]),
+  provideUseCase(DeletePromotionalMaterialUseCase, [PROMOTIONAL_MATERIAL_REPOSITORY]),
+  provideUseCase(GetAffiliateMaterialsUseCase, [
+    USER_REPOSITORY,
+    TRAINING_MODULE_REPOSITORY,
+    PROMOTIONAL_MATERIAL_REPOSITORY,
+  ]),
+  provideUseCase(CompleteTrainingModuleUseCase, [
+    USER_REPOSITORY,
+    TRAINING_MODULE_REPOSITORY,
+    CLOCK,
+  ]),
 ];
 
 @Module({
