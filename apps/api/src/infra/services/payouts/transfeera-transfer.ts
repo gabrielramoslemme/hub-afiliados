@@ -1,6 +1,10 @@
 import { WithdrawalStatusEnum } from '@porto/contracts';
 import { redactSensitive } from '@Domain/shared/redaction.util';
-import { PayoutUpdate, PayoutUpdateStatus } from '@Domain/withdrawals/payout-gateway';
+import {
+  PayoutNotificationTranslator,
+  PayoutUpdate,
+  PayoutUpdateStatus,
+} from '@Domain/withdrawals/payout-gateway';
 
 /**
  * A transferência como a Transfeera a descreve, no webhook e na consulta do
@@ -107,4 +111,15 @@ export function toPayoutUpdate(
     failureReason: reason === null ? null : redactSensitive(reason),
     payload: redactTransfeeraPayload(payload),
   };
+}
+
+/** O `PayoutNotificationTranslator` do webhook: a Transfeera fica deste lado da borda. */
+export class TransfeeraNotificationTranslator implements PayoutNotificationTranslator {
+  toUpdate(transfer: object, payload: Record<string, unknown>): PayoutUpdate {
+    return toPayoutUpdate(transfer as TransfeeraTransfer, payload);
+  }
+
+  redact(payload: Record<string, unknown>): Record<string, unknown> {
+    return redactTransfeeraPayload(payload);
+  }
 }

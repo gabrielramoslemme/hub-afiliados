@@ -1,4 +1,13 @@
-import { Body, Controller, HttpCode, HttpStatus, Logger, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Inject,
+  Logger,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBody,
   ApiHeader,
@@ -10,16 +19,16 @@ import {
 import { PayoutEventOutcomeEnum, PayoutEventSourceEnum } from '@porto/contracts';
 import { ApplyPayoutEventUseCase } from '@Application/withdrawals/apply-payout-event.use-case';
 import { RecordIgnoredPayoutEventUseCase } from '@Application/withdrawals/record-ignored-payout-event.use-case';
+import {
+  PAYOUT_NOTIFICATION_TRANSLATOR,
+  PayoutNotificationTranslator,
+} from '@Domain/withdrawals/payout-gateway';
 import { Public } from '@Http/shared/decorators/public.decorator';
 import { InvalidWebhookBody, WebhookBody } from '@Http/shared/decorators/webhook-body.decorator';
 import {
   PAYOUT_SIGNATURE_HEADER,
   PayoutWebhookSignatureGuard,
 } from '@Http/shared/guards/payout-webhook-signature.guard';
-import {
-  redactTransfeeraPayload,
-  toPayoutUpdate,
-} from '@Infra/services/payouts/transfeera-transfer';
 import { TransfeeraEventRequestDto } from './dtos/transfeera-event.request.dto';
 import { TransfeeraEventResponseDto } from './dtos/transfeera-event.response.dto';
 
@@ -38,6 +47,8 @@ export class TransfeeraWebhookController {
   constructor(
     private readonly applyPayoutEventUseCase: ApplyPayoutEventUseCase,
     private readonly recordIgnoredPayoutEventUseCase: RecordIgnoredPayoutEventUseCase,
+    @Inject(PAYOUT_NOTIFICATION_TRANSLATOR)
+    private readonly payoutNotificationTranslator: PayoutNotificationTranslator,
   ) {}
 
   /**
@@ -63,12 +74,12 @@ export class TransfeeraWebhookController {
           typeof payload.id === 'string' || typeof payload.id === 'number'
             ? String(payload.id)
             : null,
-        payload: redactTransfeeraPayload(payload),
+        payload: this.payoutNotificationTranslator.redact(payload),
       });
       return { outcome: PayoutEventOutcomeEnum.IGNORED };
     }
 
-    const update = toPayoutUpdate(event.data, payload);
+    const update = this.payoutNotificationTranslator.toUpdate(event.data, payload);
     const result = await this.applyPayoutEventUseCase.execute({
       update,
       source: PayoutEventSourceEnum.WEBHOOK,
@@ -79,7 +90,7 @@ export class TransfeeraWebhookController {
     // não mudaria nada. Quem resolve é gente — ver o runbook do webhook.
     if (result.outcome === PayoutEventOutcomeEnum.DIVERGENT) {
       this.logger.error(
-        `Desfecho ${update.providerStatus} num saque já falho: ${update.reference} — conferir à mão`,
+        `Desfecho ${update.providerStatus} em conflito com o saque: ${update.reference} — conferir à mão`,
       );
     }
 

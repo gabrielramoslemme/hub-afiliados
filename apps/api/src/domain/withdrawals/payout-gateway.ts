@@ -59,3 +59,19 @@ export interface PayoutGateway {
   /** Nulo quando o lote não tem transferência nenhuma. */
   findPayout(batchId: string): Promise<PayoutUpdate | null>;
 }
+
+export const PAYOUT_NOTIFICATION_TRANSLATOR = createToken<PayoutNotificationTranslator>(
+  'PAYOUT_NOTIFICATION_TRANSLATOR',
+);
+
+/**
+ * A notificação do fornecedor no nosso vocabulário. A rota do webhook valida o
+ * formato; o que cada campo significa — e o que não pode ir para a trilha — é
+ * de quem conhece o fornecedor.
+ */
+export interface PayoutNotificationTranslator {
+  /** O desfecho da transferência já validada, com o corpo inteiro limpo. */
+  toUpdate(transfer: object, payload: Record<string, unknown>): PayoutUpdate;
+  /** O corpo sem os dados de quem recebe, para a trilha de um evento sem efeito. */
+  redact(payload: Record<string, unknown>): Record<string, unknown>;
+}

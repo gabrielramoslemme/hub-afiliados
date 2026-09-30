@@ -1,13 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { Allow, IsOptional, IsString, ValidateNested } from 'class-validator';
-import { TransfeeraTransfer } from '@Infra/services/payouts/transfeera-transfer';
 
 /*
   Só o que se lê é validado. O resto do corpo — conta de destino, banco, datas
   — é descartado aqui e guardado limpo na trilha pelo `@Body()` cru.
 */
-export class TransfeeraTransferDto implements TransfeeraTransfer {
+export class TransfeeraTransferDto {
   // A Transfeera documenta o id como string e manda número em alguns exemplos.
   @ApiPropertyOptional({ oneOf: [{ type: 'string' }, { type: 'number' }] })
   @Allow()

@@ -1,11 +1,12 @@
 import { Global, Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CLOCK, Clock } from '@Domain/shared/clock';
-import { PAYOUT_GATEWAY } from '@Domain/withdrawals/payout-gateway';
+import { PAYOUT_GATEWAY, PAYOUT_NOTIFICATION_TRANSLATOR } from '@Domain/withdrawals/payout-gateway';
 import { EnvironmentVariables } from '@Infra/config/environment-variables';
 import { ClockModule } from '@Infra/services/clock/clock.module';
 import { TransfeeraPayoutGateway } from './transfeera-payout.gateway';
 import { TransfeeraTokenProvider } from './transfeera-token.provider';
+import { TransfeeraNotificationTranslator } from './transfeera-transfer';
 
 @Global()
 @Module({
@@ -51,7 +52,8 @@ import { TransfeeraTokenProvider } from './transfeera-token.provider';
         );
       },
     },
+    { provide: PAYOUT_NOTIFICATION_TRANSLATOR, useValue: new TransfeeraNotificationTranslator() },
   ],
-  exports: [PAYOUT_GATEWAY],
+  exports: [PAYOUT_GATEWAY, PAYOUT_NOTIFICATION_TRANSLATOR],
 })
 export class PayoutGatewayModule {}
