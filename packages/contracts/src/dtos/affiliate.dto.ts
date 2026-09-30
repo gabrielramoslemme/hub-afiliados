@@ -89,19 +89,24 @@ export interface AffiliateAuditLogItem {
 /*
   O que a própria pessoa vê da sua conta. Diferente do `AffiliateDetail`, que é
   a visão da analista: aqui não há `approvedByName` nem `rejectionReason` de
-  outra pessoa, e o CPF chega mascarado — o afiliado já sabe o dele, e um CPF
-  completo numa tela aberta em público não serve a ninguém.
+  outra pessoa. CPF, RG e chave PIX chegam inteiros e mascarados — o perfil abre
+  com a máscara, porque a tela pode estar aberta em público, e revela o valor
+  inteiro a pedido da própria pessoa.
 */
 export interface AffiliateMeResponse {
   publicId: string;
   name: string;
   email: string;
+  /** Só dígitos. */
+  cpf: string;
   maskedCpf: string;
+  rg: string;
   maskedRg: string;
   occupation: OccupationEnum;
   socialNetwork: SocialNetworkEnum | null;
   socialHandle: string | null;
   pixKeyType: PixKeyTypeEnum;
+  pixKey: string;
   maskedPixKey: string;
   status: AffiliateStatusEnum;
   /** Nulo enquanto a Porto não emitir o cupom do afiliado aprovado. */

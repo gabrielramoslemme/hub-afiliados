@@ -18,8 +18,14 @@ export class AffiliateAccountResponseDto implements AffiliateMeResponse {
   @ApiProperty()
   email: string;
 
+  @ApiProperty({ example: '52998224725', description: 'Só dígitos' })
+  cpf: string;
+
   @ApiProperty({ example: '***.***.247-25' })
   maskedCpf: string;
+
+  @ApiProperty({ example: '12345678X' })
+  rg: string;
 
   @ApiProperty({ example: '*****678X' })
   maskedRg: string;
@@ -35,6 +41,9 @@ export class AffiliateAccountResponseDto implements AffiliateMeResponse {
 
   @ApiProperty({ enum: PixKeyTypeEnum })
   pixKeyType: PixKeyTypeEnum;
+
+  @ApiProperty({ example: 'marina.ferraz@email.com' })
+  pixKey: string;
 
   @ApiProperty({ example: 'ma***********@email.com' })
   maskedPixKey: string;
