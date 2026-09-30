@@ -1,13 +1,14 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { AuthAudienceEnum, UserRoleEnum } from '@porto/contracts';
+import { AuthAudienceEnum } from '@porto/contracts';
 import { AuthenticatedRequest } from '../authenticated-request';
-import { ROLES } from '../decorators/roles.decorator';
+import { assertDeclaredRole } from './assert-declared-role';
 
 /**
  * Guard do canal: o `AuthenticatedGuard` já garantiu que o token é válido, e
  * aqui se decide se ele é **deste** canal. Esquecer a audiência é escalação de
- * privilégio — um token de afiliado abriria a fila de análise.
+ * privilégio — um token de afiliado abriria a fila de análise. Depois, se o
+ * perfil está entre os que a rota declara em `@Roles(...)`.
  */
 @Injectable()
 export class AdminGuard implements CanActivate {
@@ -21,14 +22,7 @@ export class AdminGuard implements CanActivate {
       throw new ForbiddenException('Acesso restrito ao painel da Porto.');
     }
 
-    const roles = this.reflector.getAllAndOverride<UserRoleEnum[]>(ROLES, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-
-    if (roles?.length && (!claims.role || !roles.includes(claims.role))) {
-      throw new ForbiddenException('Seu perfil não tem acesso a esta operação.');
-    }
+    assertDeclaredRole(this.reflector, context, claims.role);
 
     request.actor = { publicId: claims.sub, name: claims.name, role: claims.role };
 

@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { AuthAudienceEnum } from '@porto/contracts';
+import { AuthAudienceEnum, UserRoleEnum } from '@porto/contracts';
 import { ACCESS_TOKEN_ISSUER, AccessTokenIssuer } from '../src/domain/auth/access-token';
 import { createE2eApp, type E2eApp, resetDatabase } from './e2e-app';
 import { approve, MARINA, register, signInOperator } from './e2e-fixtures';
@@ -51,7 +51,7 @@ describe('Admin coupons (e2e)', () => {
       const affiliateToken = await e2e.app.get<AccessTokenIssuer>(ACCESS_TOKEN_ISSUER).issue({
         sub: '00000000-0000-4000-8000-000000000000',
         aud: AuthAudienceEnum.AFFILIATE,
-        role: null,
+        role: UserRoleEnum.AFFILIATE,
         name: 'Marina Ferraz',
       });
 

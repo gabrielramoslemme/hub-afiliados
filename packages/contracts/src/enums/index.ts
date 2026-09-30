@@ -3,10 +3,16 @@ export enum UserTypeEnum {
   ADMIN = 'ADMIN',
 }
 
+/**
+ * O perfil de acesso de quem entra. Toda rota autenticada declara os perfis que
+ * alcança, com `@Roles(...)`: os três primeiros são do painel, e o afiliado tem
+ * o seu, que é o único que as rotas da área dele aceitam.
+ */
 export enum UserRoleEnum {
   PORTO_ANALYST = 'PORTO_ANALYST',
   PORTO_ADMIN = 'PORTO_ADMIN',
   MESA_ADMIN = 'MESA_ADMIN',
+  AFFILIATE = 'AFFILIATE',
 }
 
 export enum AffiliateStatusEnum {

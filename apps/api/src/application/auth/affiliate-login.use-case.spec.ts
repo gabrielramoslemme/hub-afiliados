@@ -1,4 +1,9 @@
-import { AffiliateStatusEnum, AuthAudienceEnum, UserTypeEnum } from '@porto/contracts';
+import {
+  AffiliateStatusEnum,
+  AuthAudienceEnum,
+  UserRoleEnum,
+  UserTypeEnum,
+} from '@porto/contracts';
 import {
   AccountInactiveError,
   InvalidCredentialsError,
@@ -31,6 +36,7 @@ describe('AffiliateLoginUseCase', () => {
       email: credentials.email,
       password: '$2b$10$hashed',
       type: UserTypeEnum.AFFILIATE,
+      role: UserRoleEnum.AFFILIATE,
     });
 
     return {
@@ -51,7 +57,7 @@ describe('AffiliateLoginUseCase', () => {
     useCase = new AffiliateLoginUseCase(userRepository, passwordHasher, accessTokenIssuer, clock);
   });
 
-  it('issues a token with the audience of the affiliate portal', async () => {
+  it('issues a token with the audience and the role of the affiliate portal', async () => {
     const account = signedUp(AffiliateStatusEnum.APPROVED);
     userRepository.findByEmail.mockResolvedValue(account);
 
@@ -60,7 +66,7 @@ describe('AffiliateLoginUseCase', () => {
     expect(accessTokenIssuer.issue).toHaveBeenCalledWith({
       sub: account.publicId,
       aud: AuthAudienceEnum.AFFILIATE,
-      role: null,
+      role: UserRoleEnum.AFFILIATE,
       name: 'Marina Ferraz',
     });
     expect(result).toEqual({

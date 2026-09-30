@@ -6,6 +6,7 @@ import {
   AuditChangeTypeEnum,
   AuditEntityEnum,
   IncentiveStatusEnum,
+  UserRoleEnum,
   UserTypeEnum,
 } from '@porto/contracts';
 import {
@@ -292,7 +293,7 @@ export class AffiliateTypeormRepository implements AffiliateRepository {
             shouldChangePassword: false,
             isActive: true,
             type: UserTypeEnum.AFFILIATE,
-            role: null,
+            role: UserRoleEnum.AFFILIATE,
           }),
         );
 

@@ -1,6 +1,8 @@
 import { GUARDS_METADATA, METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { DiscoveryModule, DiscoveryService, MetadataScanner } from '@nestjs/core';
+import { UserRoleEnum } from '@porto/contracts';
 import { IS_PUBLIC } from '../src/http/shared/decorators/public.decorator';
+import { ROLES } from '../src/http/shared/decorators/roles.decorator';
 import { AdminGuard } from '../src/http/shared/guards/admin.guard';
 import { AffiliateGuard } from '../src/http/shared/guards/affiliate.guard';
 import { WebhookSignatureGuard } from '../src/http/shared/guards/webhook-signature.guard';
@@ -49,6 +51,7 @@ interface DiscoveredRoute {
   signature: string;
   isPublic: boolean;
   guards: unknown[];
+  roles: UserRoleEnum[];
 }
 
 function join(controllerPath: string, handlerPath: string): string {
@@ -90,6 +93,8 @@ describe('Route protection (e2e)', () => {
               ...(Reflect.getMetadata(GUARDS_METADATA, handler) ?? []),
               ...(Reflect.getMetadata(GUARDS_METADATA, controller) ?? []),
             ],
+            roles:
+              Reflect.getMetadata(ROLES, handler) ?? Reflect.getMetadata(ROLES, controller) ?? [],
           };
         });
     });
@@ -138,6 +143,42 @@ describe('Route protection (e2e)', () => {
       .map((route) => route.signature);
 
     expect(mismatched).toEqual([]);
+  });
+
+  /*
+    Os guards de canal já recusam a rota sem `@Roles(...)`, mas só na hora da
+    chamada: a rota esquecida apareceria como 403 para todo perfil, e passaria
+    por bug de tela. Aqui a falta aparece no CI, com o nome da rota.
+  */
+  it('declares the roles every authenticated route accepts', () => {
+    const undeclared = routes
+      .filter((route) => !route.isPublic)
+      .filter((route) => route.roles.length === 0)
+      .map((route) => route.signature);
+
+    expect(undeclared).toEqual([]);
+  });
+
+  /*
+    O `@Roles` de cada rota lista os perfis dela, e nenhum perfil cruza de
+    canal: afiliado não entra em rota do painel, e perfil do painel não entra
+    em rota do afiliado — nem por uma lista copiada da rota vizinha.
+  */
+  it('keeps each role inside its own channel', () => {
+    const crossing = routes
+      .filter((route) => !route.isPublic)
+      .filter((route) => {
+        const path = route.signature.split(' ')[1];
+        const affiliateRoleOnly = route.roles.every((role) => role === UserRoleEnum.AFFILIATE);
+        const panelRolesOnly = !route.roles.includes(UserRoleEnum.AFFILIATE);
+
+        if (path.startsWith('/admin/')) return !panelRolesOnly;
+        if (path.startsWith('/affiliate/')) return !affiliateRoleOnly;
+        return false;
+      })
+      .map((route) => route.signature);
+
+    expect(crossing).toEqual([]);
   });
 
   /*
