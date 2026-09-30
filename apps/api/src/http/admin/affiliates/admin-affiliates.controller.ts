@@ -15,6 +15,7 @@ import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiConflictResponse,
+  ApiForbiddenResponse,
   ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -22,6 +23,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { UserRoleEnum } from '@porto/contracts';
 import { ApproveAffiliateUseCase } from '@Application/affiliates/approve-affiliate.use-case';
 import { GetAffiliateUseCase } from '@Application/affiliates/get-affiliate.use-case';
 import { ListAffiliateAuditLogsUseCase } from '@Application/affiliates/list-affiliate-audit-logs.use-case';
@@ -31,6 +33,7 @@ import { RejectAffiliateUseCase } from '@Application/affiliates/reject-affiliate
 import { ChangeAffiliateCouponUseCase } from '@Application/coupons/change-affiliate-coupon.use-case';
 import { ActorInfo } from '@Http/shared/authenticated-request';
 import { Actor } from '@Http/shared/decorators/actor.decorator';
+import { Roles } from '@Http/shared/decorators/roles.decorator';
 import { AdminGuard } from '@Http/shared/guards/admin.guard';
 import { AffiliateAuditLogResponseDto } from './dtos/affiliate-audit-log.response.dto';
 import {
@@ -47,6 +50,7 @@ import { RejectAffiliateRequestDto } from './dtos/reject-affiliate.request.dto';
 @ApiTags('admin/affiliates')
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({ description: 'Sessão ausente ou expirada' })
+@ApiForbiddenResponse({ description: 'Token de outro canal, ou perfil fora dos que a rota aceita' })
 @UseGuards(AdminGuard)
 @Controller('admin/affiliates')
 export class AdminAffiliatesController {
@@ -61,6 +65,7 @@ export class AdminAffiliatesController {
   ) {}
 
   @Get()
+  @Roles(UserRoleEnum.PORTO_ANALYST, UserRoleEnum.PORTO_ADMIN, UserRoleEnum.MESA_ADMIN)
   @ApiOkResponse({ type: PaginatedAffiliatesResponseDto })
   async list(@Query() query: ListAffiliatesQueryDto): Promise<PaginatedAffiliatesResponseDto> {
     const result = await this.listAffiliatesUseCase.execute({
@@ -82,6 +87,7 @@ export class AdminAffiliatesController {
    * `report` e o recusaria como uuid inválido.
    */
   @Get('report')
+  @Roles(UserRoleEnum.PORTO_ANALYST, UserRoleEnum.PORTO_ADMIN, UserRoleEnum.MESA_ADMIN)
   @ApiOkResponse({ type: [AffiliateReportRowResponseDto] })
   async report(): Promise<AffiliateReportRowResponseDto[]> {
     const rows = await this.listAffiliatesReportUseCase.execute();
@@ -90,6 +96,7 @@ export class AdminAffiliatesController {
   }
 
   @Get(':publicId')
+  @Roles(UserRoleEnum.PORTO_ANALYST, UserRoleEnum.PORTO_ADMIN, UserRoleEnum.MESA_ADMIN)
   @ApiOkResponse({ type: AffiliateDetailResponseDto })
   @ApiNotFoundResponse({ description: 'Afiliado não encontrado' })
   async detail(
@@ -103,6 +110,7 @@ export class AdminAffiliatesController {
    * perfil e o cupom, da mais recente para a mais antiga.
    */
   @Get(':publicId/audit-logs')
+  @Roles(UserRoleEnum.PORTO_ANALYST, UserRoleEnum.PORTO_ADMIN, UserRoleEnum.MESA_ADMIN)
   @ApiOkResponse({ type: [AffiliateAuditLogResponseDto] })
   @ApiNotFoundResponse({ description: 'Afiliado não encontrado' })
   async auditLogs(
@@ -115,6 +123,7 @@ export class AdminAffiliatesController {
 
   /** Aprovar é criar o cupom: ele é registrado na Porto antes de o status mudar. */
   @Post(':publicId/approve')
+  @Roles(UserRoleEnum.PORTO_ANALYST, UserRoleEnum.PORTO_ADMIN, UserRoleEnum.MESA_ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({ description: 'Cadastro aprovado e cupom emitido' })
   @ApiNotFoundResponse({ description: 'Afiliado não encontrado' })
@@ -136,6 +145,7 @@ export class AdminAffiliatesController {
   }
 
   @Post(':publicId/reject')
+  @Roles(UserRoleEnum.PORTO_ANALYST, UserRoleEnum.PORTO_ADMIN, UserRoleEnum.MESA_ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({ description: 'Cadastro reprovado' })
   @ApiNotFoundResponse({ description: 'Afiliado não encontrado' })
@@ -158,6 +168,7 @@ export class AdminAffiliatesController {
    * antes de ela ser gravada aqui, e a trilha do cupom guarda quem pediu.
    */
   @Patch(':publicId/coupon')
+  @Roles(UserRoleEnum.PORTO_ANALYST, UserRoleEnum.PORTO_ADMIN, UserRoleEnum.MESA_ADMIN)
   @ApiOkResponse({ type: CouponSummaryResponseDto })
   @ApiBadRequestResponse({ description: 'Nada para alterar, ou percentual fora de 1 a 25' })
   @ApiNotFoundResponse({ description: 'Afiliado não encontrado, ou cadastro ainda sem cupom' })

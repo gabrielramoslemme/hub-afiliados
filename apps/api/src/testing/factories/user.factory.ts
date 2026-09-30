@@ -15,7 +15,7 @@ export function buildUser(overrides: Partial<UserEntity> = {}): UserEntity {
     shouldChangePassword: false,
     isActive: true,
     type: UserTypeEnum.AFFILIATE,
-    role: null,
+    role: UserRoleEnum.AFFILIATE,
     lastLoginAt: null,
     createdAt: new Date('2026-08-17T12:00:00Z'),
     updatedAt: new Date('2026-08-17T12:00:00Z'),

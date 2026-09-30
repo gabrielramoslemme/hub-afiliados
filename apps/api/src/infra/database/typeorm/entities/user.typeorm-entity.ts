@@ -15,8 +15,8 @@ import { AffiliateTypeormEntity } from './affiliate.typeorm-entity';
 
 @Entity('users')
 @Check(
-  'ck_users_role_required_for_admin',
-  `("type" = 'ADMIN' AND "role" IS NOT NULL) OR ("type" = 'AFFILIATE' AND "role" IS NULL)`,
+  'ck_users_role_matches_type',
+  `("type" = 'ADMIN' AND "role" IN ('PORTO_ANALYST', 'PORTO_ADMIN', 'MESA_ADMIN')) OR ("type" = 'AFFILIATE' AND "role" = 'AFFILIATE')`,
 )
 export class UserTypeormEntity implements UserEntity {
   @PrimaryGeneratedColumn()

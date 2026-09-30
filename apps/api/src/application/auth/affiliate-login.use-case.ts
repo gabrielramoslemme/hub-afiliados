@@ -72,7 +72,7 @@ export class AffiliateLoginUseCase implements UseCase<AffiliateLoginInput, Affil
     const accessToken = await this.accessTokenIssuer.issue({
       sub: user.publicId,
       aud: AuthAudienceEnum.AFFILIATE,
-      role: null,
+      role: user.role,
       name: user.name,
     });
 

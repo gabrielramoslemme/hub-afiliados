@@ -6,8 +6,8 @@ NestJS 11 + TypeORM 0.3 + PostgreSQL 16. Uma aplicação, três canais de entrad
 
 | Módulo | Consumidor | Autenticação | Guard |
 |---|---|---|---|
-| `affiliate` | Portal web do afiliado (`apps/web`) | JWT com audiência `affiliate` | `AffiliateGuard` |
-| `admin` | Painel da Porto e da Mesa | JWT com audiência `admin` | `AdminGuard`, com `@Roles(...)` por rota |
+| `affiliate` | Portal web do afiliado (`apps/web`) | JWT com audiência `affiliate` | `AffiliateGuard`, com `@Roles(UserRoleEnum.AFFILIATE)` |
+| `admin` | Painel da Porto e da Mesa | JWT com audiência `admin` | `AdminGuard`, com `@Roles(...)` em toda rota |
 | `webhooks` | Sistemas externos | Assinatura HMAC, sem JWT | `@Public()` + `WebhookSignatureGuard` |
 | `health` | Monitoração | pública | `@Public()` |
 
@@ -21,7 +21,17 @@ Identidade unificada em `users`, perfil 1:1 em `affiliates`. **Esquecer de checa
 
 `AuthenticatedGuard` é global, registrado como `APP_GUARD` no `AppModule`: **sem `@Public()` explícito, requisição sem token válido é 401** — inclusive a rota que alguém criar amanhã e esquecer de proteger. Ele verifica a assinatura uma vez e deixa os claims em `request.auth`.
 
-`AdminGuard` e `AffiliateGuard` ficam nos controllers dos canais e respondem a outra pergunta: este token é **deste** canal. Conferem `aud`, o do painel aplica o `@Roles(...)` quando a rota declara, e os dois publicam `request.actor` — que chega ao handler pelo decorator de parâmetro `@Actor()`, nunca por `@Req()`. Eles leem o que o primeiro deixou, então a assinatura não é verificada duas vezes.
+`AdminGuard` e `AffiliateGuard` ficam nos controllers dos canais e respondem a outra pergunta: este token é **deste** canal. Conferem `aud` e o perfil contra o `@Roles(...)` da rota, e os dois publicam `request.actor` — que chega ao handler pelo decorator de parâmetro `@Actor()`, nunca por `@Req()`. Eles leem o que o primeiro deixou, então a assinatura não é verificada duas vezes.
+
+### Perfis de acesso
+
+**Todo endpoint autenticado lista, no próprio `@Roles(...)`, os perfis que o alcançam** — um por um, no método, e nunca por uma constante de fora: quem lê o controller vê quem entra. Rota do painel lista perfis do painel (`@Roles(UserRoleEnum.PORTO_ANALYST, UserRoleEnum.PORTO_ADMIN, UserRoleEnum.MESA_ADMIN)`); rota do afiliado, só `@Roles(UserRoleEnum.AFFILIATE)`. O afiliado tem perfil próprio, gravado em `users.role` e emitido no token; a constraint `ck_users_role_matches_type` amarra cada tipo de usuário aos seus perfis.
+
+**Sem `@Roles`, o guard do canal recusa com 403 para todo perfil** (`assertDeclaredRole`) — a negação por omissão vale para o perfil como vale para a sessão. Token sem `role` não passa em rota nenhuma. E o `route-protection.e2e-spec.ts` reprova no CI a rota autenticada sem `@Roles` e a rota que aceita perfil do outro canal — `AFFILIATE` numa rota `admin/...`, ou perfil do painel numa `affiliate/...` —, com o nome dela.
+
+Nesta onda os três perfis do painel alcançam tudo no painel, por decisão da Porto.
+
+Os materiais seguem a mesma separação por canal: o painel cadastra em `http/admin/materials`, e o afiliado lê e marca o que assistiu em `http/affiliate/materials` — o `AffiliateMaterialsController`, sob o path `affiliate/me`, porque o que sai dali é sempre o progresso de quem assinou o token.
 
 **Trocar de canal é 403, nos dois sentidos**, e há e2e para isso: token de afiliado em `/v1/admin/coupons/availability` e token de operador em `/v1/affiliate/me`. Além disso, o `route-protection.e2e-spec.ts` percorre as rotas registradas e confere que toda rota `admin/...` tem o `AdminGuard` e toda `affiliate/...` o `AffiliateGuard` — o guard do canal certo, e não só algum.
 

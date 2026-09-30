@@ -68,8 +68,27 @@ describe('AdminGuard', () => {
     expect(guard.canActivate(contextWith(adminClaims()).context)).toBe(true);
   });
 
-  it('publishes the actor for any operator when the route declares no role', () => {
+  it('rejects a route that declares no role, whatever the role of the token', () => {
     const guard = new AdminGuard(new Reflector());
+
+    expect(() =>
+      guard.canActivate(contextWith(adminClaims(UserRoleEnum.MESA_ADMIN)).context),
+    ).toThrow(ForbiddenException);
+  });
+
+  it('rejects an operator token that carries no role', () => {
+    const reflector = new Reflector();
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(Object.values(UserRoleEnum));
+    const guard = new AdminGuard(reflector);
+    const roleless = { ...adminClaims(), role: null };
+
+    expect(() => guard.canActivate(contextWith(roleless).context)).toThrow(ForbiddenException);
+  });
+
+  it('publishes the actor when the role is one the route declares', () => {
+    const reflector = new Reflector();
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([UserRoleEnum.MESA_ADMIN]);
+    const guard = new AdminGuard(reflector);
     const { context, request } = contextWith(adminClaims(UserRoleEnum.MESA_ADMIN));
 
     expect(guard.canActivate(context)).toBe(true);
