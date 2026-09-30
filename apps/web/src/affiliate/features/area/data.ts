@@ -2,6 +2,7 @@ import 'server-only';
 
 import { redirect } from 'next/navigation';
 import type {
+  AffiliateMaterialsResponse,
   AffiliateMeResponse,
   AffiliateReferralsResponse,
   AffiliateWalletResponse,
@@ -47,5 +48,11 @@ export function fetchReferrals(period: ReferralPeriodEnum): Promise<AffiliateRef
       `/affiliate/me/referrals?period=${period}`,
       FRESH,
     ),
+  );
+}
+
+export function fetchMaterials(): Promise<AffiliateMaterialsResponse> {
+  return readOrSignIn(() =>
+    affiliateApiFetch<AffiliateMaterialsResponse>('/affiliate/me/materials', FRESH),
   );
 }

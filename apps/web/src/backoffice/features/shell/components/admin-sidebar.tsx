@@ -1,11 +1,16 @@
 'use client';
 
-import { BarChart3, Megaphone, Users, Wallet } from 'lucide-react';
+import { BarChart3, GraduationCap, Megaphone, Users, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ComponentType } from 'react';
 import type { SessionUser } from '@/backoffice/features/auth/session';
-import { CAMPAIGNS_PATH, DASHBOARD_PATH, QUEUE_PATH } from '@/backoffice/shared/routes';
+import {
+  CAMPAIGNS_PATH,
+  DASHBOARD_PATH,
+  MATERIALS_PATH,
+  QUEUE_PATH,
+} from '@/backoffice/shared/routes';
 import { PortoLogo } from '@/shared/components/porto-logo';
 import { cn } from '@/shared/lib/cn';
 import { roleLabel } from '../lib/role-label';
@@ -28,6 +33,7 @@ const NAV: NavItem[] = [
   { label: 'Dashboard', icon: BarChart3, href: DASHBOARD_PATH, exact: true },
   { label: 'Afiliados', icon: Users, href: QUEUE_PATH },
   { label: 'Campanhas', icon: Megaphone, href: CAMPAIGNS_PATH },
+  { label: 'Materiais', icon: GraduationCap, href: MATERIALS_PATH },
   { label: 'Pagamentos', icon: Wallet },
 ];
 
