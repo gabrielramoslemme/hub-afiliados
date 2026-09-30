@@ -562,12 +562,15 @@ O tópico é outro, e a assinatura também chega por e-mail para confirmar.
 **5. Gravar as credenciais de produção** no `PortoSecret` (`SetPortoSecretCommand`)
 e, quando houver, a chave do Resend no `AppSecret` (`SetResendKeyCommand`).
 
-**6. Ligar o GitHub.** Três coisas, todas obrigatórias:
+**6. Ligar o GitHub.** Duas coisas, as duas obrigatórias:
 
 - environment **`production`** com *Required reviewers* e *Deployment branches:
   Selected branches → `main`*;
-- secret **`AWS_PROD_DEPLOY_ROLE_ARN`** = output `GitHubOidcRoleArn` da stack de prod;
-- variável de repositório **`PRODUCTION_READY`** = `true`.
+- secret **`AWS_PROD_DEPLOY_ROLE_ARN`** = output `GitHubOidcRoleArn` da stack de prod.
+
+A stack de prod tem que existir antes de qualquer push na `main`: o job
+`images` lê os repositórios do ECR dela, e sem a stack a CI da `main` quebra no
+`describe-stacks`.
 
 **7. Publicar.** O próximo merge na `main` publica as imagens no ECR de prod e
 para no deploy esperando aprovação. A instância está vazia até ele.
@@ -653,10 +656,6 @@ caros; confira na calculadora da AWS antes de repassar o número.
 O fluxo é `feature/*` → PR para `development` → CI verde → merge → deploy em
 dev; e `development` → PR para `main` quando a release estiver pronta → CI
 verde → deploy em prod **esperando aprovação** na aba *Actions*.
-
-A `main` só publica imagem e faz deploy com a variável de repositório
-`PRODUCTION_READY=true`. Sem ela, push na `main` roda a verificação inteira e
-para aí — é o que impede a CI de quebrar antes de a stack de produção existir.
 
 O parâmetro `DeployBranch` da stack é o que amarra uma coisa na outra: a role
 OIDC desta stack só aceita token vindo da branch nomeada ali. A de produção usa
