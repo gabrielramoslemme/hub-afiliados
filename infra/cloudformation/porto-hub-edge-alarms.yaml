@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  porto-hub-afiliados - alarme de 5xx do CloudFront de um ambiente. Sobe SEMPRE
+  em us-east-1, qualquer que seja a regiao da stack principal: o CloudFront so
+  publica metrica la, e alarme do CloudWatch nao le metrica de outra regiao.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, prod]
+    Description: Mesmo valor da stack principal - so entra no nome dos recursos.
+
+  DistributionId:
+    Type: String
+    AllowedPattern: '^E[A-Z0-9]+$'
+    Description: Output DistributionId da stack principal.
+
+  AlertEmail:
+    Type: String
+    AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+    Description: >
+      Quem recebe o alarme. O topico da stack principal esta em outra regiao,
+      entao este e outro, com outra assinatura para confirmar.
+
+Rules:
+  RunsInUsEast1:
+    Assertions:
+      - Assert: !Equals [!Ref 'AWS::Region', 'us-east-1']
+        AssertDescription: >
+          Esta stack precisa estar em us-east-1 - e so la que o CloudFront
+          publica 5xxErrorRate. Em outra regiao o alarme nunca dispara.
+
+Resources:
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'porto-hub-${EnvironmentName}-edge-alerts'
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+
+  # O que o afiliado ve: 5xx na borda, venha da instancia fora do ar ou da
+  # aplicacao quebrando. Metrica padrao do CloudFront, com Region=Global. Sem
+  # trafego nao ha dado, e sem dado nao ha problema.
+  CdnErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'porto-hub-${EnvironmentName}-cdn-5xx'
+      AlarmDescription: Mais de 5% das respostas do CloudFront em 5xx por 5 minutos
+      Namespace: AWS/CloudFront
+      MetricName: 5xxErrorRate
+      Dimensions:
+        - Name: DistributionId
+          Value: !Ref DistributionId
+        - Name: Region
+          Value: Global
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertTopic]
+      OKActions: [!Ref AlertTopic]

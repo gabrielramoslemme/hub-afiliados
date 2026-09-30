@@ -24,7 +24,7 @@ MIGRATION_APPLIED=false
 # shellcheck source=/dev/null
 source "${APP_DIR}/bootstrap.env"
 
-# `umask 077`: o parâmetro traz as credenciais da Porto em claro, e o arquivo
+# `umask 077` por hábito: o parâmetro só traz ARNs de segredo, mas o arquivo
 # fica no disco da instância entre um deploy e outro.
 ( umask 077
   aws ssm get-parameter --name "${CONFIG_PARAM}" --region "${AWS_REGION}" \
@@ -32,6 +32,16 @@ source "${APP_DIR}/bootstrap.env"
 )
 # shellcheck source=/dev/null
 source "${APP_DIR}/stack.env"
+
+# Chaves que nasceram junto com o template de producao. Faltando, a stack ainda
+# roda o template anterior: o `set -u` pararia mais adiante com um "unbound
+# variable" que nao diz o que fazer.
+for key in PORTO_SECRET_ARN PORTO_OAUTH_URL PORTO_API_BASE_URL; do
+  if [ -z "${!key+set}" ]; then
+    echo "FALHA: ${key} ausente em ${CONFIG_PARAM}. Atualize a stack com o template atual antes do deploy." >&2
+    exit 1
+  fi
+done
 
 compose() {
   docker compose -f "${COMPOSE_FILE}" --project-directory "${APP_DIR}" "$@"
@@ -85,7 +95,7 @@ AVISO
 write_secret_files() {
   set +x
 
-  local db_secret app_secret database_url jwt_secret resend_key
+  local db_secret app_secret porto_secret database_url jwt_secret resend_key
 
   db_secret="$(aws secretsmanager get-secret-value --secret-id "${DB_SECRET_ARN}" \
     --region "${AWS_REGION}" --query SecretString --output text)"
@@ -102,6 +112,20 @@ print("postgres://%s:%s@%s:5432/%s" % (
 
   jwt_secret="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["jwt_secret"])' "${app_secret}")"
   resend_key="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["resend_api_key"])' "${app_secret}")"
+
+  # O segredo nasce com REPLACE_ME e é preenchido à mão depois do create. Falhar
+  # aqui, antes de tocar em container, é melhor que subir uma API que só descobre
+  # a credencial falsa na primeira aprovação de cupom.
+  porto_secret="$(aws secretsmanager get-secret-value --secret-id "${PORTO_SECRET_ARN}" \
+    --region "${AWS_REGION}" --query SecretString --output text)"
+  PORTO_CLIENT_ID="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["client_id"])' "${porto_secret}")"
+  PORTO_CLIENT_SECRET="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["client_secret"])' "${porto_secret}")"
+  PORTO_WEBHOOK_SECRET="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("webhook_secret",""))' "${porto_secret}")"
+  if [ "${PORTO_CLIENT_ID}" = REPLACE_ME ] || [ "${PORTO_CLIENT_SECRET}" = REPLACE_ME ]; then
+    echo "FALHA: as credenciais da Porto ainda são REPLACE_ME no ${PORTO_SECRET_ARN}." >&2
+    echo "Grave-as com o comando do output SetPortoSecretCommand e rode o deploy de novo." >&2
+    exit 1
+  fi
 
   # `umask 077` antes de escrever: criar e depois `chmod` deixa uma janela em
   # que o arquivo com a senha do banco é legível por qualquer usuário do host.
@@ -122,13 +146,11 @@ MAIL_PROVIDER=${MAIL_PROVIDER}
 RESEND_API_KEY=${resend_key}
 MAIL_FROM_EMAIL=${MAIL_FROM_EMAIL}
 MAIL_FROM_NAME=Hub de Afiliados
-# Os endereços do gateway não vêm do parâmetro: valem os padrões da API, que são
-# os de homologação.
 PORTO_CLIENT_ID=${PORTO_CLIENT_ID}
 PORTO_CLIENT_SECRET=${PORTO_CLIENT_SECRET}
-# O segredo do webhook de incentivos é opcional de propósito: sem a linha no
-# parâmetro, a API sobe e a rota recusa toda chamada com 401.
-PORTO_WEBHOOK_SECRET=${PORTO_WEBHOOK_SECRET:-}
+# O segredo do webhook de incentivos é opcional de propósito: vazio no segredo,
+# a API sobe e a rota recusa toda chamada com 401.
+PORTO_WEBHOOK_SECRET=${PORTO_WEBHOOK_SECRET}
 # Transfeera (saque via PIX). As três linhas são opcionais de propósito: sem
 # credencial a API sobe com o saque desligado (WDR-003), e sem o segredo a
 # rota do webhook recusa tudo com 401.
@@ -137,10 +159,20 @@ TRANSFEERA_CLIENT_SECRET=${TRANSFEERA_CLIENT_SECRET:-}
 TRANSFEERA_WEBHOOK_SECRET=${TRANSFEERA_WEBHOOK_SECRET:-}
 ENV
 
-    # Os endereços da Transfeera só entram quando o parâmetro os traz. Linha
-    # vazia não cai no padrão da API: chega como '' e o Joi, que exige URL,
-    # derruba o boot. Sem a linha valem os padrões de sandbox; produção põe no
-    # parâmetro TRANSFEERA_AUTH_URL e TRANSFEERA_API_BASE_URL.
+    # Os endereços do gateway só entram quando a stack os traz. Vazios (dev),
+    # valem os padrões da API, que são os de homologação; em prod a stack não
+    # cria sem eles. Linha vazia aqui não serviria: o Joi recusaria a string
+    # vazia em vez de cair no padrão.
+    if [ -n "${PORTO_OAUTH_URL}" ]; then
+      echo "PORTO_OAUTH_URL=${PORTO_OAUTH_URL}" >> "${APP_DIR}/api.env"
+    fi
+    if [ -n "${PORTO_API_BASE_URL}" ]; then
+      echo "PORTO_API_BASE_URL=${PORTO_API_BASE_URL}" >> "${APP_DIR}/api.env"
+    fi
+
+    # Os endereços da Transfeera seguem a mesma regra, mas vêm do parâmetro:
+    # sem a linha valem os padrões de sandbox; produção põe no parâmetro
+    # TRANSFEERA_AUTH_URL e TRANSFEERA_API_BASE_URL.
     local name
     for name in TRANSFEERA_AUTH_URL TRANSFEERA_API_BASE_URL; do
       if [ -n "${!name:-}" ]; then
@@ -309,8 +341,14 @@ DB_RW_PASSWORD="$(read_rw_password)" \
 # Idempotente por `ON CONFLICT DO NOTHING`: rodar a cada deploy não devolve a
 # senha do operador para a do seed, e garante que um ambiente recém-criado já
 # tenha com quem entrar no painel.
-SEED_ADMIN_PASSWORD="$(read_seed_password)" \
-  compose run --rm -e SEED_ADMIN_PASSWORD api npm run seed:prod || rollback
+#
+# Só em dev. Em prod a stack não cria o SeedSecret e deixa SEED_SECRET_ARN
+# vazio: os operadores do seed são contas fictícias com senha compartilhada, e
+# operador de produção nasce à mão, pelo túnel.
+if [ -n "${SEED_SECRET_ARN}" ]; then
+  SEED_ADMIN_PASSWORD="$(read_seed_password)" \
+    compose run --rm -e SEED_ADMIN_PASSWORD api npm run seed:prod || rollback
+fi
 
 compose up -d --remove-orphans --quiet-pull
 

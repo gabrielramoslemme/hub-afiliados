@@ -1,8 +1,8 @@
 name: CI
 
 # `development` e o ambiente de desenvolvimento, `main` e producao. As duas
-# rodam a verificacao inteira; so a `development` termina em deploy, porque a
-# stack de producao ainda nao existe.
+# rodam a verificacao inteira e terminam em deploy - a de producao parada no
+# revisor obrigatorio do environment `production`.
 on:
   push:
     branches: [development, main]
@@ -11,16 +11,23 @@ on:
 # Em PR, commit novo cancela a verificacao do anterior. Em push nao: a execucao
 # pode terminar em deploy, e cancelar no meio deixa a instancia num estado que
 # ninguem pediu.
+#
+# Push na `main` ganha grupo proprio por commit. O deploy-prod para no revisor
+# do environment, e o GitHub conta a espera como execucao em andamento: com um
+# grupo por ref, o push seguinte ficaria inteiro na fila atras da aprovacao, e
+# um terceiro cancelaria o segundo sem verificar nada. Quem serializa os
+# deploys e a concorrencia `deploy-<environment>` do cd.yml.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
+# Dev mora em us-east-1 e prod em ca-central-1 - a regiao segue a branch, como
+# a stack e a role do job `images`.
 env:
-  AWS_REGION: us-east-1
-  STACK_NAME: porto-hub-dev
+  AWS_REGION: ${{ github.ref == 'refs/heads/main' && 'ca-central-1' || 'us-east-1' }}
 
 jobs:
   # Os quatro primeiros jobs rodam em paralelo: o tempo de parede passa a ser o
@@ -121,8 +128,10 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    # A branch escolhe a stack e a role: cada uma so alcanca o proprio ECR.
     env:
-      PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development' }}
+      PUBLISH: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/development' || github.ref == 'refs/heads/main') }}
+      STACK_NAME: ${{ github.ref == 'refs/heads/main' && 'porto-hub-prod' || 'porto-hub-dev' }}
     outputs:
       api-repo: ${{ steps.stack.outputs.ApiRepositoryUri }}
       web-repo: ${{ steps.stack.outputs.WebRepositoryUri }}
@@ -134,7 +143,7 @@ jobs:
         if: env.PUBLISH == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ github.ref == 'refs/heads/main' && secrets.AWS_PROD_DEPLOY_ROLE_ARN || secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Ler os outputs da stack
@@ -198,24 +207,19 @@ jobs:
       environment: development
     secrets: inherit
 
-  # Producao ainda nao tem stack. Quando tiver, o job e este, e nada mais muda:
-  # o `cd.yml` ja recebe `stackName` e `environment` por parametro.
-  #
-  #   deploy-prod:
-  #     name: Deploy prod
-  #     needs: [verify, e2e, infra-lint, images]
-  #     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #     uses: ./.github/workflows/cd.yml
-  #     permissions:
-  #       contents: read
-  #       id-token: write
-  #     with:
-  #       imageTag: ${{ github.sha }}
-  #       stackName: porto-hub-prod
-  #       environment: production
-  #     secrets: inherit
-  #
-  # Falta antes: a stack de producao (o template de hoje tem DeletionPolicy
-  # Delete no RDS, 1 dia de backup e sem Multi-AZ - escolhas de ambiente
-  # descartavel), o `images` publicando no ECR de producao quando a branch e
-  # `main`, e o secret AWS_DEPLOY_ROLE_ARN no escopo do ambiente `production`.
+  # A imagem de producao e reconstruida aqui, a partir do merge na `main`: mesmo
+  # fonte que passou por dev, SHA do merge. O job para no environment
+  # `production`, que exige revisor e so aceita a `main`.
+  deploy-prod:
+    name: Deploy prod
+    needs: [verify, e2e, infra-lint, images]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/cd.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      imageTag: ${{ github.sha }}
+      stackName: porto-hub-prod
+      environment: production
+    secrets: inherit

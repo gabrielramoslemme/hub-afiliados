@@ -13,20 +13,23 @@ import { UseCase } from '../use-case';
 
 /**
  * O que a própria pessoa vê da sua conta. Diferente do detalhe da analista: aqui
- * não há quem decidiu nem motivo de reprovação de terceiros, e CPF e chave PIX
- * saem mascarados — o afiliado já sabe os dele, e um dado completo numa tela
- * aberta em público não serve a ninguém.
+ * não há quem decidiu nem motivo de reprovação de terceiros. CPF, RG e chave PIX
+ * saem inteiros e mascarados: o perfil mostra tudo o que foi cadastrado, mas
+ * abre com a máscara, e quem revela o valor é a própria pessoa.
  */
 export interface AffiliateAccountOutput {
   publicId: string;
   name: string;
   email: string;
+  cpf: string;
   maskedCpf: string;
+  rg: string;
   maskedRg: string;
   occupation: OccupationEnum;
   socialNetwork: SocialNetworkEnum | null;
   socialHandle: string | null;
   pixKeyType: PixKeyTypeEnum;
+  pixKey: string;
   maskedPixKey: string;
   status: AffiliateStatusEnum;
   coupon: string | null;
@@ -51,12 +54,15 @@ export class GetAffiliateAccountUseCase implements UseCase<string, AffiliateAcco
       publicId: affiliate.publicId,
       name: user.name,
       email: user.email,
+      cpf: affiliate.cpf,
       maskedCpf: maskCpf(affiliate.cpf),
+      rg: affiliate.rg,
       maskedRg: maskRg(affiliate.rg),
       occupation: affiliate.occupation,
       socialNetwork: affiliate.socialNetwork,
       socialHandle: affiliate.socialHandle,
       pixKeyType: affiliate.pixKeyType,
+      pixKey: affiliate.pixKey,
       maskedPixKey: maskPixKey(affiliate.pixKeyType, affiliate.pixKey),
       status: affiliate.status,
       coupon: affiliate.coupon?.code ?? null,
