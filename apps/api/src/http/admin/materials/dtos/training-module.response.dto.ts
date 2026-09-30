@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { AdminTrainingModule } from '@porto/contracts';
-import { TrainingModuleOutput } from '@Application/materials/material.output';
+import { TrainingModuleOutput } from '@Application/materials/list-training-modules.use-case';
 
 export class TrainingModuleResponseDto implements AdminTrainingModule {
   @ApiProperty({ format: 'uuid' })

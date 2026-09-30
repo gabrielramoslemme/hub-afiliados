@@ -2,7 +2,7 @@ import { TrainingModuleNotFoundError } from '@Domain/materials/materials.errors'
 import { TrainingModuleInput } from '@Domain/materials/training-module.entity';
 import { TrainingModuleRepository } from '@Domain/materials/training-module.repository';
 import { UseCase } from '../use-case';
-import { TrainingModuleOutput, toTrainingModuleOutput } from './material.output';
+import { TrainingModuleOutput } from './list-training-modules.use-case';
 
 export interface UpdateTrainingModuleInput extends TrainingModuleInput {
   publicId: string;
@@ -21,6 +21,13 @@ export class UpdateTrainingModuleUseCase
     const module = await this.trainingModuleRepository.update(publicId, input);
     if (!module) throw new TrainingModuleNotFoundError();
 
-    return toTrainingModuleOutput(module);
+    return {
+      publicId: module.publicId,
+      title: module.title,
+      description: module.description,
+      videoUrl: module.videoUrl,
+      durationMinutes: module.durationMinutes,
+      position: module.position,
+    };
   }
 }

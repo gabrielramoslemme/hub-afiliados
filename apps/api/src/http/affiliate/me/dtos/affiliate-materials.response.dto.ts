@@ -7,9 +7,9 @@ import {
 } from '@porto/contracts';
 import {
   AffiliateMaterialsOutput,
+  AffiliatePromotionalMaterialOutput,
   AffiliateTrainingModuleOutput,
 } from '@Application/materials/get-affiliate-materials.use-case';
-import { PromotionalMaterialOutput } from '@Application/materials/material.output';
 
 export class AffiliateTrainingModuleDto implements AffiliateTrainingModule {
   @ApiProperty({ format: 'uuid' })
@@ -61,7 +61,7 @@ export class AffiliatePromotionalMaterialDto implements PromotionalMaterial {
   @ApiProperty({ description: 'Em bytes' })
   fileSizeBytes: number;
 
-  static from(output: PromotionalMaterialOutput): AffiliatePromotionalMaterialDto {
+  static from(output: AffiliatePromotionalMaterialOutput): AffiliatePromotionalMaterialDto {
     return {
       id: output.publicId,
       title: output.title,

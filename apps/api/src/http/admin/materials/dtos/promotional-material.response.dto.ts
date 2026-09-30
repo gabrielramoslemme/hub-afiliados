@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { AdminPromotionalMaterial, MaterialFileFormatEnum } from '@porto/contracts';
-import { PromotionalMaterialOutput } from '@Application/materials/material.output';
+import { PromotionalMaterialOutput } from '@Application/materials/list-promotional-materials.use-case';
 
 export class PromotionalMaterialResponseDto implements AdminPromotionalMaterial {
   @ApiProperty({ format: 'uuid' })

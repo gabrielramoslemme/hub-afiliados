@@ -1,22 +1,33 @@
+import { MaterialFileFormatEnum } from '@porto/contracts';
 import { UnknownAffiliateError } from '@Domain/auth/auth.errors';
 import { PromotionalMaterialRepository } from '@Domain/materials/promotional-material.repository';
 import { TrainingModuleRepository } from '@Domain/materials/training-module.repository';
 import { UserRepository } from '@Domain/users/user.repository';
 import { UseCase } from '../use-case';
-import {
-  PromotionalMaterialOutput,
-  TrainingModuleOutput,
-  toPromotionalMaterialOutput,
-  toTrainingModuleOutput,
-} from './material.output';
 
-export interface AffiliateTrainingModuleOutput extends TrainingModuleOutput {
+/** Um módulo da trilha como o afiliado o vê: sem a posição, com o progresso dele. */
+export interface AffiliateTrainingModuleOutput {
+  publicId: string;
+  title: string;
+  description: string;
+  videoUrl: string;
+  durationMinutes: number;
   completed: boolean;
+}
+
+/** Um material para download como o afiliado o vê. */
+export interface AffiliatePromotionalMaterialOutput {
+  publicId: string;
+  title: string;
+  description: string;
+  fileUrl: string;
+  fileFormat: MaterialFileFormatEnum;
+  fileSizeBytes: number;
 }
 
 export interface AffiliateMaterialsOutput {
   trainingModules: AffiliateTrainingModuleOutput[];
-  promotionalMaterials: PromotionalMaterialOutput[];
+  promotionalMaterials: AffiliatePromotionalMaterialOutput[];
 }
 
 /** A aba Materiais: a trilha com o progresso de quem pediu, e os arquivos para baixar. */
@@ -40,10 +51,21 @@ export class GetAffiliateMaterialsUseCase implements UseCase<string, AffiliateMa
 
     return {
       trainingModules: modules.map((module) => ({
-        ...toTrainingModuleOutput(module),
+        publicId: module.publicId,
+        title: module.title,
+        description: module.description,
+        videoUrl: module.videoUrl,
+        durationMinutes: module.durationMinutes,
         completed: completed.has(module.id),
       })),
-      promotionalMaterials: materials.map(toPromotionalMaterialOutput),
+      promotionalMaterials: materials.map((material) => ({
+        publicId: material.publicId,
+        title: material.title,
+        description: material.description,
+        fileUrl: material.fileUrl,
+        fileFormat: material.fileFormat,
+        fileSizeBytes: material.fileSizeBytes,
+      })),
     };
   }
 }
