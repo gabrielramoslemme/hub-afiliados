@@ -1,4 +1,4 @@
-import { videoEmbed, videoThumbnail, vimeoThumbnailFrom } from './video-embed';
+import { videoEmbed, videoThumbnail, vimeoThumbnailFrom } from './video';
 
 describe('videoEmbed', () => {
   it.each([

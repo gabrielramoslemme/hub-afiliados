@@ -1,4 +1,5 @@
-import { fetchMaterials, fetchVideoThumbnails } from '../data';
+import { fetchVideoThumbnails } from '@/shared/http/video-thumbnails';
+import { fetchMaterials } from '../data';
 import { DownloadList } from './download-list';
 import { PageHeading } from './page-heading';
 import { TrainingTrack } from './training-track';

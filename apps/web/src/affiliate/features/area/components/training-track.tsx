@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Clock, ExternalLink, Loader2, Play } from 'lucide-react';
+import { Check, Clock, ExternalLink, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -14,11 +14,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/components/ui/dialog';
+import { VideoCover } from '@/shared/components/video-cover';
 import { cn } from '@/shared/lib/cn';
+import { type ResolvedVideoThumbnail, videoEmbed } from '@/shared/lib/video';
 import { completeTrainingModule } from '../actions/complete-training-module.action';
-import type { ResolvedVideoThumbnail } from '../data';
 import { trainingProgress } from '../lib/training-progress';
-import { videoEmbed } from '../lib/video-embed';
 
 /**
  * A trilha de formação. Cada módulo abre o vídeo num diálogo, sem sair da
@@ -116,7 +116,7 @@ function ModuleRow({
       onClick={onOpen}
       className="flex w-full items-start gap-3 rounded-card border border-ink-200 bg-ink-50 p-3 text-left transition-colors hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
     >
-      <VideoCover thumbnail={thumbnail} />
+      <VideoCover thumbnail={thumbnail} className="w-24 sm:w-36" />
 
       <span className="min-w-0 flex-1">
         <span className="block text-[0.9375rem] font-semibold text-ink-900">{module.title}</span>
@@ -250,41 +250,5 @@ function VideoPlayer({ title, url }: { title: string; url: string }) {
         </a>
       </Button>
     </div>
-  );
-}
-
-/**
- * A prévia do vídeo no card, como no protótipo: a capa com o botão de play por
- * cima. Sem capa, o fundo neutro da marca — o play continua dizendo o que é.
- */
-function VideoCover({ thumbnail }: { thumbnail: ResolvedVideoThumbnail }) {
-  return (
-    <span className="relative flex aspect-video w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border border-ink-200 bg-blue-50 sm:w-36">
-      {thumbnail.kind === 'image' && (
-        // biome-ignore lint/performance/noImgElement: capa de outro domínio, sem o otimizador do Next no meio.
-        <img
-          src={thumbnail.src}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          referrerPolicy="no-referrer"
-          className="absolute inset-0 size-full object-cover"
-        />
-      )}
-      {thumbnail.kind === 'frame' && (
-        <video
-          src={thumbnail.src}
-          preload="metadata"
-          muted
-          playsInline
-          tabIndex={-1}
-          aria-hidden
-          className="pointer-events-none absolute inset-0 size-full object-cover"
-        />
-      )}
-      <span className="relative flex size-9 items-center justify-center rounded-pill bg-white text-blue-600 shadow-card">
-        <Play className="ml-0.5 size-4 fill-current" aria-hidden />
-      </span>
-    </span>
   );
 }

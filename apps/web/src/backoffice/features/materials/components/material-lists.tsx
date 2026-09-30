@@ -4,7 +4,9 @@ import { Clock, ExternalLink, FileDown, PlayCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { AdminPromotionalMaterial, AdminTrainingModule } from '@porto/contracts';
 import { Badge } from '@/shared/components/ui/badge';
+import { VideoCover } from '@/shared/components/video-cover';
 import { formatFileSize } from '@/shared/lib/format';
+import type { ResolvedVideoThumbnail } from '@/shared/lib/video';
 import { reorderPromotionalMaterials } from '../actions/promotional-material.action';
 import { reorderTrainingModules } from '../actions/training-module.action';
 import { PromotionalMaterialRowActions, TrainingModuleRowActions } from './material-actions';
@@ -15,7 +17,14 @@ import { SortableList } from './sortable-list';
   estado da ordem na mão; o resto da tela continua Server Component.
 */
 
-export function TrainingModuleList({ modules }: { modules: AdminTrainingModule[] }) {
+export function TrainingModuleList({
+  modules,
+  thumbnails,
+}: {
+  modules: AdminTrainingModule[];
+  /** A capa de cada módulo, por id, resolvida no servidor. */
+  thumbnails: Record<string, ResolvedVideoThumbnail>;
+}) {
   if (modules.length === 0) {
     return (
       <EmptyState>
@@ -31,6 +40,10 @@ export function TrainingModuleList({ modules }: { modules: AdminTrainingModule[]
       renderItem={(module, index) => (
         <>
           <PositionBadge position={index + 1} />
+          <VideoCover
+            thumbnail={thumbnails[module.id] ?? { kind: 'none' }}
+            className="hidden w-28 sm:flex"
+          />
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-ink-900">{module.title}</p>
             <p className="mt-0.5 line-clamp-2 text-[0.875rem] text-ink-500">{module.description}</p>

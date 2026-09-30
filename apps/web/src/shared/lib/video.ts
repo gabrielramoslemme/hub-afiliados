@@ -28,6 +28,9 @@ export type VideoThumbnail =
   | { kind: 'vimeo'; oembedUrl: string }
   | { kind: 'none' };
 
+/** A capa pronta para a tela: o `vimeo` já virou imagem, ou nada. */
+export type ResolvedVideoThumbnail = Exclude<VideoThumbnail, { kind: 'vimeo' }>;
+
 const YOUTUBE_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com']);
 const YOUTUBE_ID = /^[\w-]{6,}$/;
 const VIMEO_ID = /^\d+$/;

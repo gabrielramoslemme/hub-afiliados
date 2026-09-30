@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { fetchVideoThumbnails } from '@/shared/http/video-thumbnails';
 import { cn } from '@/shared/lib/cn';
 import { fetchPromotionalMaterials, fetchTrainingModules } from '../data';
 import { NewPromotionalMaterialButton, NewTrainingModuleButton } from './material-actions';
@@ -17,6 +18,7 @@ export async function MaterialsScreen() {
     fetchTrainingModules(),
     fetchPromotionalMaterials(),
   ]);
+  const thumbnails = await fetchVideoThumbnails(modules);
 
   return (
     <>
@@ -35,7 +37,7 @@ export async function MaterialsScreen() {
           action={<NewTrainingModuleButton />}
           className="animate-rise [animation-delay:60ms]"
         >
-          <TrainingModuleList modules={modules} />
+          <TrainingModuleList modules={modules} thumbnails={thumbnails} />
         </Panel>
 
         <Panel
