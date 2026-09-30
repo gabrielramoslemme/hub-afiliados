@@ -3,10 +3,6 @@ name: CI
 # `development` e o ambiente de desenvolvimento, `main` e producao. As duas
 # rodam a verificacao inteira e terminam em deploy - a de producao parada no
 # revisor obrigatorio do environment `production`.
-#
-# A `main` so publica e faz deploy com a variavel de repositorio
-# PRODUCTION_READY=true. Sem ela, cada push na `main` antes de a stack de
-# producao existir quebraria no describe-stacks.
 on:
   push:
     branches: [development, main]
@@ -134,7 +130,7 @@ jobs:
       id-token: write
     # A branch escolhe a stack e a role: cada uma so alcanca o proprio ECR.
     env:
-      PUBLISH: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/development' || (github.ref == 'refs/heads/main' && vars.PRODUCTION_READY == 'true')) }}
+      PUBLISH: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/development' || github.ref == 'refs/heads/main') }}
       STACK_NAME: ${{ github.ref == 'refs/heads/main' && 'porto-hub-prod' || 'porto-hub-dev' }}
     outputs:
       api-repo: ${{ steps.stack.outputs.ApiRepositoryUri }}
@@ -217,7 +213,7 @@ jobs:
   deploy-prod:
     name: Deploy prod
     needs: [verify, e2e, infra-lint, images]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PRODUCTION_READY == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/cd.yml
     permissions:
       contents: read
