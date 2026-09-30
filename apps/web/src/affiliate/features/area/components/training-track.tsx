@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Clock, ExternalLink, Loader2 } from 'lucide-react';
+import { Check, Clock, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -15,8 +15,9 @@ import {
   DialogTitle,
 } from '@/shared/components/ui/dialog';
 import { VideoCover } from '@/shared/components/video-cover';
+import { VideoPlayer } from '@/shared/components/video-player';
 import { cn } from '@/shared/lib/cn';
-import { type ResolvedVideoThumbnail, videoEmbed } from '@/shared/lib/video';
+import type { ResolvedVideoThumbnail } from '@/shared/lib/video';
 import { completeTrainingModule } from '../actions/complete-training-module.action';
 import { trainingProgress } from '../lib/training-progress';
 
@@ -209,46 +210,5 @@ function ModuleDialog({
         )}
       </DialogContent>
     </Dialog>
-  );
-}
-
-function VideoPlayer({ title, url }: { title: string; url: string }) {
-  const embed = videoEmbed(url);
-
-  if (embed.kind === 'iframe') {
-    return (
-      <iframe
-        src={embed.src}
-        title={title}
-        className="aspect-video w-full rounded-card border border-ink-200 bg-ink-900"
-        allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-        allowFullScreen
-        referrerPolicy="strict-origin-when-cross-origin"
-      />
-    );
-  }
-
-  if (embed.kind === 'file') {
-    return (
-      // biome-ignore lint/a11y/useMediaCaption: o vídeo é da Porto e chega sem legenda; o texto do módulo acompanha.
-      <video
-        src={embed.src}
-        controls
-        preload="metadata"
-        className="aspect-video w-full rounded-card border border-ink-200 bg-ink-900"
-      />
-    );
-  }
-
-  return (
-    <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 rounded-card border border-ink-200 bg-ink-50 p-6 text-center">
-      <p className="text-[0.9375rem] text-ink-500">Este vídeo abre no site onde está hospedado.</p>
-      <Button asChild variant="outline" size="sm">
-        <a href={embed.href} target="_blank" rel="noreferrer">
-          <ExternalLink aria-hidden />
-          Assistir em nova aba
-        </a>
-      </Button>
-    </div>
   );
 }

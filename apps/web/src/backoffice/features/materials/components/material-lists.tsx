@@ -4,13 +4,13 @@ import { Clock, ExternalLink, FileDown, PlayCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { AdminPromotionalMaterial, AdminTrainingModule } from '@porto/contracts';
 import { Badge } from '@/shared/components/ui/badge';
-import { VideoCover } from '@/shared/components/video-cover';
 import { formatFileSize } from '@/shared/lib/format';
 import type { ResolvedVideoThumbnail } from '@/shared/lib/video';
 import { reorderPromotionalMaterials } from '../actions/promotional-material.action';
 import { reorderTrainingModules } from '../actions/training-module.action';
 import { PromotionalMaterialRowActions, TrainingModuleRowActions } from './material-actions';
 import { SortableList } from './sortable-list';
+import { VideoPreview } from './video-preview-dialog';
 
 /*
   As duas listas da tela. São cliente inteiras porque arrastar precisa do
@@ -40,10 +40,7 @@ export function TrainingModuleList({
       renderItem={(module, index) => (
         <>
           <PositionBadge position={index + 1} />
-          <VideoCover
-            thumbnail={thumbnails[module.id] ?? { kind: 'none' }}
-            className="hidden w-28 sm:flex"
-          />
+          <VideoPreview module={module} thumbnail={thumbnails[module.id] ?? { kind: 'none' }} />
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-ink-900">{module.title}</p>
             <p className="mt-0.5 line-clamp-2 text-[0.875rem] text-ink-500">{module.description}</p>
