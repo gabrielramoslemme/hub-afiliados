@@ -25,6 +25,8 @@ import { DeleteTrainingModuleUseCase } from '@Application/materials/delete-train
 import { GetAffiliateMaterialsUseCase } from '@Application/materials/get-affiliate-materials.use-case';
 import { ListPromotionalMaterialsUseCase } from '@Application/materials/list-promotional-materials.use-case';
 import { ListTrainingModulesUseCase } from '@Application/materials/list-training-modules.use-case';
+import { ReorderPromotionalMaterialsUseCase } from '@Application/materials/reorder-promotional-materials.use-case';
+import { ReorderTrainingModulesUseCase } from '@Application/materials/reorder-training-modules.use-case';
 import { UpdatePromotionalMaterialUseCase } from '@Application/materials/update-promotional-material.use-case';
 import { UpdateTrainingModuleUseCase } from '@Application/materials/update-training-module.use-case';
 import { ApplyIncentiveEventUseCase } from '@Application/sales/apply-incentive-event.use-case';
@@ -145,10 +147,12 @@ const USE_CASES = [
   provideUseCase(CreateTrainingModuleUseCase, [TRAINING_MODULE_REPOSITORY]),
   provideUseCase(UpdateTrainingModuleUseCase, [TRAINING_MODULE_REPOSITORY]),
   provideUseCase(DeleteTrainingModuleUseCase, [TRAINING_MODULE_REPOSITORY]),
+  provideUseCase(ReorderTrainingModulesUseCase, [TRAINING_MODULE_REPOSITORY]),
   provideUseCase(ListPromotionalMaterialsUseCase, [PROMOTIONAL_MATERIAL_REPOSITORY]),
   provideUseCase(CreatePromotionalMaterialUseCase, [PROMOTIONAL_MATERIAL_REPOSITORY]),
   provideUseCase(UpdatePromotionalMaterialUseCase, [PROMOTIONAL_MATERIAL_REPOSITORY]),
   provideUseCase(DeletePromotionalMaterialUseCase, [PROMOTIONAL_MATERIAL_REPOSITORY]),
+  provideUseCase(ReorderPromotionalMaterialsUseCase, [PROMOTIONAL_MATERIAL_REPOSITORY]),
   provideUseCase(GetAffiliateMaterialsUseCase, [
     USER_REPOSITORY,
     TRAINING_MODULE_REPOSITORY,

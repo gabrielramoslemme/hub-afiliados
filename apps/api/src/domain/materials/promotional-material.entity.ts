@@ -20,5 +20,5 @@ export interface PromotionalMaterialEntity {
 
 export type PromotionalMaterialInput = Pick<
   PromotionalMaterialEntity,
-  'title' | 'description' | 'fileUrl' | 'fileFormat' | 'fileSizeBytes' | 'position'
+  'title' | 'description' | 'fileUrl' | 'fileFormat' | 'fileSizeBytes'
 >;

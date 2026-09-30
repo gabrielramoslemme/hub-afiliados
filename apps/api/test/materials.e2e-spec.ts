@@ -18,7 +18,6 @@ const MODULE = {
   description: 'Quem somos nós? O que nós proporcionamos?',
   videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
   durationMinutes: 5,
-  position: 1,
 };
 
 const MATERIAL = {
@@ -27,7 +26,6 @@ const MATERIAL = {
   fileUrl: 'https://cdn.example.com/afiliados/midia-kit.pdf',
   fileFormat: 'PDF',
   fileSizeBytes: 2_400_000,
-  position: 1,
 };
 
 /*
@@ -93,21 +91,85 @@ describe('Training modules and promotional materials (e2e)', () => {
     await e2e.app.close();
   });
 
-  it('hands the affiliate the track in position order, ties broken by creation', async () => {
-    await createModule({ title: 'Módulo 3 - Fechadura Digital', position: 3 });
-    await createModule({ title: 'Módulo 1 - Porto Serviço', position: 1 });
-    await createModule({ title: 'Módulo 2 - Encanador', position: 2 });
-    await createModule({ title: 'Módulo 2 - Encanador (extra)', position: 2 });
+  function titlesOf(body: { trainingModules: Array<{ title: string }> }): string[] {
+    return body.trainingModules.map((module) => module.title);
+  }
+
+  function reorder(resource: string, ids: string[]) {
+    return asOperator('put', `/v1/admin/${resource}/order`).send({ ids });
+  }
+
+  it('appends a new module at the end of the track', async () => {
+    await createModule({ title: 'Módulo 1 - Porto Serviço' });
+    await createModule({ title: 'Módulo 2 - Encanador' });
+
+    const response = await asOperator('get', '/v1/admin/training-modules').expect(200);
+
+    expect(response.body.map((module: { position: number }) => module.position)).toEqual([1, 2]);
+  });
+
+  it('hands the affiliate the track in the order the operator dragged it to', async () => {
+    const first = await createModule({ title: 'Módulo 1 - Porto Serviço' });
+    const second = await createModule({ title: 'Módulo 2 - Encanador' });
+    const third = await createModule({ title: 'Módulo 3 - Fechadura Digital' });
     const token = await signedIn(MARINA);
 
-    const response = await materials(token).expect(200);
+    await reorder('training-modules', [third, first, second]).expect(204);
 
-    expect(response.body.trainingModules.map((module: { title: string }) => module.title)).toEqual([
+    expect(titlesOf((await materials(token).expect(200)).body)).toEqual([
+      'Módulo 3 - Fechadura Digital',
       'Módulo 1 - Porto Serviço',
       'Módulo 2 - Encanador',
-      'Módulo 2 - Encanador (extra)',
+    ]);
+  });
+
+  it('reorders the downloads through the same rule', async () => {
+    const kit = (
+      await asOperator('post', '/v1/admin/promotional-materials').send(MATERIAL).expect(201)
+    ).body.id;
+    const creatives = (
+      await asOperator('post', '/v1/admin/promotional-materials')
+        .send({ ...MATERIAL, title: 'Criativos Estáticos' })
+        .expect(201)
+    ).body.id;
+
+    await reorder('promotional-materials', [creatives, kit]).expect(204);
+
+    const response = await asOperator('get', '/v1/admin/promotional-materials').expect(200);
+    expect(response.body.map((material: { title: string }) => material.title)).toEqual([
+      'Criativos Estáticos',
+      'Mídia Kit',
+    ]);
+  });
+
+  /* Outra aba criou um módulo depois que esta carregou: gravar a ordem velha deixaria o novo sem lugar. */
+  it('refuses an order that leaves out a module created meanwhile, writing nothing', async () => {
+    const first = await createModule({ title: 'Módulo 1 - Porto Serviço' });
+    const second = await createModule({ title: 'Módulo 2 - Encanador' });
+    await createModule({ title: 'Módulo 3 - Fechadura Digital' });
+
+    const response = await reorder('training-modules', [second, first]).expect(409);
+
+    expect(response.body.message).toBe(
+      'A lista mudou enquanto você reorganizava. Atualize a página e tente de novo.',
+    );
+    const list = await asOperator('get', '/v1/admin/training-modules').expect(200);
+    expect(list.body.map((module: { title: string }) => module.title)).toEqual([
+      'Módulo 1 - Porto Serviço',
+      'Módulo 2 - Encanador',
       'Módulo 3 - Fechadura Digital',
     ]);
+  });
+
+  it.each([
+    ['a repeated id', (id: string) => [id, id], 'A ordem repete um item'],
+    ['an id that is not a uuid', () => ['modulo-1'], 'Item inválido na ordem'],
+  ])('refuses an order with %s', async (_case, ids, message) => {
+    const id = await createModule();
+
+    const response = await reorder('training-modules', ids(id)).expect(400);
+
+    expect(response.body.message).toEqual([message]);
   });
 
   it('hands out the public id and never the serial one', async () => {
@@ -117,12 +179,10 @@ describe('Training modules and promotional materials (e2e)', () => {
 
     const response = await materials(token).expect(200);
 
-    const { position: _modulePosition, ...module } = MODULE;
-    const { position: _materialPosition, ...material } = MATERIAL;
     const uuid = expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-/);
     expect(response.body).toEqual({
-      trainingModules: [{ ...module, id: uuid, completed: false }],
-      promotionalMaterials: [{ ...material, id: uuid }],
+      trainingModules: [{ ...MODULE, id: uuid, completed: false }],
+      promotionalMaterials: [{ ...MATERIAL, id: uuid }],
     });
   });
 
@@ -179,6 +239,7 @@ describe('Training modules and promotional materials (e2e)', () => {
       id: moduleId,
       title: 'Módulo 1 - Quem somos',
       durationMinutes: 7,
+      position: 1,
     });
     expect((await materials(token).expect(200)).body.trainingModules[0].completed).toBe(true);
   });

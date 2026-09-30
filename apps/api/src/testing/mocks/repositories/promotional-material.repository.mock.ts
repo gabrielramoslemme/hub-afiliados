@@ -6,4 +6,5 @@ export const promotionalMaterialRepositoryMock =
     create: jest.fn(),
     update: jest.fn().mockResolvedValue(null),
     delete: jest.fn().mockResolvedValue(false),
+    reorder: jest.fn().mockResolvedValue(false),
   });

@@ -14,6 +14,7 @@ import {
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiCreatedResponse,
   ApiNoContentResponse,
   ApiNotFoundResponse,
@@ -24,10 +25,12 @@ import {
 import { CreatePromotionalMaterialUseCase } from '@Application/materials/create-promotional-material.use-case';
 import { DeletePromotionalMaterialUseCase } from '@Application/materials/delete-promotional-material.use-case';
 import { ListPromotionalMaterialsUseCase } from '@Application/materials/list-promotional-materials.use-case';
+import { ReorderPromotionalMaterialsUseCase } from '@Application/materials/reorder-promotional-materials.use-case';
 import { UpdatePromotionalMaterialUseCase } from '@Application/materials/update-promotional-material.use-case';
 import { AdminGuard } from '@Http/shared/guards/admin.guard';
 import { PromotionalMaterialRequestDto } from './dtos/promotional-material.request.dto';
 import { PromotionalMaterialResponseDto } from './dtos/promotional-material.response.dto';
+import { ReorderMaterialsRequestDto } from './dtos/reorder-materials.request.dto';
 
 /** Os arquivos de divulgação que o afiliado baixa na aba Materiais. */
 @ApiTags('admin/promotional-materials')
@@ -41,6 +44,7 @@ export class AdminPromotionalMaterialsController {
     private readonly createPromotionalMaterialUseCase: CreatePromotionalMaterialUseCase,
     private readonly updatePromotionalMaterialUseCase: UpdatePromotionalMaterialUseCase,
     private readonly deletePromotionalMaterialUseCase: DeletePromotionalMaterialUseCase,
+    private readonly reorderPromotionalMaterialsUseCase: ReorderPromotionalMaterialsUseCase,
   ) {}
 
   @Get()
@@ -60,6 +64,19 @@ export class AdminPromotionalMaterialsController {
     return PromotionalMaterialResponseDto.from(
       await this.createPromotionalMaterialUseCase.execute(body),
     );
+  }
+
+  /**
+   * A ordem nova de os downloads, com todos os itens. Declarada antes de `:publicId`,
+   * que casaria `order` e o recusaria como uuid inválido.
+   */
+  @Put('order')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiNoContentResponse({ description: 'Ordem gravada' })
+  @ApiBadRequestResponse({ description: 'Lista vazia, repetida ou com id inválido' })
+  @ApiConflictResponse({ description: 'A lista não é mais a dos itens que existem' })
+  reorder(@Body() body: ReorderMaterialsRequestDto): Promise<void> {
+    return this.reorderPromotionalMaterialsUseCase.execute(body.ids);
   }
 
   @Put(':publicId')

@@ -15,3 +15,11 @@ export class PromotionalMaterialNotFoundError extends DomainError {
     super('Material de divulgação não encontrado.');
   }
 }
+
+export class MaterialOrderOutdatedError extends DomainError {
+  readonly kind = DomainErrorKindEnum.CONFLICT;
+
+  constructor() {
+    super('A lista mudou enquanto você reorganizava. Atualize a página e tente de novo.');
+  }
+}

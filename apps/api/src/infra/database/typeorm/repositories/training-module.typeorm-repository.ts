@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import {
   TrainingModuleEntity,
   TrainingModuleInput,
@@ -8,6 +8,7 @@ import {
 import { TrainingModuleRepository } from '@Domain/materials/training-module.repository';
 import { TrainingModuleTypeormEntity } from '@Infra/database/typeorm/entities/training-module.typeorm-entity';
 import { TrainingModuleCompletionTypeormEntity } from '@Infra/database/typeorm/entities/training-module-completion.typeorm-entity';
+import { nextPosition, reorderByPublicId } from './reorder-by-public-id';
 
 @Injectable()
 export class TrainingModuleTypeormRepository implements TrainingModuleRepository {
@@ -16,6 +17,7 @@ export class TrainingModuleTypeormRepository implements TrainingModuleRepository
     private readonly repository: Repository<TrainingModuleTypeormEntity>,
     @InjectRepository(TrainingModuleCompletionTypeormEntity)
     private readonly completionRepository: Repository<TrainingModuleCompletionTypeormEntity>,
+    private readonly dataSource: DataSource,
   ) {}
 
   list(): Promise<TrainingModuleEntity[]> {
@@ -28,7 +30,16 @@ export class TrainingModuleTypeormRepository implements TrainingModuleRepository
   }
 
   create(input: TrainingModuleInput): Promise<TrainingModuleEntity> {
-    return this.repository.save(this.repository.create(input));
+    return this.dataSource.transaction(async (manager) => {
+      const position = await nextPosition(manager, TrainingModuleTypeormEntity);
+      return manager.save(manager.create(TrainingModuleTypeormEntity, { ...input, position }));
+    });
+  }
+
+  reorder(publicIds: string[]): Promise<boolean> {
+    return this.dataSource.transaction((manager) =>
+      reorderByPublicId(manager, TrainingModuleTypeormEntity, publicIds),
+    );
   }
 
   async update(publicId: string, input: TrainingModuleInput): Promise<TrainingModuleEntity | null> {

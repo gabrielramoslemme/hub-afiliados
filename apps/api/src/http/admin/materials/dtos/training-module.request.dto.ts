@@ -3,7 +3,10 @@ import { IsInt, IsString, IsUrl, Length, Max, MaxLength, Min } from 'class-valid
 import { TrainingModuleRequest } from '@porto/contracts';
 import { HTTPS_URL, trim } from './material-fields';
 
-/** Espelha o `trainingModuleSchema`. Serve ao POST e ao PUT, que troca o módulo inteiro. */
+/**
+ * Espelha o `trainingModuleSchema`. Serve ao POST e ao PUT, que troca o módulo
+ * inteiro. A posição não entra: muda só pela rota `order`.
+ */
 export class TrainingModuleRequestDto implements TrainingModuleRequest {
   @ApiProperty({ minLength: 3, maxLength: 120, example: 'Módulo 1 - Porto Serviço' })
   @trim()
@@ -29,10 +32,4 @@ export class TrainingModuleRequestDto implements TrainingModuleRequest {
   @Min(1, { message: 'A duração começa em 1 minuto' })
   @Max(600, { message: 'A duração vai até 600 minutos' })
   durationMinutes: number;
-
-  @ApiProperty({ minimum: 1, maximum: 999, description: 'A ordem na trilha' })
-  @IsInt({ message: 'A posição deve ser um número inteiro' })
-  @Min(1, { message: 'A posição começa em 1' })
-  @Max(999, { message: 'A posição vai até 999' })
-  position: number;
 }

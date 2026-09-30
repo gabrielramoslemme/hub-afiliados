@@ -33,10 +33,4 @@ export class PromotionalMaterialRequestDto implements PromotionalMaterialRequest
   @Min(1, { message: 'Informe o tamanho do arquivo' })
   @Max(2_000_000_000, { message: 'O arquivo pode ter até 2000 MB' })
   fileSizeBytes: number;
-
-  @ApiProperty({ minimum: 1, maximum: 999, description: 'A ordem na lista' })
-  @IsInt({ message: 'A posição deve ser um número inteiro' })
-  @Min(1, { message: 'A posição começa em 1' })
-  @Max(999, { message: 'A posição vai até 999' })
-  position: number;
 }

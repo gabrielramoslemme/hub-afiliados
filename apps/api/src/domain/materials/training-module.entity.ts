@@ -15,10 +15,10 @@ export interface TrainingModuleEntity {
   updatedAt: Date;
 }
 
-/** O que o operador escreve. O resto a tabela preenche. */
+/** O que o operador escreve. A posição sai da ordem da lista, não do formulário. */
 export type TrainingModuleInput = Pick<
   TrainingModuleEntity,
-  'title' | 'description' | 'videoUrl' | 'durationMinutes' | 'position'
+  'title' | 'description' | 'videoUrl' | 'durationMinutes'
 >;
 
 /** Um módulo que o afiliado marcou como assistido. */
