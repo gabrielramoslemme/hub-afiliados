@@ -1,16 +1,21 @@
-import type { INestApplication, ModuleMetadata } from '@nestjs/common';
+import { type INestApplication, Module, type ModuleMetadata } from '@nestjs/common';
 import { Test, type TestingModuleBuilder } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { COUPON_GATEWAY } from '../src/domain/coupons/coupon-gateway';
 import { PAYOUT_GATEWAY } from '../src/domain/withdrawals/payout-gateway';
+import { JobsModule } from '../src/infra/di/jobs/jobs.module';
 import { MAIL_PROVIDER } from '../src/infra/services/email/mail-provider.interface';
 import { FakeCouponGateway } from '../src/testing/fakes/fake-coupon.gateway';
 import { FakeMailProvider } from '../src/testing/fakes/fake-mail.provider';
 import { FakePayoutGateway } from '../src/testing/fakes/fake-payout.gateway';
 
 type Imports = NonNullable<ModuleMetadata['imports']>;
+
+/** No lugar do `JobsModule`: o e2e chama a reconciliação pelo use case, sem cron. */
+@Module({})
+class NoJobsModule {}
 
 /*
   Ponto de partida de todo e2e. A API sempre fala com a Porto: o `AppModule` cru
@@ -29,7 +34,9 @@ export function createE2eTestingModule(extraImports: Imports = []): TestingModul
     .overrideProvider(MAIL_PROVIDER)
     .useValue(new FakeMailProvider())
     .overrideProvider(PAYOUT_GATEWAY)
-    .useValue(new FakePayoutGateway());
+    .useValue(new FakePayoutGateway())
+    .overrideModule(JobsModule)
+    .useModule(NoJobsModule);
 }
 
 export interface E2eApp {

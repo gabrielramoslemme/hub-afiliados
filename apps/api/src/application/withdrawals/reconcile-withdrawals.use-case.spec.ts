@@ -121,9 +121,52 @@ describe('ReconcileWithdrawalsUseCase', () => {
     expect(result.retried).toBe(1);
   });
 
-  // `listStale` ordena por `updatedAt`, e uma linha que quebra sem ser recusa
-  // nem indisponibilidade nunca muda esse campo: sem isolar por linha, ela
-  // travaria toda rodada futura atrás dela, para sempre.
+  // `listStale` devolve os mais antigos por `updatedAt`: a linha que a tentativa
+  // não fecha precisa ir para o fim da fila, senão cinquenta presas travam os
+  // saques mais novos atrás delas, rodada após rodada.
+  it('claims each withdrawal before asking the provider again', async () => {
+    stale(WithdrawalStatusEnum.REQUESTED, [requested]);
+    payoutGateway.requestPayout.mockRejectedValue(new PayoutProviderUnavailableError());
+
+    await useCase.execute(INPUT);
+
+    expect(withdrawalRepository.claimForAttempt).toHaveBeenCalledWith(
+      requested.publicId,
+      WithdrawalStatusEnum.REQUESTED,
+    );
+    expect(withdrawalRepository.claimForAttempt.mock.invocationCallOrder[0]).toBeLessThan(
+      payoutGateway.requestPayout.mock.invocationCallOrder[0],
+    );
+  });
+
+  // A lista foi lida sem lock, e a rodada pode levar minutos: um webhook pode ter
+  // fechado o saque, e as vendas dele já estar em outro. Reenviar esse pedido
+  // arriscaria pagar duas vezes.
+  it('does not ask again for a withdrawal that changed since the listing', async () => {
+    stale(WithdrawalStatusEnum.REQUESTED, [requested]);
+    withdrawalRepository.claimForAttempt.mockResolvedValue(false);
+
+    const result = await useCase.execute(INPUT);
+
+    expect(payoutGateway.requestPayout).not.toHaveBeenCalled();
+    expect(result).toEqual({ retried: 0, settled: 0, failed: [] });
+  });
+
+  it('claims a processing withdrawal before looking its batch up, and skips it once changed', async () => {
+    stale(WithdrawalStatusEnum.PROCESSING, [processing]);
+    withdrawalRepository.claimForAttempt.mockResolvedValue(false);
+
+    await useCase.execute(INPUT);
+
+    expect(withdrawalRepository.claimForAttempt).toHaveBeenCalledWith(
+      processing.publicId,
+      WithdrawalStatusEnum.PROCESSING,
+    );
+    expect(payoutGateway.findPayout).not.toHaveBeenCalled();
+  });
+
+  // Uma linha que quebra de um jeito imprevisto não pode derrubar os saques
+  // que vêm depois dela na mesma rodada.
   it('collects an unexpected failure on a requested row without stopping the round', async () => {
     const second = buildWithdrawal({ status: WithdrawalStatusEnum.REQUESTED });
     withdrawalRepository.listStale.mockImplementation(async (input) => {
@@ -218,6 +261,18 @@ describe('ReconcileWithdrawalsUseCase', () => {
     await useCase.execute(INPUT);
 
     expect(withdrawalRepository.applyPayoutUpdate).not.toHaveBeenCalled();
+  });
+
+  // A queda do fornecedor é esperada: vai para a próxima rodada, e não para a
+  // lista que o job loga como erro para alguém conferir.
+  it('leaves a lookup for the next round while the provider is down, without reporting it', async () => {
+    stale(WithdrawalStatusEnum.PROCESSING, [processing]);
+    payoutGateway.findPayout.mockRejectedValue(new PayoutProviderUnavailableError());
+
+    const result = await useCase.execute(INPUT);
+
+    expect(withdrawalRepository.applyPayoutUpdate).not.toHaveBeenCalled();
+    expect(result.failed).toEqual([]);
   });
 
   it('collects an unexpected failure from findPayout without stopping the round', async () => {

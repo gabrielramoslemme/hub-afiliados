@@ -28,8 +28,8 @@ describe('seedOperators (integration)', () => {
   });
 
   afterAll(async () => {
-    // `app.close()`, não só `dataSource.destroy()`: é o que desliga o cron do
-    // `JobsModule` — sem isso o timer da reconciliação prende o Jest de pé.
+    // `app.close()`, não só `dataSource.destroy()`: fecha tudo o que o
+    // `AppModule` abriu, não só o pool do banco.
     await app.close();
   });
 

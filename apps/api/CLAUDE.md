@@ -99,7 +99,7 @@ Quem liga token a implementação é `*.module.ts`, em dois passos: o `Repositor
 | bcrypt | `PasswordHasher` (`src/domain/auth/`) | `BcryptPasswordHasher` |
 | `node:crypto` | `TokenGenerator` (`src/domain/auth/`) | `CryptoTokenGenerator` |
 | HMAC do webhook e `PORTO_WEBHOOK_SECRET` | `WebhookSignatureVerifier` (`src/domain/auth/`) | `HmacWebhookSignatureVerifier` |
-| Transfeera (saque via PIX) | `PayoutGateway` (`src/domain/withdrawals/`) | `TransfeeraPayoutGateway` e o `TransfeeraTokenProvider` |
+| Transfeera (saque via PIX) | `PayoutGateway` e `PayoutNotificationTranslator` (`src/domain/withdrawals/`) | `TransfeeraPayoutGateway`, o `TransfeeraTokenProvider` e o `TransfeeraNotificationTranslator` |
 | Assinatura do webhook da Transfeera | `PayoutWebhookSignatureVerifier` (`src/domain/auth/`) | `TransfeeraWebhookSignatureVerifier` |
 | O relógio | `Clock` (`src/domain/shared/`) | `SystemClock` |
 | `APP_BASE_URL` | `LinkBuilder` (`src/domain/notifications/`) | `AppLinkBuilder` |
@@ -145,7 +145,7 @@ const USE_CASES = [
 | `src/domain/**` | `typeorm`, `@nestjs/typeorm`, `@Infra/*`, `@Http/*`, `@Application/*` |
 | `src/application/**` | `@nestjs/common` **inteiro**, `@nestjs/swagger`, `class-validator`, `express`, `typeorm`, `@nestjs/typeorm`, `@Infra/*`, `@Http/*` |
 | `src/infra/**` | `@Application/*` e `@Http/*` — infra implementa contrato do domínio, não chama use case |
-| `src/http/**` | `@Infra/database/*` — controller chama use case, não repositório |
+| `src/http/**` | `@Infra/*` — controller chama use case, não repositório, e recebe o adapter de fornecedor por contrato do domínio |
 
 **As exceções são o wiring, e só ele:** `src/infra/di/**` conhece a application porque montar o use case é o trabalho dele, e o `*.module.ts` do canal conhece infra pelo mesmo motivo. **`src/application/**` não tem exceção nenhuma** — não existe arquivo dessa camada que possa importar Nest.
 
@@ -311,7 +311,7 @@ O `HttpExceptionFilter` global normaliza toda resposta de erro:
   ```
 
 - **Traduzir `kind` para status é do filtro**, e é a tabela inteira: `NOT_FOUND` 404 · `CONFLICT` 409 · `INVALID_INPUT` 400 · `UNAUTHORIZED` 401 · `FORBIDDEN` 403 · `UNAVAILABLE` 503.
-- `code` vem de um `*ErrorCodeEnum` de `@porto/contracts` (`AuthErrorCodeEnum`, `RegistrationErrorCodeEnum`, `CouponErrorCodeEnum`, `IncentiveErrorCodeEnum`) quando o cliente precisa distinguir o caso para escolher a mensagem; nas demais respostas é `null`.
+- `code` vem de um `*ErrorCodeEnum` de `@porto/contracts` (`AuthErrorCodeEnum`, `RegistrationErrorCodeEnum`, `CouponErrorCodeEnum`, `IncentiveErrorCodeEnum`, `WithdrawalErrorCodeEnum`) quando o cliente precisa distinguir o caso para escolher a mensagem; nas demais respostas é `null`.
 - **Guard e controller continuam podendo lançar exceção do Nest** — eles já são a camada de HTTP.
 - 5xx é logado com stack e responde `Erro interno`: a mensagem original pode carregar nome de coluna ou detalhe de schema. 4xx não é logado. **Não logue a exceção você mesmo** — o filtro já faz.
 - O `ValidationPipe` global usa `whitelist`, `forbidNonWhitelisted`, `transform` e `stopAtFirstError`: campo fora do DTO devolve 400 sozinho, com uma mensagem por campo. Ele é montado em `configureApp` (`src/configure-app.ts`), junto com o filtro — nunca direto no `main.ts`, senão o e2e volta a testar uma configuração que produção não usa.
@@ -419,8 +419,10 @@ Spec: `porto-hub-afiliados-docs/docs/specs/22-saque-via-pix.md`.
   Cada saque é tratado por si: um erro inesperado num não trava os demais da rodada, e o `publicId` dele
   entra logado como falha, nunca a exceção. Se nem o `pg_advisory_unlock` nem o `unlock_all` de socorro
   confirmarem que a sessão soltou o lock, a conexão é descartada em vez de voltar ao pool — devolvê-la
-  presa travaria toda rodada futura. O cron só é registrado fora de `NODE_ENV=test` (`jobs.module.ts`);
-  dentro dele, o `AppModule` de cada e2e spec criaria doze `CronJob` reais e prenderia o Jest de pé.
+  presa travaria toda rodada futura. O e2e troca o `JobsModule` por um vazio (`createE2eTestingModule`):
+  o `AppModule` de cada spec criaria um `CronJob` real e prenderia o Jest de pé. A reconciliação entra
+  no e2e pelo use case. Antes de cada tentativa a rodada reivindica o saque (`claimForAttempt`): confere
+  que o status não mudou desde a leitura e o manda para o fim da fila, para os presos não travarem os novos.
 - **Sem credencial o saque fica desligado** (WDR-003) e a reconciliação não roda. `TRANSFEERA_*` é opcional
   de propósito.
 - **`payout_events` guarda o corpo sem chave PIX nem CPF** (`redactTransfeeraPayload`). Nenhum log leva

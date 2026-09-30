@@ -34,6 +34,7 @@ export interface ReconcileWithdrawalsOutput {
 }
 
 const MINUTE_MS = 60_000;
+const { REQUESTED, PROCESSING } = WithdrawalStatusEnum;
 
 function isOutage(error: unknown): boolean {
   return (
@@ -68,19 +69,27 @@ export class ReconcileWithdrawalsUseCase
     if (!this.payoutGateway.isEnabled()) return { retried: 0, settled: 0, failed: [] };
 
     const now = this.clock.now();
-    // Uma linha que quebra de um jeito imprevisto não pode travar a rodada
-    // inteira: `listStale` ordena por `updatedAt`, e uma linha que nunca muda
-    // esse campo travaria todo o resto atrás dela, rodada após rodada.
+    /*
+      Cada saque é reivindicado antes da tentativa. `listStale` devolve os mais
+      antigos por `updatedAt`: sem tocar o campo, a linha que a tentativa não
+      fecha voltaria à frente na próxima rodada, e cinquenta assim travariam os
+      mais novos para sempre. E a lista foi lida sem lock — a reivindicação
+      confere o status de novo, para não reenviar um saque que um webhook fechou
+      no meio da rodada, com as vendas dele talvez já em outro saque.
+    */
     const failed: string[] = [];
 
     const requested = await this.withdrawalRepository.listStale({
-      status: WithdrawalStatusEnum.REQUESTED,
+      status: REQUESTED,
       updatedBefore: new Date(now.getTime() - input.retryAfterMinutes * MINUTE_MS),
       limit: input.limit,
     });
     let retried = 0;
     for (const withdrawal of requested) {
       try {
+        if (!(await this.withdrawalRepository.claimForAttempt(withdrawal.publicId, REQUESTED))) {
+          continue;
+        }
         if (await this.retry(withdrawal)) retried += 1;
       } catch {
         failed.push(withdrawal.publicId);
@@ -88,13 +97,16 @@ export class ReconcileWithdrawalsUseCase
     }
 
     const processing = await this.withdrawalRepository.listStale({
-      status: WithdrawalStatusEnum.PROCESSING,
+      status: PROCESSING,
       updatedBefore: new Date(now.getTime() - input.staleAfterMinutes * MINUTE_MS),
       limit: input.limit,
     });
     let settled = 0;
     for (const withdrawal of processing) {
       try {
+        if (!(await this.withdrawalRepository.claimForAttempt(withdrawal.publicId, PROCESSING))) {
+          continue;
+        }
         const outcome = await this.settle(withdrawal, now);
         if (outcome === 'settled') settled += 1;
         if (outcome === 'divergent') failed.push(withdrawal.publicId);
