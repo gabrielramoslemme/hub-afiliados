@@ -158,7 +158,9 @@ O extrato do hero é a exceção declarada: `showcase` guarda valores de exemplo
 
 A aba Materiais do afiliado (`/minha-conta/materiais`) e a tela que a alimenta no painel (`/admin/materiais`) falam com `/v1/affiliate/me/materials` e `/v1/admin/training-modules|promotional-materials`. **Vídeo e arquivo ficam onde a Porto os hospeda**: o operador cola a URL, e o formulário pede o tamanho em MB — o `promotionalMaterialFormSchema` converte para bytes, então o Server Action recebe o formulário cru, não o valor já convertido.
 
-O vídeo toca num diálogo, e `lib/video-embed.ts` decide como: YouTube (pelo `youtube-nocookie.com`) e Vimeo em `<iframe>`, arquivo `.mp4`/`.webm` no `<video>`, qualquer outro endereço como link em nova aba. **Player novo exige entrada no `frame-src` do CSP**, em `next.config.mjs` — sem ela o diálogo abre vazio e o console só acusa a política. "Marcar como assistido" é a palavra do afiliado: o player é de outro domínio e o Hub não sabe o que ele tocou.
+**A ordem é arrastando, nunca digitando.** A posição saiu dos dois formulários: item novo entra no fim, e `SortableList` (dnd-kit, com alça, teclado e anúncios em pt-BR) manda a lista inteira para `PUT .../order`. Inteira, porque é assim que a API recusa com 409 a ordem de uma tela aberta antes de outro operador criar ou apagar um item. O `DndContext` leva `id` de `useId`: sem ele, com duas listas na tela, o contador interno do dnd-kit diverge entre servidor e cliente e a hidratação reclama.
+
+O vídeo toca num diálogo, e `lib/video-embed.ts` decide como: YouTube (pelo `youtube-nocookie.com`) e Vimeo em `<iframe>`, arquivo `.mp4`/`.webm` no `<video>`, qualquer outro endereço como link em nova aba. A mesma leitura do endereço dá a capa do card: a miniatura do YouTube pelo id, o primeiro quadro do arquivo pelo próprio `<video>`, e a do Vimeo pela consulta oEmbed, que `fetchVideoThumbnails` faz no servidor com cache de um dia — falhou, o card fica com a capa neutra. **Player ou CDN de capa novo exige entrada no CSP** (`frame-src` e `img-src`, em `next.config.mjs`) — sem ela o diálogo abre vazio ou a capa some, e só o console acusa a política. "Marcar como assistido" é a palavra do afiliado: o player é de outro domínio e o Hub não sabe o que ele tocou.
 
 ## Sessão e acesso
 
@@ -232,12 +234,12 @@ rastreamento.
 
 O ambiente provisionado tem CloudFront (e a Imperva da Porto na frente dele). O
 Next compara o header `Origin` com `X-Forwarded-Host` e **aborta a ação** quando
-divergem — `Invalid Server Actions request`, HTTP 500. Como são vinte e duas
+divergem — `Invalid Server Actions request`, HTTP 500. Como são vinte e quatro
 actions e elas são todo o caminho de escrita — cadastro, os dois logins, definir
 senha, os dois pedidos de recuperação e as duas redefinições, aprovar/reprovar, a
 consulta de disponibilidade e a alteração do cupom, as trocas de chave PIX, e-mail
-e ocupação pelo afiliado, o "marcar como assistido" da trilha, salvar e apagar
-módulo e material no painel, e os dois logouts —, errar isso derruba a aplicação
+e ocupação pelo afiliado, o "marcar como assistido" da trilha, salvar, apagar e
+reordenar módulo e material no painel, e os dois logouts —, errar isso derruba a aplicação
 inteira com a tela carregando normalmente.
 
 `next.config.mjs` resolve com `experimental.serverActions.allowedOrigins`,

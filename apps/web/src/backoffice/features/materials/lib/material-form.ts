@@ -6,25 +6,23 @@ import {
   type TrainingModuleFormValues,
 } from '@porto/contracts';
 
-/** Item novo entra depois do último, que é onde a trilha costuma crescer. */
-export function nextPosition(items: ReadonlyArray<{ position: number }>): number {
-  return items.reduce((highest, item) => Math.max(highest, item.position), 0) + 1;
-}
+/*
+  A posição fica de fora dos dois formulários: item novo entra no fim, e a
+  ordem muda arrastando a lista. Mandá-la no PUT seria campo fora do DTO, e 400.
+*/
 
 export function trainingModuleFormDefaults(
   module: AdminTrainingModule | null,
-  position: number,
 ): TrainingModuleFormValues {
-  if (!module) return { title: '', description: '', videoUrl: '', durationMinutes: '', position };
+  if (!module) return { title: '', description: '', videoUrl: '', durationMinutes: '' };
 
-  const { id: _id, ...values } = module;
+  const { id: _id, position: _position, ...values } = module;
   return values;
 }
 
 /** O formulário edita o tamanho em MB; a API devolve em bytes. */
 export function promotionalMaterialFormDefaults(
   material: AdminPromotionalMaterial | null,
-  position = 1,
 ): PromotionalMaterialFormValues {
   if (!material) {
     return {
@@ -33,10 +31,9 @@ export function promotionalMaterialFormDefaults(
       fileUrl: '',
       fileFormat: '' as PromotionalMaterialFormValues['fileFormat'],
       fileSizeMegabytes: '',
-      position,
     };
   }
 
-  const { id: _id, fileSizeBytes, ...values } = material;
+  const { id: _id, position: _position, fileSizeBytes, ...values } = material;
   return { ...values, fileSizeMegabytes: fileSizeBytes / BYTES_PER_MEGABYTE };
 }

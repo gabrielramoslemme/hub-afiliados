@@ -38,7 +38,6 @@ import { promotionalMaterialFormDefaults } from '../lib/material-form';
 interface PromotionalMaterialDialogProps {
   /** Nulo para criar. */
   material: AdminPromotionalMaterial | null;
-  nextPosition: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -50,7 +49,6 @@ const SIZE_HINT = 'Como aparece no Finder ou no Explorer — ex.: 2,4.';
 
 export function PromotionalMaterialDialog({
   material,
-  nextPosition,
   open,
   onOpenChange,
 }: PromotionalMaterialDialogProps) {
@@ -67,12 +65,12 @@ export function PromotionalMaterialDialog({
     formState: { errors },
   } = useForm<PromotionalMaterialFormValues, unknown, PromotionalMaterialRequest>({
     resolver: zodResolver(promotionalMaterialFormSchema),
-    defaultValues: promotionalMaterialFormDefaults(material, nextPosition),
+    defaultValues: promotionalMaterialFormDefaults(material),
   });
 
   useEffect(() => {
-    if (open) reset(promotionalMaterialFormDefaults(material, nextPosition));
-  }, [open, material, nextPosition, reset]);
+    if (open) reset(promotionalMaterialFormDefaults(material));
+  }, [open, material, reset]);
 
   /*
     O action recebe o formulário como o operador o preencheu — tamanho em MB — e
@@ -142,7 +140,7 @@ export function PromotionalMaterialDialog({
               />
             </Field>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field id="fileFormat" label="Formato" required error={errors.fileFormat?.message}>
                 <Controller
                   control={control}
@@ -178,18 +176,6 @@ export function PromotionalMaterialDialog({
                   min={0.1}
                   step={0.1}
                   inputMode="decimal"
-                />
-              </Field>
-
-              <Field id="position" label="Posição" required error={errors.position?.message}>
-                <Input
-                  {...register('position')}
-                  {...aria('position')}
-                  type="number"
-                  min={1}
-                  max={999}
-                  step={1}
-                  inputMode="numeric"
                 />
               </Field>
             </div>

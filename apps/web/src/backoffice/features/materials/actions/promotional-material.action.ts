@@ -5,6 +5,7 @@ import { z } from 'zod';
 import {
   type PromotionalMaterialFormValues,
   promotionalMaterialFormSchema,
+  reorderMaterialsSchema,
 } from '@porto/contracts';
 import { MATERIALS_PATH } from '@/backoffice/shared/routes';
 import { authedApiFetch } from '@/shared/http/api-client';
@@ -59,6 +60,37 @@ export async function deletePromotionalMaterial(
     await authedApiFetch(`/admin/promotional-materials/${publicId}`, { method: 'DELETE' });
   } catch (error) {
     return failure(error, 'Não foi possível apagar o material. Tente novamente.');
+  }
+
+  revalidatePath(MATERIALS_PATH);
+
+  return { status: 'success' };
+}
+
+/**
+ * A ordem nova, com todos os itens — é assim que a API confere que ninguém
+ * criou ou apagou um item enquanto a tela estava aberta.
+ */
+export async function reorderPromotionalMaterials(
+  ids: string[],
+): Promise<SaveMaterialResult<never>> {
+  const parsed = reorderMaterialsSchema.safeParse({ ids });
+  if (!parsed.success) {
+    return {
+      status: 'failed',
+      message:
+        parsed.error.issues[0]?.message ??
+        'Não foi possível salvar a nova ordem dos downloads. Tente novamente.',
+    };
+  }
+
+  try {
+    await authedApiFetch('/admin/promotional-materials/order', {
+      method: 'PUT',
+      body: JSON.stringify(parsed.data),
+    });
+  } catch (error) {
+    return failure(error, 'Não foi possível salvar a nova ordem dos downloads. Tente novamente.');
   }
 
   revalidatePath(MATERIALS_PATH);

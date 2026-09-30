@@ -15,7 +15,7 @@ import { TrainingModuleDialog } from './training-module-dialog';
   a lista em volta continua Server Component.
 */
 
-export function NewTrainingModuleButton({ nextPosition }: { nextPosition: number }) {
+export function NewTrainingModuleButton() {
   const [open, setOpen] = useState(false);
 
   return (
@@ -24,12 +24,7 @@ export function NewTrainingModuleButton({ nextPosition }: { nextPosition: number
         <Plus aria-hidden />
         Novo módulo
       </Button>
-      <TrainingModuleDialog
-        module={null}
-        nextPosition={nextPosition}
-        open={open}
-        onOpenChange={setOpen}
-      />
+      <TrainingModuleDialog module={null} open={open} onOpenChange={setOpen} />
     </>
   );
 }
@@ -49,12 +44,7 @@ export function TrainingModuleRowActions({ module }: { module: AdminTrainingModu
         <span className="sr-only">Apagar {module.title}</span>
       </Button>
 
-      <TrainingModuleDialog
-        module={module}
-        nextPosition={module.position}
-        open={editing}
-        onOpenChange={setEditing}
-      />
+      <TrainingModuleDialog module={module} open={editing} onOpenChange={setEditing} />
       <DeleteMaterialDialog
         title={`Apagar “${module.title}”?`}
         description="O módulo sai da trilha de todos os afiliados, e o registro de quem já o assistiu vai junto."
@@ -67,7 +57,7 @@ export function TrainingModuleRowActions({ module }: { module: AdminTrainingModu
   );
 }
 
-export function NewPromotionalMaterialButton({ nextPosition }: { nextPosition: number }) {
+export function NewPromotionalMaterialButton() {
   const [open, setOpen] = useState(false);
 
   return (
@@ -76,12 +66,7 @@ export function NewPromotionalMaterialButton({ nextPosition }: { nextPosition: n
         <Plus aria-hidden />
         Novo material
       </Button>
-      <PromotionalMaterialDialog
-        material={null}
-        nextPosition={nextPosition}
-        open={open}
-        onOpenChange={setOpen}
-      />
+      <PromotionalMaterialDialog material={null} open={open} onOpenChange={setOpen} />
     </>
   );
 }
@@ -105,12 +90,7 @@ export function PromotionalMaterialRowActions({
         <span className="sr-only">Apagar {material.title}</span>
       </Button>
 
-      <PromotionalMaterialDialog
-        material={material}
-        nextPosition={material.position}
-        open={editing}
-        onOpenChange={setEditing}
-      />
+      <PromotionalMaterialDialog material={material} open={editing} onOpenChange={setEditing} />
       <DeleteMaterialDialog
         title={`Apagar “${material.title}”?`}
         description="O arquivo sai de Downloads para todos os afiliados. O arquivo hospedado continua onde está."

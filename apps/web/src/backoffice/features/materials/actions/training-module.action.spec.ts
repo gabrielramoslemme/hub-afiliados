@@ -1,7 +1,11 @@
 import { revalidatePath } from 'next/cache';
 import { authedApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
-import { deleteTrainingModule, saveTrainingModule } from './training-module.action';
+import {
+  deleteTrainingModule,
+  reorderTrainingModules,
+  saveTrainingModule,
+} from './training-module.action';
 
 jest.mock('@/shared/http/api-client', () => ({ authedApiFetch: jest.fn() }));
 jest.mock('next/cache', () => ({ revalidatePath: jest.fn() }));
@@ -17,7 +21,6 @@ const form = {
   description: 'Vazamentos visíveis em torneiras, sifões ou tubulações?',
   videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
   durationMinutes: '6',
-  position: '2',
 };
 
 const body = {
@@ -25,7 +28,6 @@ const body = {
   description: 'Vazamentos visíveis em torneiras, sifões ou tubulações?',
   videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
   durationMinutes: 6,
-  position: 2,
 };
 
 beforeEach(() => {
@@ -110,5 +112,43 @@ describe('deleteTrainingModule', () => {
     await deleteTrainingModule('');
 
     expect(apiFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('reorderTrainingModules', () => {
+  const ORDER = ['40000000-0000-4000-8000-000000000002', MODULE_ID];
+
+  it('sends the whole track in the new order and refreshes the screen', async () => {
+    await expect(reorderTrainingModules(ORDER)).resolves.toEqual({ status: 'success' });
+
+    expect(apiFetch).toHaveBeenCalledWith('/admin/training-modules/order', {
+      method: 'PUT',
+      body: JSON.stringify({ ids: ORDER }),
+    });
+    expect(revalidate).toHaveBeenCalledWith('/admin/materiais');
+  });
+
+  it('refuses an order that repeats a module without calling the api', async () => {
+    await expect(reorderTrainingModules([MODULE_ID, MODULE_ID])).resolves.toEqual({
+      status: 'failed',
+      message: 'A ordem repete um item',
+    });
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  /* Outra aba mexeu na lista: a mensagem da API diz o que fazer, e a tela a mostra. */
+  it('reports the api message when the list changed meanwhile', async () => {
+    apiFetch.mockRejectedValue(
+      new ApiError(
+        409,
+        null,
+        'A lista mudou enquanto você reorganizava. Atualize a página e tente de novo.',
+      ),
+    );
+
+    await expect(reorderTrainingModules(ORDER)).resolves.toEqual({
+      status: 'failed',
+      message: 'A lista mudou enquanto você reorganizava. Atualize a página e tente de novo.',
+    });
   });
 });

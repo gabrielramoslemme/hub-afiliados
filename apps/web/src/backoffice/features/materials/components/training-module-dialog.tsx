@@ -30,21 +30,13 @@ import { trainingModuleFormDefaults } from '../lib/material-form';
 interface TrainingModuleDialogProps {
   /** Nulo para criar. */
   module: AdminTrainingModule | null;
-  /** A posição sugerida para um módulo novo: depois do último. */
-  nextPosition: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 const VIDEO_HINT = 'Link do YouTube, do Vimeo ou do arquivo .mp4. Precisa começar com https://.';
-const POSITION_HINT = 'A ordem na trilha. Posições iguais seguem a ordem de criação.';
 
-export function TrainingModuleDialog({
-  module,
-  nextPosition,
-  open,
-  onOpenChange,
-}: TrainingModuleDialogProps) {
+export function TrainingModuleDialog({ module, open, onOpenChange }: TrainingModuleDialogProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -56,13 +48,13 @@ export function TrainingModuleDialog({
     formState: { errors },
   } = useForm<TrainingModuleFormValues, unknown, TrainingModuleRequest>({
     resolver: zodResolver(trainingModuleSchema),
-    defaultValues: trainingModuleFormDefaults(module, nextPosition),
+    defaultValues: trainingModuleFormDefaults(module),
   });
 
   // Reabrir o diálogo começa do que está salvo, não do rascunho abandonado.
   useEffect(() => {
-    if (open) reset(trainingModuleFormDefaults(module, nextPosition));
-  }, [open, module, nextPosition, reset]);
+    if (open) reset(trainingModuleFormDefaults(module));
+  }, [open, module, reset]);
 
   function onSave(values: TrainingModuleRequest) {
     startTransition(async () => {
@@ -131,42 +123,23 @@ export function TrainingModuleDialog({
               />
             </Field>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                id="durationMinutes"
-                label="Duração (minutos)"
-                required
-                error={errors.durationMinutes?.message}
-              >
-                <Input
-                  {...register('durationMinutes')}
-                  {...aria('durationMinutes')}
-                  type="number"
-                  min={1}
-                  max={600}
-                  step={1}
-                  inputMode="numeric"
-                />
-              </Field>
-
-              <Field
-                id="position"
-                label="Posição"
-                required
-                hint={POSITION_HINT}
-                error={errors.position?.message}
-              >
-                <Input
-                  {...register('position')}
-                  {...aria('position', POSITION_HINT)}
-                  type="number"
-                  min={1}
-                  max={999}
-                  step={1}
-                  inputMode="numeric"
-                />
-              </Field>
-            </div>
+            <Field
+              id="durationMinutes"
+              label="Duração (minutos)"
+              required
+              error={errors.durationMinutes?.message}
+              className="sm:w-52"
+            >
+              <Input
+                {...register('durationMinutes')}
+                {...aria('durationMinutes')}
+                type="number"
+                min={1}
+                max={600}
+                step={1}
+                inputMode="numeric"
+              />
+            </Field>
           </div>
 
           <DialogFooter>

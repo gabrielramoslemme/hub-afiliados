@@ -16,6 +16,7 @@ import {
 } from '@/shared/components/ui/dialog';
 import { cn } from '@/shared/lib/cn';
 import { completeTrainingModule } from '../actions/complete-training-module.action';
+import type { ResolvedVideoThumbnail } from '../data';
 import { trainingProgress } from '../lib/training-progress';
 import { videoEmbed } from '../lib/video-embed';
 
@@ -24,7 +25,13 @@ import { videoEmbed } from '../lib/video-embed';
  * página, e é a própria pessoa que marca o que assistiu: o player é de outro
  * domínio, e o Hub não sabe o que ele tocou.
  */
-export function TrainingTrack({ modules }: { modules: AffiliateTrainingModule[] }) {
+interface TrainingTrackProps {
+  modules: AffiliateTrainingModule[];
+  /** A capa de cada módulo, por id, resolvida no servidor. */
+  thumbnails: Record<string, ResolvedVideoThumbnail>;
+}
+
+export function TrainingTrack({ modules, thumbnails }: TrainingTrackProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const progress = trainingProgress(modules);
   const current = modules.find((module) => module.id === openId) ?? null;
@@ -74,7 +81,11 @@ export function TrainingTrack({ modules }: { modules: AffiliateTrainingModule[] 
           <ol className="mt-6 flex flex-col gap-3">
             {modules.map((module) => (
               <li key={module.id}>
-                <ModuleRow module={module} onOpen={() => setOpenId(module.id)} />
+                <ModuleRow
+                  module={module}
+                  thumbnail={thumbnails[module.id] ?? { kind: 'none' }}
+                  onOpen={() => setOpenId(module.id)}
+                />
               </li>
             ))}
           </ol>
@@ -90,22 +101,26 @@ export function TrainingTrack({ modules }: { modules: AffiliateTrainingModule[] 
   );
 }
 
-function ModuleRow({ module, onOpen }: { module: AffiliateTrainingModule; onOpen: () => void }) {
+function ModuleRow({
+  module,
+  thumbnail,
+  onOpen,
+}: {
+  module: AffiliateTrainingModule;
+  thumbnail: ResolvedVideoThumbnail;
+  onOpen: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onOpen}
       className="flex w-full items-start gap-3 rounded-card border border-ink-200 bg-ink-50 p-3 text-left transition-colors hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
     >
-      <span className="relative flex aspect-square w-12 shrink-0 items-center justify-center rounded-md border border-blue-100 bg-blue-50 sm:aspect-video sm:w-28">
-        <span className="flex size-8 items-center justify-center rounded-pill bg-white text-blue-600 shadow-card">
-          <Play className="ml-0.5 size-3.5 fill-current" aria-hidden />
-        </span>
-      </span>
+      <VideoCover thumbnail={thumbnail} />
 
       <span className="min-w-0 flex-1">
         <span className="block text-[0.9375rem] font-semibold text-ink-900">{module.title}</span>
-        <span className="mt-0.5 line-clamp-2 block text-[0.8125rem] leading-relaxed text-ink-500 sm:line-clamp-3">
+        <span className="mt-0.5 line-clamp-2 text-[0.8125rem] leading-relaxed text-ink-500 sm:line-clamp-3">
           {module.description}
         </span>
         <span className="mt-1.5 inline-flex items-center gap-1 text-[0.75rem] text-ink-500">
@@ -235,5 +250,41 @@ function VideoPlayer({ title, url }: { title: string; url: string }) {
         </a>
       </Button>
     </div>
+  );
+}
+
+/**
+ * A prévia do vídeo no card, como no protótipo: a capa com o botão de play por
+ * cima. Sem capa, o fundo neutro da marca — o play continua dizendo o que é.
+ */
+function VideoCover({ thumbnail }: { thumbnail: ResolvedVideoThumbnail }) {
+  return (
+    <span className="relative flex aspect-video w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border border-ink-200 bg-blue-50 sm:w-36">
+      {thumbnail.kind === 'image' && (
+        // biome-ignore lint/performance/noImgElement: capa de outro domínio, sem o otimizador do Next no meio.
+        <img
+          src={thumbnail.src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          className="absolute inset-0 size-full object-cover"
+        />
+      )}
+      {thumbnail.kind === 'frame' && (
+        <video
+          src={thumbnail.src}
+          preload="metadata"
+          muted
+          playsInline
+          tabIndex={-1}
+          aria-hidden
+          className="pointer-events-none absolute inset-0 size-full object-cover"
+        />
+      )}
+      <span className="relative flex size-9 items-center justify-center rounded-pill bg-white text-blue-600 shadow-card">
+        <Play className="ml-0.5 size-4 fill-current" aria-hidden />
+      </span>
+    </span>
   );
 }

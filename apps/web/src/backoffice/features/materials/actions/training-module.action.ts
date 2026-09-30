@@ -2,7 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { type TrainingModuleRequest, trainingModuleSchema } from '@porto/contracts';
+import {
+  reorderMaterialsSchema,
+  type TrainingModuleRequest,
+  trainingModuleSchema,
+} from '@porto/contracts';
 import { MATERIALS_PATH } from '@/backoffice/shared/routes';
 import { authedApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
@@ -55,6 +59,35 @@ export async function deleteTrainingModule(publicId: string): Promise<SaveMateri
     await authedApiFetch(`/admin/training-modules/${publicId}`, { method: 'DELETE' });
   } catch (error) {
     return failure(error, 'Não foi possível apagar o módulo. Tente novamente.');
+  }
+
+  revalidatePath(MATERIALS_PATH);
+
+  return { status: 'success' };
+}
+
+/**
+ * A ordem nova, com todos os itens — é assim que a API confere que ninguém
+ * criou ou apagou um item enquanto a tela estava aberta.
+ */
+export async function reorderTrainingModules(ids: string[]): Promise<SaveMaterialResult<never>> {
+  const parsed = reorderMaterialsSchema.safeParse({ ids });
+  if (!parsed.success) {
+    return {
+      status: 'failed',
+      message:
+        parsed.error.issues[0]?.message ??
+        'Não foi possível salvar a nova ordem da trilha. Tente novamente.',
+    };
+  }
+
+  try {
+    await authedApiFetch('/admin/training-modules/order', {
+      method: 'PUT',
+      body: JSON.stringify(parsed.data),
+    });
+  } catch (error) {
+    return failure(error, 'Não foi possível salvar a nova ordem da trilha. Tente novamente.');
   }
 
   revalidatePath(MATERIALS_PATH);

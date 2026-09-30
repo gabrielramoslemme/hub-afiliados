@@ -11,6 +11,7 @@ import type {
 import { AFFILIATE_SESSION_EXPIRED_PATH } from '@/affiliate/shared/routes';
 import { affiliateApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
+import { type VideoThumbnail, videoThumbnail, vimeoThumbnailFrom } from './lib/video-embed';
 
 /**
  * Carteira, extrato e indicações não podem vir de cache: entre a pessoa abrir a
@@ -55,4 +56,46 @@ export function fetchMaterials(): Promise<AffiliateMaterialsResponse> {
   return readOrSignIn(() =>
     affiliateApiFetch<AffiliateMaterialsResponse>('/affiliate/me/materials', FRESH),
   );
+}
+
+/** A capa já resolvida: o `vimeo` da `videoThumbnail` sai daqui como imagem ou como nada. */
+export type ResolvedVideoThumbnail = Exclude<VideoThumbnail, { kind: 'vimeo' }>;
+
+/*
+  Um dia: a capa de um vídeo praticamente não muda, e consultar o Vimeo a cada
+  abertura da aba seria pagar a volta de rede à toa.
+*/
+const VIMEO_OEMBED: RequestInit = { next: { revalidate: 86_400 } };
+const VIMEO_TIMEOUT_MS = 2_500;
+
+/**
+ * A capa de cada módulo, por id. YouTube e arquivo saem direto do endereço; o
+ * Vimeo só entrega a capa pela consulta oEmbed, que é pública e sai daqui, do
+ * servidor. Falhou ou demorou, o card fica com a capa neutra — a trilha não
+ * pode deixar de abrir porque o Vimeo não respondeu.
+ */
+export async function fetchVideoThumbnails(
+  modules: ReadonlyArray<{ id: string; videoUrl: string }>,
+): Promise<Record<string, ResolvedVideoThumbnail>> {
+  const entries = await Promise.all(
+    modules.map(async ({ id, videoUrl }): Promise<[string, ResolvedVideoThumbnail]> => {
+      const thumbnail = videoThumbnail(videoUrl);
+      if (thumbnail.kind !== 'vimeo') return [id, thumbnail];
+
+      try {
+        const response = await fetch(thumbnail.oembedUrl, {
+          ...VIMEO_OEMBED,
+          signal: AbortSignal.timeout(VIMEO_TIMEOUT_MS),
+        });
+        if (!response.ok) return [id, { kind: 'none' }];
+
+        const resolved = vimeoThumbnailFrom(await response.json());
+        return [id, resolved.kind === 'vimeo' ? { kind: 'none' } : resolved];
+      } catch {
+        return [id, { kind: 'none' }];
+      }
+    }),
+  );
+
+  return Object.fromEntries(entries);
 }
