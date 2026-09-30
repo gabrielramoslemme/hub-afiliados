@@ -4,7 +4,7 @@ import { PAYOUTS_PATH } from '@/backoffice/shared/routes';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { WITHDRAWAL_STATUS_LABELS } from '@/shared/lib/withdrawal-status';
-import type { PayoutsParams } from '../lib/payouts-params';
+import { PAYOUTS_SEARCH_MAX_LENGTH, type PayoutsParams } from '../lib/payouts-params';
 
 /**
  * `REQUESTED` e `PROCESSING` dizem a mesma coisa no badge — "em
@@ -54,6 +54,7 @@ export function PayoutsFilters({ params, total }: PayoutsFiltersProps) {
             type="search"
             name="search"
             defaultValue={params.search}
+            maxLength={PAYOUTS_SEARCH_MAX_LENGTH}
             aria-label="Buscar por nome ou CPF"
             placeholder="Nome ou CPF"
             className="h-9 w-full pl-9 lg:w-56"

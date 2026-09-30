@@ -14,14 +14,34 @@ export interface PayoutsParams {
 
 export type RawSearchParams = Record<string, string | string[] | undefined>;
 
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** O mesmo limite do `ListWithdrawalsQueryDto`: acima dele a API responde 400. */
+export const PAYOUTS_SEARCH_MAX_LENGTH = 120;
 
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
+/** A API confere o calendário (`IsDateString` estrito), não só o molde. */
 function day(value: string | undefined): string | null {
-  return value && DAY.test(value) ? value : null;
+  const match = value ? DAY.exec(value) : null;
+  if (!match) return null;
+
+  const [, year, month, date] = match.map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, date));
+  const exists =
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === date;
+
+  return exists ? (value as string) : null;
+}
+
+function searchTerm(value: string | undefined): string {
+  const term = (value ?? '').trim();
+
+  return term.length <= PAYOUTS_SEARCH_MAX_LENGTH ? term : '';
 }
 
 /** Mesma regra da fila: nada que chegou pela URL é confiável. */
@@ -35,7 +55,7 @@ export function parsePayoutsParams(raw: RawSearchParams): PayoutsParams {
       status && Object.values(WithdrawalStatusEnum).includes(status as WithdrawalStatusEnum)
         ? (status as WithdrawalStatusEnum)
         : null,
-    search: (first(raw.search) ?? '').trim(),
+    search: searchTerm(first(raw.search)),
     from: day(first(raw.from)),
     until: day(first(raw.until)),
   };

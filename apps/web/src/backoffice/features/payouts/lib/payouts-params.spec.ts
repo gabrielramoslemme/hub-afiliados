@@ -26,6 +26,21 @@ describe('parsePayoutsParams', () => {
       parsePayoutsParams({ page: '0', status: 'LOST', from: '25/09/2026', until: 'ontem' }),
     ).toEqual({ page: 1, status: null, search: '', from: null, until: null });
   });
+
+  // No molde certo, mas fora do calendário: a API recusa com 400, e a analista
+  // veria a página de erro em vez da lista.
+  it('drops a day that does not exist in the calendar', () => {
+    expect(parsePayoutsParams({ from: '2026-02-30', until: '2026-13-45' })).toMatchObject({
+      from: null,
+      until: null,
+    });
+    expect(parsePayoutsParams({ from: '2028-02-29' }).from).toBe('2028-02-29');
+  });
+
+  it('drops a search longer than the api accepts', () => {
+    expect(parsePayoutsParams({ search: 'a'.repeat(121) }).search).toBe('');
+    expect(parsePayoutsParams({ search: 'a'.repeat(120) }).search).toBe('a'.repeat(120));
+  });
 });
 
 describe('payoutsHref', () => {
