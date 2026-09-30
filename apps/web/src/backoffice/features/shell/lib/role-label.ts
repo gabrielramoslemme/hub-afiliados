@@ -10,6 +10,8 @@ const ROLE_LABELS: Record<UserRoleEnum, string> = {
   [UserRoleEnum.PORTO_ANALYST]: 'Analista · Porto',
   [UserRoleEnum.PORTO_ADMIN]: 'Administrador · Porto',
   [UserRoleEnum.MESA_ADMIN]: 'Administrador · Mesa',
+  // Nunca aparece no painel: o login do painel não emite token de afiliado.
+  [UserRoleEnum.AFFILIATE]: 'Afiliado',
 };
 
 export function roleLabel(role: UserRoleEnum): string {
