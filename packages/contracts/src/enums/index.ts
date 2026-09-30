@@ -117,6 +117,18 @@ export enum ReferralPeriodEnum {
 }
 
 /**
+ * O formato de um material de divulgação. Decide o ícone e o rótulo na área do
+ * afiliado; o arquivo em si mora onde o operador o hospedou.
+ */
+export enum MaterialFileFormatEnum {
+  PDF = 'PDF',
+  ZIP = 'ZIP',
+  PNG = 'PNG',
+  JPG = 'JPG',
+  MP4 = 'MP4',
+}
+
+/**
  * De que registro é uma linha de `audit_logs`. A tabela é global, e o par
  * `entity` + `entity_id` é o que diz a quem a alteração pertence.
  */
