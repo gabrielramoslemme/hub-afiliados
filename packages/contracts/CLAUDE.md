@@ -36,4 +36,4 @@ Sem isso, a API e a web continuam enxergando os tipos antigos, e o erro aparece 
 
 ## Atenção: o valor do enum está gravado no banco
 
-`AffiliateStatusEnum`, `CouponStatusEnum`, `UserRoleEnum`, `UserTypeEnum`, `PixKeyTypeEnum` e `TokenPurposeEnum` são persistidos como `varchar` nas tabelas do Postgres. Adicionar valor novo é seguro; **renomear ou remover é migration de dados, não refactor** — o type-check passa e o banco fica inconsistente em silêncio.
+`AffiliateStatusEnum`, `CouponStatusEnum`, `UserRoleEnum`, `UserTypeEnum`, `PixKeyTypeEnum`, `TokenPurposeEnum`, `WithdrawalStatusEnum`, `PayoutEventSourceEnum` e `PayoutEventOutcomeEnum` são persistidos como `varchar` nas tabelas do Postgres. Adicionar valor novo é seguro; **renomear ou remover é migration de dados, não refactor** — o type-check passa e o banco fica inconsistente em silêncio. Os valores de `WithdrawalStatusEnum` ainda aparecem literais nos `CHECK` e no índice parcial de `affiliate_withdrawals`: mexer neles é migration de schema também.
