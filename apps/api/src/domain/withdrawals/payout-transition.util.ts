@@ -5,7 +5,7 @@ export enum PayoutTransitionEnum {
   APPLY = 'APPLY',
   DUPLICATE = 'DUPLICATE',
   IGNORE = 'IGNORE',
-  /** Pago ou devolvido num saque já falho: nada muda, mas alguém precisa conferir. */
+  /** Pago num saque já falho, ou falha num já pago: nada muda, mas alguém precisa conferir. */
   DIVERGE = 'DIVERGE',
 }
 
@@ -33,11 +33,23 @@ export function resolvePayoutTransition(
   if (incoming === null) return PayoutTransitionEnum.IGNORE;
   if (current === incoming) return PayoutTransitionEnum.DUPLICATE;
   /*
-    As vendas do saque falho já voltaram ao saldo e podem estar em outro saque.
-    Um PIX que caiu (ou voltou) depois disso não pode sumir como "sem efeito":
-    é dinheiro fora do lugar, e reabrir o saque pagaria as vendas duas vezes.
+    A Transfeera leva toda `FALHA` a `DEVOLVIDO` logo em seguida. O saldo já
+    voltou na falha, então a devolução é repetição — alarmar aqui ensinaria a
+    ignorar o alarme de verdade, o de pagamento em dobro, logo abaixo.
   */
-  if (current === FAILED && incoming !== FAILED) return PayoutTransitionEnum.DIVERGE;
+  if (current === FAILED && incoming === RETURNED) return PayoutTransitionEnum.DUPLICATE;
+  /*
+    As vendas do saque falho já voltaram ao saldo e podem estar em outro saque.
+    Um PIX que caiu depois disso não pode sumir como "sem efeito": é dinheiro
+    fora do lugar, e reabrir o saque pagaria as vendas duas vezes.
+  */
+  if (current === FAILED && incoming === PAID) return PayoutTransitionEnum.DIVERGE;
+  /*
+    Falha depois do pago: se o dinheiro voltou, a carteira segue contando como
+    sacado e o afiliado perde o saldo. Nada muda sozinho — um `DEVOLVIDO` que
+    venha depois ainda se aplica —, mas alguém precisa conferir.
+  */
+  if (current === PAID && incoming === FAILED) return PayoutTransitionEnum.DIVERGE;
 
   return ALLOWED_FROM[incoming].includes(current)
     ? PayoutTransitionEnum.APPLY

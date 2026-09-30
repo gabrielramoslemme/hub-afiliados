@@ -29,16 +29,27 @@ describe('resolvePayoutTransition', () => {
 
   it.each([
     [RETURNED, PAID],
-    [PAID, FAILED],
     [RETURNED, FAILED],
   ] as const)('never reopens a closed withdrawal from %s to %s', (current, incoming) => {
     expect(resolvePayoutTransition(current, incoming)).toBe(IGNORE);
   });
 
   // As vendas de um saque falho já voltaram ao saldo e podem ter ido para outro
-  // saque: um PIX que caiu (ou voltou) depois disso é dinheiro fora do lugar.
-  it.each([PAID, RETURNED] as const)('flags %s on a failed withdrawal as divergent', (incoming) => {
-    expect(resolvePayoutTransition(FAILED, incoming)).toBe(DIVERGE);
+  // saque: um PIX que caiu depois disso é dinheiro fora do lugar.
+  it('flags a payment on a failed withdrawal as divergent', () => {
+    expect(resolvePayoutTransition(FAILED, PAID)).toBe(DIVERGE);
+  });
+
+  // A Transfeera leva toda `FALHA` a `DEVOLVIDO` logo em seguida: o saldo já
+  // voltou, e alarmar aqui ensinaria a ignorar o alarme de pagamento em dobro.
+  it('takes the return that follows every failure as a duplicate', () => {
+    expect(resolvePayoutTransition(FAILED, RETURNED)).toBe(DUPLICATE);
+  });
+
+  // Uma falha depois do pago não pode sumir como "sem efeito": se o dinheiro
+  // voltou, o afiliado perdeu o saldo e ninguém saberia.
+  it('flags a failure on a paid withdrawal as divergent', () => {
+    expect(resolvePayoutTransition(PAID, FAILED)).toBe(DIVERGE);
   });
 
   it('ignores the intermediate statuses the provider sends on the way', () => {

@@ -1,6 +1,6 @@
 # Webhook da Transfeera
 
-- **URL:** `https://<host>/v1/webhooks/transfeera`, cadastrada na Transfeera por `POST /webhook` (`event_url`).
+- **URL:** `https://<host>/v1/webhooks/transfeera`, cadastrada na Transfeera por `POST /webhook` com `event_url` e `object_types: ["Transfer"]` — o campo é obrigatório, e assinar outros objetos só enche a trilha de eventos sem efeito.
 - **Segredo:** o `signature_secret` que a Transfeera devolve nesse cadastro. Ele vai em `TRANSFEERA_WEBHOOK_SECRET` — no ambiente provisionado, uma linha à mão no `/porto-hub/dev/config`. Sem ele a rota recusa toda chamada com 401.
 - **Assinatura:** header `Transfeera-Signature: t=<ms>,v1=<hex>`, HMAC-SHA256 de `"<t>.<corpo cru>"`. Janela de `TRANSFEERA_WEBHOOK_TOLERANCE_SECONDS` (5 min).
 - **Respostas:**
@@ -10,7 +10,7 @@
   | 200 `APPLIED` | o saque mudou |
   | 200 `DUPLICATE` | repetição |
   | 200 `IGNORED` | status intermediário ou objeto que não é `Transfer` |
-  | 200 `DIVERGENT` | `FINALIZADO` ou `DEVOLVIDO` num saque já `FAILED` — nada muda, `logger.error` com o `publicId`; ver o runbook |
+  | 200 `DIVERGENT` | `FINALIZADO` num saque já `FAILED`, ou `FALHA` num já `PAID` — nada muda, `logger.error` com o `publicId`; ver o runbook |
   | 200 `outcome: null` | corpo vazio (teste de URL) |
   | 404 | `integration_id` que não é saque nosso — a Transfeera tenta de novo, duas vezes |
   | 401 | assinatura |
@@ -20,7 +20,7 @@
 
 ## Quando o saque não anda
 
-O alarme é o log de erro: `Reconciliação: conferir à mão <publicId>, …` (job) ou `Desfecho … num saque já falho: <publicId>` (webhook). Em todo caso, primeiro:
+O alarme é o log de erro: `Reconciliação: conferir à mão <publicId>, …` (job) ou `Desfecho … em conflito com o saque: <publicId>` (webhook). Em todo caso, primeiro:
 
 1. **A trilha do saque** — o que chegou e o que se fez com cada evento:
 
@@ -93,10 +93,10 @@ COMMIT;
 
 ### `DIVERGENT`
 
-Um `FINALIZADO` ou `DEVOLVIDO` chegou num saque que já tínhamos fechado como `FAILED`. As vendas dele voltaram ao saldo quando falhou, e a ligação se perdeu (`withdrawal_id` virou nulo) — podem já estar em outro saque.
+Um desfecho chegou em conflito com o que já tínhamos fechado. O saque não muda sozinho.
 
-- **`DEVOLVIDO`:** o PIX caiu e voltou; o dinheiro está de novo na conta da Mesa. Confira no painel e não faça nada.
-- **`FINALIZADO`:** o PIX caiu. Se as mesmas vendas foram sacadas de novo, o afiliado recebeu duas vezes. **Não reabra o saque por SQL** — marcá-lo `PAID` sem vendas ligadas bagunça a carteira, e religar vendas às cegas pode prender as de outro saque. Levante os saques do afiliado depois da falha e leve ao financeiro:
+- **`FALHA` num saque `PAID`:** a Transfeera costuma mandar `DEVOLVIDO` logo depois, e esse se aplica sozinho (o saque vira `RETURNED` e as vendas voltam ao saldo). Se em uma hora o saque continuar `PAID`, confira o lote no painel da Transfeera: se o dinheiro voltou para a conta da Mesa, feche como devolvido pelo SQL da seção anterior.
+- **`FINALIZADO` num saque `FAILED`:** as vendas dele voltaram ao saldo quando falhou, e a ligação se perdeu (`withdrawal_id` virou nulo) — podem já estar em outro saque. O PIX caiu: se as mesmas vendas foram sacadas de novo, o afiliado recebeu duas vezes. **Não reabra o saque por SQL** — marcá-lo `PAID` sem vendas ligadas bagunça a carteira, e religar vendas às cegas pode prender as de outro saque. Levante os saques do afiliado depois da falha e leve ao financeiro:
 
   ```sql
   SELECT o."public_id", o."status", o."amount_cents", o."requested_at", o."paid_at"
@@ -105,3 +105,5 @@ Um `FINALIZADO` ou `DEVOLVIDO` chegou num saque que já tínhamos fechado como `
    WHERE w."public_id" = '<publicId>'
    ORDER BY o."requested_at";
   ```
+
+Um `DEVOLVIDO` num saque `FAILED` não entra aqui: a Transfeera leva toda `FALHA` a `DEVOLVIDO` em seguida, e o evento fica na trilha como `DUPLICATE`.
