@@ -224,28 +224,21 @@ dig +short api-dev.hubafiliados.com.br @1.1.1.1  # idem
 Com a Imperva na frente o CNAME é dela, e o CloudFront aparece só como origin
 na RDM — nesse caso o que se confirma é que a resposta **não** é o Elastic IP.
 
-**3. Gravar as credenciais da Porto e injetar a chave do Resend.** As da Porto
-vêm **antes do primeiro deploy**: a API sempre fala com o gateway Sensedia, e o
-deploy falha enquanto o `PortoSecret` tiver `REPLACE_ME`. A do Resend pode
-esperar: com `REPLACE_ME` o deploy só avisa, a API sobe e nenhum e-mail sai — a
-aprovação passa sem o link de definir senha chegar a ninguém. O passo a passo da Porto está em
-*Credenciais da Porto*, mais abaixo. A chave do Resend:
+**3. Gravar o `api-env`.** Tudo o que se define à mão para a API mora num
+segredo só, `/porto-hub/dev/api-env`, e a chave é o nome da variável. A stack
+não o cria nem o regrava: quem o mantém é o `infra/scripts/set-env.sh`, e o
+primeiro `set` cria o segredo. Precisa estar pronto **antes do primeiro
+deploy**, porque o deploy para se faltar uma obrigatória:
 
 ```bash
-# `read -s` em vez de `echo 're_…'`: a chave não entra no histórico do shell, e o
-# umask 077 do subshell cria o arquivo legível só por você.
-# O prompt vem do printf porque `read -p` no zsh é outra coisa (coprocesso).
-( umask 077; printf 'Chave do Resend: '; read -rs k; printf '%s' "$k" > resend_key.txt )
-# O comando exato sai no output SetResendKeyCommand; ele lê de arquivo, nunca de
-# argv, porque segredo em argv fica visível em `ps` e no histórico do shell. O
-# JSON intermediário, com o segredo inteiro, nasce com umask 077 e é apagado
-# mesmo se o put falhar.
+# Cada valor é pedido sem eco: não entra no histórico do shell nem em `ps`.
+infra/scripts/set-env.sh dev JWT_SECRET PORTO_CLIENT_ID PORTO_CLIENT_SECRET \
+  PORTO_OAUTH_URL PORTO_API_BASE_URL MAIL_FROM_EMAIL
+infra/scripts/set-env.sh dev RESEND_API_KEY   # quando a conta do Resend existir
+infra/scripts/set-env.sh dev --list           # só as chaves, nunca os valores
 ```
 
-O domínio do `MailFromEmail` precisa estar verificado no Resend. Sem isso, o
-Resend recusa o envio, o link de definir senha não chega, e a recusa fica só no
-log da API. O envio que só registrava no log saiu: ele levava o link, com o
-token em claro, para o CloudWatch.
+O que vai em cada chave está em *Onde mora cada variável*, logo abaixo.
 
 **4. Ligar o deploy.** Duas coisas no GitHub, e a segunda não é opcional:
 
@@ -266,6 +259,66 @@ de infra e o que publica as imagens rodam em paralelo, e o deploy só existe com
 
 Antes desse primeiro deploy a instância está de pé mas vazia — não há imagem no
 ECR, e o `https://` ainda não responde. É esperado.
+
+## Onde mora cada variável
+
+Três lugares, e cada um tem um dono só:
+
+| Lugar | Quem escreve | O que guarda |
+|---|---|---|
+| `/porto-hub/<env>/aws-config` (Parameter Store, `String`) | só a stack, a cada update | o que a stack calcula: endereço do RDS, imagens, domínio efetivo e os ARNs das senhas geradas |
+| `DbSecret`, `DbRwSecret`, `SeedSecret` (Secrets Manager) | a AWS gera; ninguém edita | senha do master, do papel `hub_rw` e a inicial dos operadores (só dev) |
+| `/porto-hub/<env>/api-env` (Secrets Manager) | você, pelo `set-env.sh` | **tudo o que se define à mão** |
+
+A regra é uma só: **se alguém digita, vai para o `api-env`**. O `aws-config`
+é regravado inteiro pelo CloudFormation a cada update que mude o valor, e
+qualquer linha escrita à mão nele some. O `api-env` fica fora da stack: nenhum
+update o toca, e apagar a stack não o leva junto.
+
+As chaves do `api-env`:
+
+| Chave | Obrigatória | O que é |
+|---|---|---|
+| `JWT_SECRET` | sim | Assina as sessões. Pelo menos 32 caracteres: `openssl rand -base64 48`. Trocar derruba a sessão de todo mundo, e é o que se faz se ele vazar |
+| `PORTO_CLIENT_ID`, `PORTO_CLIENT_SECRET` | sim | Credenciais do gateway Sensedia da Porto (INT-01, cupons) |
+| `PORTO_OAUTH_URL`, `PORTO_API_BASE_URL` | sim | Endereços do gateway. Em dev, os de homologação: `https://portoapicloud-hml.portoseguro.com.br/oauth/v2/access-token` e `https://portoapicloud-hml.portoseguro.com.br`. Em prod, os de produção — credencial de produção falando com HML falha sem dizer por quê |
+| `MAIL_FROM_EMAIL` | sim | Remetente. O domínio precisa estar verificado no Resend, ou o envio é recusado e a recusa fica só no log da API |
+| `RESEND_API_KEY` | não | Sem ela a API sobe e nenhum e-mail sai — a aprovação passa sem o link de definir senha chegar a ninguém |
+| `PORTO_WEBHOOK_SECRET` | não | Segredo do webhook de incentivos combinado com a Porto, pelo menos 32 caracteres (`openssl rand -hex 32`). Sem ele, `POST /v1/webhooks/porto/incentives` recusa toda chamada com 401 |
+| qualquer outra do `env.validation.ts` | não | `PORTO_API_TIMEOUT_MS`, `MAIL_FROM_NAME`, `JWT_EXPIRES_IN_SECONDS`... Sem a chave, vale o padrão da API |
+
+O deploy copia **todas** as chaves para o `api.env`, sem precisar conhecê-las.
+Ele para antes da migration, sem tocar em container, quando:
+
+- falta uma obrigatória, ou ela está vazia;
+- aparece uma chave que o próprio deploy escreve a partir da stack:
+  `NODE_ENV`, `PORT`, `DATABASE_URL`, `DATABASE_SSL`, `APP_BASE_URL`;
+- um valor tem quebra de linha, aspas simples ou barra invertida — o `api.env`
+  é escrito entre aspas simples para o compose não interpolar `$`.
+
+**Variável nova** na API: declare no `env.validation.ts`, grave com o
+`set-env.sh` e rode um deploy. Se ela for obrigatória fora de teste, some-a
+também ao `REQUIRED_API_ENV_KEYS` do `install-release.sh`.
+
+```bash
+infra/scripts/set-env.sh <dev|prod> CHAVE [CHAVE...]      # pede cada valor sem eco
+infra/scripts/set-env.sh <dev|prod> --list                # chaves, nunca valores
+infra/scripts/set-env.sh <dev|prod> --unset CHAVE         # remove
+printf '%s\n' "$valor" | infra/scripts/set-env.sh dev CHAVE   # sem terminal: uma linha por chave
+```
+
+O script lê o segredo, mescla e grava de volta. Não use `put-secret-value` direto:
+ele troca o JSON inteiro, e as outras chaves vão embora. **O valor só chega à API
+no próximo deploy** — um push, ou o *Redeploy sem passar pela CI* abaixo com a
+tag que está no ar.
+
+Se a aprovação responder *"A Porto Serviços recusou o acesso da integração"*
+(`CPN-004`), o gateway recusou a credencial do `api-env` — errada, revogada, sem
+permissão para `/porto-assistencia/campanhasneo`, ou de outro ambiente (a de
+homologação apontada para produção). Repetir não resolve: confira o segredo e o
+log da API, que guarda o status e o corpo da recusa. *"A Porto Serviços não
+respondeu"* (`CPN-002`) é o outro caso — timeout, rede ou 5xx —, e esse passa
+com uma nova tentativa.
 
 ## Pelo console da AWS
 
@@ -291,7 +344,7 @@ coisas que não têm flag equivalente.
 3. *Stack name*: `porto-hub-dev`.
 4. Parâmetros: **deixe `DomainName`, `ApiDomainName` e `CertificateArn`
    vazios** — é o primeiro dos três modos. `GitHubRepo`, `DeployBranch`,
-   `GitHubEnvironment` e `MailFromEmail` já vêm com o valor
+   e `GitHubEnvironment` já vêm com o valor
    certo para este ambiente. `CreateGitHubOidcProvider=false` se a conferência
    acima achou o provider.
 5. *Configure stack options*:
@@ -333,63 +386,13 @@ e `infra/scripts/install-release.sh` → **Systems Manager → Run Command** →
 documento `porto-hub-dev-deploy` → a instância → `imageTag` = o SHA. É
 exatamente o que o `cd.yml` faz.
 
-### Chave do Resend, sem CLI
+### Variáveis da API, sem CLI
 
-Obrigatória: sem ela o deploy falha. **Secrets Manager** → o segredo
-descrito *"Segredos de aplicacao do Hub de Afiliados"* → *Retrieve secret value*
-→ *Edit* → preencha `resend_api_key`.
-
-⚠️ Depois disso, **nunca mexa no `GenerateSecretString` desse segredo**:
-qualquer alteração nele regenera o segredo inteiro e leva a chave junto. O
-sintoma — e-mail parando de sair depois de um update de stack sem relação
-nenhuma — não aponta para lá sozinho.
-
-### Credenciais da Porto (cupons, INT-01)
-
-A API sempre fala com o gateway Sensedia — não há emissor falso fora dos
-testes. As credenciais moram no segredo `PortoSecret`, que nasce com
-`REPLACE_ME` e é preenchido **antes do primeiro deploy**. Por arquivo, nunca por
-argv:
-
-```bash
-# Pelo editor, e não por heredoc colado no terminal: o heredoc vai inteiro para o
-# histórico do shell. O umask 077 cria o arquivo legível só por você.
-( umask 077; touch porto_secret.json ) && "${EDITOR:-vi}" porto_secret.json
-# {"client_id":"<client_id>","client_secret":"<client_secret>","webhook_secret":"<segredo>"}
-# O comando exato sai no output SetPortoSecretCommand; ele apaga o arquivo no fim.
-```
-
-Pelo console: **Secrets Manager** → o segredo descrito *"Credenciais do gateway
-da Porto…"* → *Retrieve secret value* → *Edit*.
-
-`webhook_secret` é o segredo do webhook de incentivos, combinado com a Porto,
-com no mínimo 32 caracteres (`openssl rand -hex 32`). Vazio é válido: a API
-sobe, e `POST /v1/webhooks/porto/incentives` recusa toda chamada com 401.
-
-Com `REPLACE_ME` no `client_id` ou no `client_secret`, o `install-release.sh`
-para antes de tocar nos containers e diz o que fazer.
-
-Os endereços do gateway são parâmetros da stack, `PortoOAuthUrl` e
-`PortoApiBaseUrl`. Em dev ficam vazios, e o `ConfigParameter` escreve os de
-**homologação** no lugar. Em prod são obrigatórios: a stack não cria sem eles.
-A API, com `NODE_ENV=production` — o que os dois ambientes usam —, não sobe sem
-os dois, e o `install-release.sh` falha o deploy antes de tocar nos containers
-se o parâmetro os trouxer vazios (o caso de uma stack com o template anterior).
-
-> Até este template, as credenciais eram linhas escritas à mão no fim do
-> `/porto-hub/dev/config`. Elas saíram de lá por dois motivos: todo update de
-> stack que regravasse o parâmetro as apagava, e o parâmetro é `String`, legível
-> por quem tem `ssm:GetParameter`. O primeiro update da `porto-hub-dev` com o
-> template novo regrava o parâmetro — as linhas antigas somem, e o segredo
-> precisa estar preenchido antes do deploy seguinte.
-
-Se a aprovação responder *"A Porto Serviços recusou o acesso da integração"*
-(`CPN-004`), o gateway recusou a credencial do segredo — errada, revogada, sem
-permissão para `/porto-assistencia/campanhasneo`, ou de outro ambiente (a de
-homologação apontada para produção). Repetir não resolve: confira o segredo e o
-log da API, que guarda o status e o corpo da recusa. *"A Porto Serviços não
-respondeu"* (`CPN-002`) é o outro caso — timeout, rede ou 5xx —, e esse passa
-com uma nova tentativa.
+**Secrets Manager → Store a new secret → Other type of secret**, uma linha
+*Key/value* por chave de *Onde mora cada variável*, e o nome **exatamente**
+`/porto-hub/dev/api-env` — o deploy e a role da instância procuram por ele.
+Antes do primeiro deploy. Para mudar depois: o mesmo segredo → *Retrieve secret
+value* → *Edit*, e um deploy.
 
 ### Quando o certificado chegar
 
@@ -449,7 +452,7 @@ docs (`specs/21-ambiente-de-producao.md`).
 | VPC | `10.0.0.0/16` | `10.1.0.0/16` |
 | RDS | single-AZ, backup 1 dia | **Multi-AZ**, backup 14 dias, `DeletionProtection`, disco até 100 GB |
 | Acesso direto ao banco | `DbAccessCidr` opcional | `DbAccessCidr` opcional, com **subnets próprias do banco**, senhas de **64** caracteres, TLS obrigatório no parameter group e **log de cada conexão** no CloudWatch |
-| Gateway da Porto | homologação, escrita pela stack | `PortoOAuthUrl` e `PortoApiBaseUrl` **obrigatórios** |
+| Gateway da Porto | `PORTO_OAUTH_URL` e `PORTO_API_BASE_URL` de homologação no `api-env` | os de **produção** no `api-env` |
 | Seed de operadores | a cada deploy | **não roda**, e o `SeedSecret` não existe |
 | Alarmes | nenhum | SNS por e-mail: status check (recover e reboot), CPU, disco e conexões do RDS; o 5xx do CloudFront numa stack à parte, em `us-east-1` |
 | Log de acesso do CloudFront | stack de borda em `us-east-1`, 14 dias | stack de borda em `us-east-1`, 90 dias |
@@ -460,44 +463,64 @@ docs (`specs/21-ambiente-de-producao.md`).
 variar por ambiente exigiria o transform `AWS::LanguageExtensions`, que não
 documenta o caso e proíbe o *Use existing template* dos updates.
 
-### Antes de tudo: migrar o dev para o template novo
+### Migrar um ambiente para `aws-config` e `api-env`
 
-O template novo muda o `/porto-hub/dev/config` (chaves `PORTO_*` novas) e o
-`install-release.sh` passa a exigi-las. **Atualize a `porto-hub-dev` e preencha
-o `PortoSecret` dela antes do merge deste template na `development`**: o merge
-dispara o deploy, e ele falha, com mensagem clara, se a stack ainda estiver no
-template antigo.
+Até este template, a configuração da stack ficava em `/porto-hub/<env>/config`,
+e o que se digitava estava espalhado: `AppSecret` (JWT e Resend), `PortoSecret`
+(credenciais e webhook) e os parâmetros `MailFromEmail`, `PortoOAuthUrl` e
+`PortoApiBaseUrl`. O update com o template novo **apaga os dois segredos e o
+parâmetro antigo**, então o conteúdo vai para o `api-env` antes. Uma vez por
+ambiente, nesta ordem — dev primeiro, prod depois:
 
 ```bash
-# Cada parâmetro que a stack já tem, com o valor que está nela. Os novos
-# (PortoOAuthUrl, AlertEmail, zonas...) entram com o padrão, que é vazio.
-params="$(aws cloudformation describe-stacks --stack-name porto-hub-dev --region us-east-1 \
-  --query 'Stacks[0].Parameters[].ParameterKey' --output text \
-  | tr '\t' '\n' | sed 's/.*/ParameterKey=&,UsePreviousValue=true/')"
+ENV=dev; STACK=porto-hub-dev; REGION=us-east-1   # prod: prod, porto-hub-prod, ca-central-1
+
+# 1. Copia JWT, Resend, Porto e remetente para o api-env. O JWT_SECRET vai igual:
+#    um novo derrubaria a sessão de todo mundo. Pode rodar de novo; o que já
+#    existe no api-env não é tocado.
+infra/scripts/set-env.sh $ENV --import-legacy
+infra/scripts/set-env.sh $ENV --list   # as seis obrigatórias têm que aparecer
+
+# 2. O template passa do limite de 51.200 bytes do --template-body: vai pelo
+#    bucket de deploy da própria stack.
+BUCKET="$(aws cloudformation describe-stacks --stack-name $STACK --region $REGION \
+  --query "Stacks[0].Outputs[?OutputKey=='DeployBucketName'].OutputValue" --output text)"
+aws s3 cp infra/cloudformation/porto-hub-stack.yaml "s3://$BUCKET/cfn/porto-hub-stack.yaml" --region $REGION
+
+# Os parâmetros que continuam no template, com o valor que está na stack.
+params="$(aws cloudformation describe-stacks --stack-name $STACK --region $REGION \
+  --query 'Stacks[0].Parameters[].ParameterKey' --output text | tr '\t' '\n' \
+  | grep -vxE 'MailFromEmail|PortoOAuthUrl|PortoApiBaseUrl' \
+  | sed 's/.*/ParameterKey=&,UsePreviousValue=true/')"
 
 # shellcheck disable=SC2086 — a lista é para ser quebrada em palavras
-aws cloudformation create-change-set --stack-name porto-hub-dev --change-set-name prod-template \
-  --template-body file://infra/cloudformation/porto-hub-stack.yaml \
-  --parameters $params --capabilities CAPABILITY_NAMED_IAM --region us-east-1
+aws cloudformation create-change-set --stack-name $STACK --change-set-name api-env \
+  --template-url "https://$BUCKET.s3.$REGION.amazonaws.com/cfn/porto-hub-stack.yaml" \
+  --parameters $params --capabilities CAPABILITY_NAMED_IAM --region $REGION
 
-aws cloudformation describe-change-set --stack-name porto-hub-dev --change-set-name prod-template \
-  --region us-east-1 --query 'Changes[].ResourceChange.[LogicalResourceId,Action,Replacement]' --output table
+aws cloudformation describe-change-set --stack-name $STACK --change-set-name api-env \
+  --region $REGION --query 'Changes[].ResourceChange.[LogicalResourceId,Action,Replacement]' --output table
 ```
 
-Pelo console é **Update → Replace current template**, mantendo os parâmetros.
+Pelo console é **Update → Replace current template → Upload**, mantendo os
+parâmetros — os três que saíram somem do formulário sozinhos.
 
-O change set esperado tem `Add` em `PortoSecret` e nos três handles de
-dependência (`DatabaseRoutesReady`, `OriginAddressReady`, `PrivateRoutesReady`
-— não criam nada na conta), e `Modify` em `ConfigParameter`,
-`InstanceRole` e `Database` (só o atributo de exclusão), mais `Distribution` e
-`Instance` por metadado. **`Replacement: True` em qualquer coisa que não seja a
-`Instance`, pare** — o template deveria resolver para o mesmo recurso em dev. Na
-`Instance`, replacement só é aceitável se vier do `LatestAmiId` (AMI nova
-publicada desde o último update); aí o deploy seguinte reinstala a release.
+O change set esperado: `Remove` em `AppSecret`, `PortoSecret` e
+`ConfigParameter`; `Add` em `AwsConfigParameter`; `Modify` em `InstanceRole`.
+**`Replacement: True` em qualquer coisa que não seja a `Instance`, pare.** Na
+`Instance`, só é aceitável se vier do `LatestAmiId` (AMI nova publicada desde o
+último update), e aí o deploy seguinte reinstala a release.
 
-Depois do execute: as linhas manuais `PORTO_*` do parâmetro somem (é o
-esperado); grave as mesmas credenciais no `PortoSecret` pelo
-`SetPortoSecretCommand`. Aí o merge pode seguir.
+**3. Executar o change set**, e **4. rodar um deploy** — em dev, o merge na
+`development`; em prod, o merge na `main` e a aprovação. A API no ar não sente
+o intervalo: ela lê o `api.env` só ao subir. Um deploy que rode antes do passo 3
+para com *"/porto-hub/<env>/aws-config não existe"*, sem tocar em container — é
+só rodar de novo depois.
+
+Os segredos removidos ficam agendados para exclusão, com janela de recuperação.
+Se algo não veio no passo 1, `aws secretsmanager restore-secret --secret-id <arn>`
+os traz de volta dentro dela. Esta seção e o `--import-legacy` saem quando os
+dois ambientes tiverem migrado.
 
 ### Subir pela primeira vez
 
@@ -545,8 +568,6 @@ aws cloudformation deploy \
     PrimaryAvailabilityZone=<zona-a> \
     SecondaryAvailabilityZone=<zona-b> \
     CloudFrontPrefixListId=<id do passo 1> \
-    PortoOAuthUrl=<endpoint de token de produção> \
-    PortoApiBaseUrl=<base da API de produção> \
     AlertEmail=<quem recebe os alarmes> \
     DbAccessCidr=<faixa de quem acessa o banco>
 ```
@@ -581,8 +602,13 @@ aws cloudformation deploy \
 
 O tópico é outro, e a assinatura também chega por e-mail para confirmar.
 
-**5. Gravar as credenciais de produção** no `PortoSecret` (`SetPortoSecretCommand`)
-e, quando houver, a chave do Resend no `AppSecret` (`SetResendKeyCommand`).
+**5. Gravar o `api-env` de produção**, com as credenciais e os endereços **de
+produção** da Porto — as chaves estão em *Onde mora cada variável*:
+
+```bash
+infra/scripts/set-env.sh prod JWT_SECRET PORTO_CLIENT_ID PORTO_CLIENT_SECRET \
+  PORTO_OAUTH_URL PORTO_API_BASE_URL MAIL_FROM_EMAIL RESEND_API_KEY
+```
 
 **6. Ligar o GitHub.** Duas coisas, as duas obrigatórias:
 
@@ -727,24 +753,26 @@ todo mundo.
 
 ## Mudar configuração
 
-`DomainName`, `ApiDomainName` e `MailFromEmail` são parâmetros da stack, mas
-**não vivem no UserData** — vivem no parâmetro
-`/porto-hub/dev/config` do Parameter Store, que o `install-release.sh` lê a cada
-deploy. Trocar um valor é:
+Depende de quem é o dono do valor (*Onde mora cada variável*):
 
 ```bash
-aws cloudformation deploy ... --parameter-overrides MailFromEmail=<remetente> ... # 1
+# Definido à mão (remetente, credenciais, JWT...): o api-env, e um deploy.
+infra/scripts/set-env.sh dev MAIL_FROM_EMAIL                                   # 1
+
+# Da stack (domínio, certificado, CIDR do banco...): update de stack, e um deploy.
+aws cloudformation deploy ... --parameter-overrides DomainName=<host> ...      # 1
+
 aws ssm send-command --document-name porto-hub-dev-deploy \
   --instance-ids <id> --parameters imageTag=<sha-no-ar>                        # 2
 ```
 
-O passo 2 é o que aplica: o update de stack reescreve o parâmetro, o deploy
-reescreve os arquivos de env e reinicia os containers.
+O passo 2 é o que aplica nos dois casos: o deploy relê o `aws-config` e o
+`api-env`, reescreve os arquivos de env e reinicia os containers.
 
 Foi para isso que a configuração saiu do UserData. Lá, mudar um valor ou
 **substituiria a instância**, ou não teria efeito nenhum — o `cloud-init` roda
 só no primeiro boot. O endpoint do RDS entra na mesma conta: se o banco for
-substituído, o parâmetro acompanha.
+substituído, o `aws-config` acompanha.
 
 Trocar `DomainName` ou `ApiDomainName` tem um passo a mais: eles também são
 `Aliases` do CloudFront, então o certificado precisa cobrir o nome novo **antes**
@@ -937,7 +965,11 @@ aws rds describe-db-snapshots --region us-east-1 \
 aws rds delete-db-snapshot --db-snapshot-identifier <id> --region us-east-1
 ```
 
-Os segredos ficam **agendados para exclusão** com janela de recuperação — é
+O `/porto-hub/dev/api-env` **fica**: ele não é da stack, e é isso que faz a
+stack recriada subir com os mesmos valores. Se o ambiente acabou de vez:
+`aws secretsmanager delete-secret --secret-id /porto-hub/dev/api-env --region us-east-1`.
+
+Os segredos da stack ficam **agendados para exclusão** com janela de recuperação — é
 assim que o Secrets Manager funciona, não dá para apagar na hora pelo
 CloudFormation.
 

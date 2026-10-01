@@ -18,40 +18,32 @@ ENV_FILE="${APP_DIR}/.env"
 MIGRATION_APPLIED=false
 
 # O UserData deixa só a região e o nome do parâmetro — nada que possa mudar
-# durante a vida da instância. A configuração de verdade vem do Parameter Store
-# a cada deploy: é isso que faz um update de stack (endpoint novo do RDS, outro
-# remetente) chegar aqui sem substituir a máquina.
+# durante a vida da instância. A configuração de verdade vem de dois lugares, a
+# cada deploy, e cada um tem um dono só:
+#
+#   /porto-hub/<env>/aws-config  Parameter Store. Escrito pela stack: endereços,
+#                                imagens e ARNs das senhas que a AWS gera.
+#   /porto-hub/<env>/api-env     Secrets Manager. Escrito à mão, pelo set-env.sh:
+#                                tudo o que uma pessoa define, chave = variável.
+#
+# O bootstrap.env ainda aponta para `/porto-hub/<env>/config`, o nome antigo: o
+# UserData não roda de novo, e corrigi-lo no template pararia a instância sem
+# atualizar o arquivo. O prefixo é o mesmo; só o sufixo muda.
 # shellcheck source=/dev/null
 source "${APP_DIR}/bootstrap.env"
+AWS_CONFIG_PARAM="${CONFIG_PARAM%/*}/aws-config"
 
 # `umask 077` por hábito: o parâmetro só traz ARNs de segredo, mas o arquivo
 # fica no disco da instância entre um deploy e outro.
-( umask 077
-  aws ssm get-parameter --name "${CONFIG_PARAM}" --region "${AWS_REGION}" \
+if ! ( umask 077
+  aws ssm get-parameter --name "${AWS_CONFIG_PARAM}" --region "${AWS_REGION}" \
     --query Parameter.Value --output text > "${APP_DIR}/stack.env"
-)
+); then
+  echo "FALHA: ${AWS_CONFIG_PARAM} não existe. Atualize a stack com o template atual antes do deploy." >&2
+  exit 1
+fi
 # shellcheck source=/dev/null
 source "${APP_DIR}/stack.env"
-
-# Chaves que nasceram junto com o template de producao. Faltando, a stack ainda
-# roda o template anterior: o `set -u` pararia mais adiante com um "unbound
-# variable" que nao diz o que fazer.
-for key in PORTO_SECRET_ARN PORTO_OAUTH_URL PORTO_API_BASE_URL; do
-  if [ -z "${!key+set}" ]; then
-    echo "FALHA: ${key} ausente em ${CONFIG_PARAM}. Atualize a stack com o template atual antes do deploy." >&2
-    exit 1
-  fi
-done
-
-# Vazios, a API recusaria a subida com NODE_ENV=production depois da migration,
-# e o deploy terminaria em rollback. A stack de antes deixava os dois vazios em
-# dev; a atual escreve os de homologação.
-for key in PORTO_OAUTH_URL PORTO_API_BASE_URL; do
-  if [ -z "${!key}" ]; then
-    echo "FALHA: ${key} vazio em ${CONFIG_PARAM}. Atualize a stack com o template atual antes do deploy." >&2
-    exit 1
-  fi
-done
 
 compose() {
   docker compose -f "${COMPOSE_FILE}" --project-directory "${APP_DIR}" "$@"
@@ -102,25 +94,57 @@ AVISO
   exit 1
 }
 
-# Lê um campo do JSON de segredo que chega pela entrada padrão. O segredo nunca
-# vai para a linha de comando: argv de qualquer processo aparece inteiro em
-# `ps` e em /proc/<pid>/cmdline para todo usuário do host, durante toda a vida
-# do processo. `printf` é builtin do bash, e por isso o pipe não expõe nada.
-# Com o segundo argumento, o campo é opcional e cai nele quando falta.
-secret_field() {
-  python3 -c 'import json,sys
-s = json.load(sys.stdin)
-print(s[sys.argv[1]] if len(sys.argv) < 3 else s.get(sys.argv[1], sys.argv[2]))' "$@"
+# Variáveis que o deploy escreve a partir da stack. Uma delas também no
+# api-env seria duas fontes para o mesmo valor, e o compose ficaria com a última
+# linha sem ninguém perceber.
+STACK_OWNED_KEYS="NODE_ENV PORT DATABASE_URL DATABASE_SSL APP_BASE_URL"
+
+# Sem estas a API não sobe com NODE_ENV=production, ou sobe falando com quem não
+# devia: o padrão do MAIL_FROM_EMAIL é um domínio de exemplo. Conferir aqui,
+# antes da migration, troca um rollback com schema já aplicado por uma falha
+# limpa que diz qual chave gravar. O resto do api-env é opcional — o
+# env.validation.ts da API tem o padrão de cada uma.
+REQUIRED_API_ENV_KEYS="JWT_SECRET PORTO_CLIENT_ID PORTO_CLIENT_SECRET PORTO_OAUTH_URL PORTO_API_BASE_URL MAIL_FROM_EMAIL"
+
+# Transforma o JSON do api-env, que chega pela entrada padrão, em linhas do
+# env_file. O segredo nunca vai para a linha de comando: argv de qualquer
+# processo aparece inteiro em `ps` e em /proc/<pid>/cmdline para todo usuário do
+# host. `printf` é builtin do bash, e por isso o pipe não expõe nada.
+#
+# Aspas simples porque o compose não interpola nada dentro delas: um `$` numa
+# senha chegaria inteiro à API. Por isso mesmo aspas simples, barra invertida
+# (que escapa a aspa) e quebra de linha são recusadas — o set-env.sh já recusa
+# os três na gravação.
+api_env_lines() {
+  python3 -c 'import json, re, sys
+env = json.load(sys.stdin)
+reserved = set(sys.argv[1].split())
+required = sys.argv[2].split()
+problems = []
+for key in required:
+    if not env.get(key):
+        problems.append("%s ausente ou vazia" % key)
+for key, value in env.items():
+    if not re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
+        problems.append("%s não é nome de variável" % key)
+    elif key in reserved:
+        problems.append("%s é escrita pelo deploy a partir da stack" % key)
+    elif not isinstance(value, str):
+        problems.append("%s não é texto" % key)
+    elif any(c in value for c in "\n\x27\\"):
+        problems.append("%s tem quebra de linha, aspas simples ou barra invertida" % key)
+if problems:
+    sys.exit("\n".join(problems))
+for key in sorted(env):
+    print("%s=\x27%s\x27" % (key, env[key]))' "$@"
 }
 
 write_secret_files() {
   set +x
 
-  local db_secret app_secret porto_secret database_url jwt_secret resend_key
+  local db_secret api_env database_url api_env_lines_out
 
-  db_secret="$(aws secretsmanager get-secret-value --secret-id "${DB_SECRET_ARN}" \
-    --region "${AWS_REGION}" --query SecretString --output text)"
-  app_secret="$(aws secretsmanager get-secret-value --secret-id "${APP_SECRET_ARN}" \
+  db_secret="$(aws secretsmanager get-secret-value --secret-id "${DB_MASTER_SECRET_ARN}" \
     --region "${AWS_REGION}" --query SecretString --output text)"
 
   # O JSON vem pela entrada padrão; só o host e o nome do banco, que não são
@@ -133,29 +157,17 @@ print("postgres://%s:%s@%s:5432/%s" % (
     u.quote(s["username"], safe=""), u.quote(s["password"], safe=""),
     sys.argv[1], sys.argv[2]))' "${DB_HOST}" "${DB_NAME}")"
 
-  jwt_secret="$(printf '%s' "${app_secret}" | secret_field jwt_secret)"
-  resend_key="$(printf '%s' "${app_secret}" | secret_field resend_api_key)"
-
-  # O segredo nasce com REPLACE_ME e é preenchido à mão depois do create. Falhar
-  # aqui, antes de tocar em container, é melhor que subir uma API que só descobre
-  # a credencial falsa na primeira aprovação de cupom.
-  porto_secret="$(aws secretsmanager get-secret-value --secret-id "${PORTO_SECRET_ARN}" \
-    --region "${AWS_REGION}" --query SecretString --output text)"
-  PORTO_CLIENT_ID="$(printf '%s' "${porto_secret}" | secret_field client_id)"
-  PORTO_CLIENT_SECRET="$(printf '%s' "${porto_secret}" | secret_field client_secret)"
-  PORTO_WEBHOOK_SECRET="$(printf '%s' "${porto_secret}" | secret_field webhook_secret '')"
-  if [ "${PORTO_CLIENT_ID}" = REPLACE_ME ] || [ "${PORTO_CLIENT_SECRET}" = REPLACE_ME ]; then
-    echo "FALHA: as credenciais da Porto ainda são REPLACE_ME no ${PORTO_SECRET_ARN}." >&2
-    echo "Grave-as com o comando do output SetPortoSecretCommand e rode o deploy de novo." >&2
+  if ! api_env="$(aws secretsmanager get-secret-value --secret-id "${API_ENV_SECRET_ID}" \
+    --region "${AWS_REGION}" --query SecretString --output text)"; then
+    echo "FALHA: não consegui ler o ${API_ENV_SECRET_ID}. Crie-o com infra/scripts/set-env.sh." >&2
     exit 1
   fi
-  # Diferente da Porto, a chave do Resend não trava o deploy: sem e-mail o
-  # ambiente ainda serve para todo o resto. Vai vazia, a API sobe, e cada envio
-  # falha no log dela — a aprovação passa sem o link de definir senha chegar.
-  if [ "${resend_key}" = REPLACE_ME ]; then
-    echo "AVISO: a chave do Resend ainda é REPLACE_ME no ${APP_SECRET_ARN}." >&2
-    echo "A API sobe sem enviar e-mail. Grave-a com o output SetResendKeyCommand e rode o deploy de novo." >&2
-    resend_key=""
+  # Falhar aqui, antes de tocar em container, é melhor que subir uma API que só
+  # descobre a credencial faltando na primeira aprovação de cupom.
+  if ! api_env_lines_out="$(printf '%s' "${api_env}" \
+    | api_env_lines "${STACK_OWNED_KEYS}" "${REQUIRED_API_ENV_KEYS}")"; then
+    echo "FALHA: o ${API_ENV_SECRET_ID} não está pronto (acima). Corrija com infra/scripts/set-env.sh e rode o deploy de novo." >&2
+    exit 1
   fi
 
   # `umask 077` antes de escrever: criar e depois `chmod` deixa uma janela em
@@ -169,25 +181,10 @@ DATABASE_URL=${database_url}
 # o servidor recusa a conexão antes de olhar a senha. O bundle das CAs da Amazon
 # vai dentro da imagem, porque o trust store do Node não as conhece.
 DATABASE_SSL=true
-JWT_SECRET=${jwt_secret}
-JWT_EXPIRES_IN_SECONDS=28800
 APP_BASE_URL=https://${DOMAIN_NAME}
-RESEND_API_KEY=${resend_key}
-MAIL_FROM_EMAIL=${MAIL_FROM_EMAIL}
-MAIL_FROM_NAME=Hub de Afiliados
-PORTO_CLIENT_ID=${PORTO_CLIENT_ID}
-PORTO_CLIENT_SECRET=${PORTO_CLIENT_SECRET}
-# O segredo do webhook de incentivos é opcional de propósito: vazio no segredo,
-# a API sobe e a rota recusa toda chamada com 401.
-PORTO_WEBHOOK_SECRET=${PORTO_WEBHOOK_SECRET}
+# Daqui para baixo, o /porto-hub/<env>/api-env, chave por chave.
 ENV
-
-    # Os endereços do gateway vêm sempre da stack: em dev, os de homologação;
-    # em prod, os que o create exigiu. A API roda com NODE_ENV=production nos
-    # dois e não sobe sem eles — o padrão de homologação dela é só para a
-    # máquina de quem desenvolve.
-    echo "PORTO_OAUTH_URL=${PORTO_OAUTH_URL}" >> "${APP_DIR}/api.env"
-    echo "PORTO_API_BASE_URL=${PORTO_API_BASE_URL}" >> "${APP_DIR}/api.env"
+    printf '%s\n' "${api_env_lines_out}" >> "${APP_DIR}/api.env"
 
     # Nada de segredo aqui, e é essa a fronteira: a web não tem o que vazar.
     # `API_BASE_URL` aponta para o nome do serviço na rede interna do compose —

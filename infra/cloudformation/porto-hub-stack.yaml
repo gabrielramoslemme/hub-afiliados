@@ -120,11 +120,6 @@ Parameters:
       PrefixListMatchesRegion). Conferir com
       `aws ec2 describe-managed-prefix-lists --region <regiao> --filters Name=prefix-list-name,Values=com.amazonaws.global.cloudfront.origin-facing`.
 
-  MailFromEmail:
-    Type: String
-    Default: nao-responda@influencersportoservico.com.br
-    Description: Remetente. O dominio precisa estar verificado no Resend, ou o e-mail nao sai.
-
   GitHubRepo:
     Type: String
     Default: mesainc/affiliate-hub-web
@@ -204,28 +199,6 @@ Parameters:
       Confirmacao de que DbAccessCidr=0.0.0.0/0 e intencional. Irrelevante com
       qualquer outro CIDR, e ignorado com o banco fechado.
 
-  # VAZIOS em dev, e ai o ConfigParameter escreve os de homologacao. Em prod
-  # sao obrigatorios (regra ProdRequiresPortoGateway): credencial de producao
-  # falando com HML falharia sem dizer por que. A API tambem se recusa a subir
-  # sem eles com NODE_ENV=production - e os dois ambientes rodam assim, por isso
-  # o de dev recebe o endereco de HML escrito, e nao o padrao da API.
-  #
-  # O padrao e lista branca, e nao `\S+`: o valor cai sem aspas no
-  # ConfigParameter, que o install-release.sh le com `source`. Um `&` ou `;`
-  # partiria a URL em dois comandos, e aspas nao resolvem - a mesma linha vai
-  # para o env_file do compose, que as trataria como parte do valor.
-  PortoOAuthUrl:
-    Type: String
-    Default: ''
-    AllowedPattern: '^$|^https://[A-Za-z0-9._~:/?%=+-]+$'
-    Description: Endpoint de token do gateway Sensedia da Porto. Obrigatorio em prod.
-
-  PortoApiBaseUrl:
-    Type: String
-    Default: ''
-    AllowedPattern: '^$|^https://[A-Za-z0-9._~:/?%=+-]+$'
-    Description: Base da API do gateway Sensedia da Porto. Obrigatorio em prod.
-
   AlertEmail:
     Type: String
     Default: ''
@@ -286,16 +259,6 @@ Rules:
           do master como unico controle. Passe AcknowledgeDbOpenToInternet=true
           para confirmar que a exposicao e intencional.
 
-  ProdRequiresPortoGateway:
-    RuleCondition: !Equals [!Ref EnvironmentName, 'prod']
-    Assertions:
-      - Assert: !And
-          - !Not [!Equals [!Ref PortoOAuthUrl, '']]
-          - !Not [!Equals [!Ref PortoApiBaseUrl, '']]
-        AssertDescription: >
-          Producao exige PortoOAuthUrl e PortoApiBaseUrl. Vazios, o ambiente
-          receberia os enderecos de homologacao.
-
   # O default e o id de us-east-1. Em outra regiao ele nao existe, e o erro so
   # apareceria no security group, com InvalidPrefixListID.NotFound.
   PrefixListMatchesRegion:
@@ -351,8 +314,6 @@ Conditions:
   # Duas, e nao uma: o modo mais provavel de rodar e dominio na web e nada na
   # API - o host da API so existe para o webhook, que ainda nao foi escrito.
   HasDomain: !Not [!Equals [!Ref DomainName, '']]
-  HasPortoOAuthUrl: !Not [!Equals [!Ref PortoOAuthUrl, '']]
-  HasPortoApiBaseUrl: !Not [!Equals [!Ref PortoApiBaseUrl, '']]
   HasApiDomain: !Not [!Equals [!Ref ApiDomainName, '']]
   DbIsPublic: !Not [!Equals [!Ref DbAccessCidr, '']]
 
@@ -637,14 +598,23 @@ Resources:
           Value: !Sub 'porto-hub-${EnvironmentName}-db-sg'
 
   # =========================================================== Segredos
-  # Nenhum valor sensivel no template, na CLI ou nos eventos da stack: o RDS
-  # consome a senha por {{resolve:secretsmanager:}}.
+  # Aqui ficam so as senhas que a AWS gera e ninguem define: master do RDS,
+  # papel hub_rw e senha inicial do seed. O RDS consome a do master por
+  # {{resolve:secretsmanager:}}, e nenhum valor sensivel passa pelo template,
+  # pela CLI ou pelos eventos da stack.
   #
-  # Nenhum dos quatro tem `Name` fixo, e isso e deliberado. O DeleteSecret do
+  # Tudo o que uma pessoa define - JWT_SECRET, credenciais da Porto, chave do
+  # Resend, remetente - mora no segredo /porto-hub/<env>/api-env, que esta
+  # stack NAO cria: ele nasce e e mantido pelo infra/scripts/set-env.sh. Fora
+  # do template, nenhum update de stack tem como regravar o que foi digitado, e
+  # apagar a stack nao leva os valores junto.
+  #
+  # Nenhum dos tres tem `Name` fixo, e isso e deliberado. O DeleteSecret do
   # CloudFormation agenda a exclusao com janela de recuperacao, nao apaga na
   # hora: com nome fixo, recriar a stack falharia por 30 dias com "already
   # scheduled for deletion" - justamente o contrario do que um ambiente de
-  # desenvolvimento precisa. Quem precisa do ARN le dos outputs.
+  # desenvolvimento precisa. Quem precisa do ARN le do aws-config ou dos
+  # outputs.
   DbSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -657,24 +627,6 @@ Resources:
         # !If resolve para 32 em dev, e o segredo de la nao e regenerado.
         PasswordLength: !If [IsProd, 64, 32]
         # Sem pontuacao para nao quebrar a connection string montada no deploy.
-        ExcludePunctuation: true
-
-  # O JWT_SECRET nasce gerado com 48 caracteres - satisfaz o min(32) do Joi sem
-  # passar por mao humana. A chave do Resend nasce REPLACE_ME e e injetada
-  # depois do create pelo comando do output SetResendKeyCommand.
-  #
-  # Nao mexa no GenerateSecretString depois do primeiro create: qualquer
-  # alteracao nele regenera o segredo inteiro e leva junto a chave do Resend
-  # injetada a mao. O sintoma - e-mail parando de sair depois de um update de
-  # stack sem relacao nenhuma - nao aponta para ca sozinho.
-  AppSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Description: Segredos de aplicacao do Hub de Afiliados
-      GenerateSecretString:
-        SecretStringTemplate: '{"resend_api_key":"REPLACE_ME"}'
-        GenerateStringKey: jwt_secret
-        PasswordLength: 48
         ExcludePunctuation: true
 
   # A senha que circula entre pessoas: e ela que vai para o DBeaver, e com o
@@ -702,7 +654,7 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Condition: IsDev
     Properties:
-      # "Hub de Afiliados" nos quatro: e por essa descricao que o comando de
+      # "Hub de Afiliados" nos tres: e por essa descricao que o comando de
       # limpeza do README acha os segredos, agora que nao ha mais nome fixo.
       Description: Senha inicial dos operadores do painel do Hub de Afiliados, trocada no primeiro login
       GenerateSecretString:
@@ -710,22 +662,6 @@ Resources:
         GenerateStringKey: admin_password
         PasswordLength: 24
         ExcludePunctuation: true
-
-  # As credenciais do gateway da Porto e o segredo do webhook de incentivos.
-  # Nascem REPLACE_ME e sao preenchidas a mao depois do create - o comando sai
-  # no output SetPortoSecretCommand. Antes moravam em linhas escritas a mao no
-  # parametro de config, que e `String`: legivel por quem tem ssm:GetParameter,
-  # e apagado por qualquer update de stack que regravasse o parametro.
-  #
-  # `webhook_secret` vazio e valido: a API sobe e o webhook recusa tudo com 401.
-  #
-  # Nao mexa no SecretString abaixo depois do create: o CloudFormation o
-  # regravaria por cima dos valores preenchidos a mao.
-  PortoSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Description: Credenciais do gateway da Porto e segredo do webhook do Hub de Afiliados
-      SecretString: '{"client_id":"REPLACE_ME","client_secret":"REPLACE_ME","webhook_secret":""}'
 
   # =========================================================== Banco
   DbSubnetGroup:
@@ -929,27 +865,36 @@ Resources:
       # fulano" semanas depois; em dev ninguem olha para tras de duas semanas.
       RetentionInDays: !If [IsProd, 90, 14]
 
-  # Toda a configuracao da maquina vive aqui, e nao no UserData. UserData e
-  # imutavel na pratica: mudar um valor nele ou substitui a instancia - levando
-  # o volume com os certificados do Caddy, e com ele a cota semanal do Let's
-  # Encrypt - ou nao roda de novo, porque o cloud-init e `once`, e a mudanca
-  # passa despercebida. No Parameter Store, trocar o remetente ou absorver um
-  # endpoint novo do RDS e um update de stack seguido do proximo deploy.
+  # O que a stack sabe e mais ninguem define: enderecos, nomes e ARNs que saem
+  # dos proprios recursos. So o CloudFormation escreve aqui, e ele regrava o
+  # parametro inteiro a cada update que mude o Value - por isso NADA digitado a
+  # mao entra neste parametro. O que uma pessoa define vai para o segredo
+  # /porto-hub/<env>/api-env, que a stack nao gerencia.
   #
-  # O template escreve aqui ARNs de segredo, nunca o conteudo deles. As
-  # credenciais da Porto moram no PortoSecret, e nao mais em linhas escritas a
-  # mao no fim deste parametro: o CloudFormation o regrava inteiro a cada
-  # update que mude o Value, e as linhas iam junto.
-  ConfigParameter:
+  # Mora aqui, e nao no UserData. UserData e imutavel na pratica: mudar um
+  # valor nele ou substitui a instancia - levando o volume com os certificados
+  # do Caddy - ou nao roda de novo, porque o cloud-init e `once`, e a mudanca
+  # passa despercebida. Aqui, absorver um endpoint novo do RDS e um update de
+  # stack seguido do proximo deploy.
+  #
+  # Das senhas geradas, so o ARN: o parametro e `String`, legivel por quem tem
+  # ssm:GetParameter, e o CloudFormation nao cria `SecureString`.
+  AwsConfigParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      # Este nome e repetido literalmente no UserData e na politica da
-      # InstanceRole. E deliberado: `!Ref` nos dois lugares fecharia um ciclo
-      # de dependencia, porque o Value abaixo le a distribuicao. Mudou aqui,
-      # mude nos dois - o `grep` do caminho acha os tres.
-      Name: !Sub '/porto-hub/${EnvironmentName}/config'
+      # Este nome e repetido literalmente na politica da InstanceRole. E
+      # deliberado: `!Ref` ali fecharia um ciclo de dependencia, porque o Value
+      # abaixo le a distribuicao. Mudou aqui, mude la - o `grep` do caminho acha
+      # os dois.
+      #
+      # O UserData ainda escreve `CONFIG_PARAM=/porto-hub/<env>/config`, o nome
+      # antigo, e continua assim de proposito: o install-release.sh troca o
+      # sufixo por aws-config. Corrigir no UserData pararia a instancia no
+      # update sem atualizar nada - o cloud-init nao roda de novo, e o
+      # bootstrap.env das instancias que ja existem seguiria com o nome antigo.
+      Name: !Sub '/porto-hub/${EnvironmentName}/aws-config'
       Type: String
-      Description: Configuracao nao-secreta lida pelo install-release.sh a cada deploy
+      Description: Configuracao gerenciada pela stack, lida pelo install-release.sh a cada deploy
       # `DOMAIN_NAME` sem dominio proprio cai para o nome do CloudFront, e nao
       # para vazio. Ele nao e enfeite: alimenta o roteamento por Host do Caddy,
       # o APP_BASE_URL dos links de e-mail e o PUBLIC_DOMAIN_NAME que vira
@@ -965,33 +910,18 @@ Resources:
           DEPLOY_BUCKET=${DeployBucket}
           DB_HOST=${Database.Endpoint.Address}
           DB_NAME=hub_afiliados
-          DB_SECRET_ARN=${DbSecret}
+          DB_MASTER_SECRET_ARN=${DbSecret}
           DB_RW_SECRET_ARN=${DbRwSecret}
-          APP_SECRET_ARN=${AppSecret}
           SEED_SECRET_ARN=${SeedSecretArn}
-          PORTO_SECRET_ARN=${PortoSecret}
-          PORTO_OAUTH_URL=${EffectivePortoOAuthUrl}
-          PORTO_API_BASE_URL=${EffectivePortoApiBaseUrl}
+          API_ENV_SECRET_ID=/porto-hub/${EnvironmentName}/api-env
           DOMAIN_NAME=${EffectiveDomainName}
           API_DOMAIN_NAME=${ApiDomainName}
-          MAIL_FROM_EMAIL=${MailFromEmail}
         - EffectiveDomainName: !If
             - HasDomain
             - !Ref DomainName
             - !GetAtt Distribution.DomainName
           # Vazio em prod, e e isso que desliga o seed no install-release.sh.
           SeedSecretArn: !If [IsDev, !Ref SeedSecret, '']
-          # Vazios so em dev - em prod a regra ProdRequiresPortoGateway barra o
-          # create. Os de homologacao vao escritos porque a API, com
-          # NODE_ENV=production, nao sobe sem eles.
-          EffectivePortoOAuthUrl: !If
-            - HasPortoOAuthUrl
-            - !Ref PortoOAuthUrl
-            - 'https://portoapicloud-hml.portoseguro.com.br/oauth/v2/access-token'
-          EffectivePortoApiBaseUrl: !If
-            - HasPortoApiBaseUrl
-            - !Ref PortoApiBaseUrl
-            - 'https://portoapicloud-hml.portoseguro.com.br'
 
   # =========================================================== IAM
   InstanceRole:
@@ -1017,9 +947,11 @@ Resources:
                 Resource:
                   - !Ref DbSecret
                   - !Ref DbRwSecret
-                  - !Ref AppSecret
-                  - !Ref PortoSecret
                   - !If [IsDev, !Ref SeedSecret, !Ref 'AWS::NoValue']
+                  # O api-env nao e recurso da stack, entao vai por nome. O
+                  # `-??????` casa o sufixo aleatorio que a AWS poe no ARN, e
+                  # vale ate para o segredo criado depois da stack.
+                  - !Sub 'arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/porto-hub/${EnvironmentName}/api-env-??????'
               - Effect: Allow
                 Action: ecr:GetAuthorizationToken
                 Resource: '*'
@@ -1046,11 +978,11 @@ Resources:
                 Resource: !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*'
               - Effect: Allow
                 Action: ssm:GetParameter
-                # Nome literal, e nao `!Ref ConfigParameter`: o parametro passou a
-                # ler `Distribution.DomainName`, e a referencia aqui fecharia o
-                # ciclo ConfigParameter -> Distribution -> ElasticIpAssociation
+                # Nome literal, e nao `!Ref AwsConfigParameter`: o parametro passou
+                # a ler `Distribution.DomainName`, e a referencia aqui fecharia o
+                # ciclo AwsConfigParameter -> Distribution -> ElasticIpAssociation
                 # -> Instance -> InstanceProfile -> InstanceRole.
-                Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/porto-hub/${EnvironmentName}/config'
+                Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/porto-hub/${EnvironmentName}/aws-config'
               - Effect: Allow
                 Action:
                   - logs:CreateLogStream
@@ -1689,9 +1621,15 @@ Outputs:
       - 'aws ssm start-session --target ${Instance} --region ${AWS::Region} --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters ''{"host":["${DbHost}"],"portNumber":["5432"],"localPortNumber":["5433"]}'''
       - DbHost: !GetAtt Database.Endpoint.Address
 
-  ConfigParameterName:
-    Description: Parametro com a configuracao nao-secreta lida a cada deploy
-    Value: !Ref ConfigParameter
+  AwsConfigParameterName:
+    Description: Parametro com a configuracao gerenciada pela stack, lida a cada deploy
+    Value: !Ref AwsConfigParameter
+
+  # Nome, e nao ARN: o segredo nao e desta stack, e o set-env.sh o cria na
+  # primeira chave gravada.
+  ApiEnvSecretName:
+    Description: Segredo com tudo o que se define a mao - grave com infra/scripts/set-env.sh
+    Value: !Sub '/porto-hub/${EnvironmentName}/api-env'
 
   # O nome do segredo e gerado pelo CloudFormation, entao nao ha string fixa que
   # um script possa adivinhar: quem precisa da senha resolve o ARN por aqui.
@@ -1711,22 +1649,3 @@ Outputs:
     Condition: IsDev
     Description: Senha inicial dos operadores do painel (trocada no primeiro login)
     Value: !Sub 'aws secretsmanager get-secret-value --secret-id ${SeedSecret} --region ${AWS::Region} --query SecretString --output text'
-
-  # O valor vem de ARQUIVO, nunca de argv: segredo em argv fica visivel em `ps`
-  # e no historico do shell - exatamente o que tira-lo do template evitou.
-  #
-  # O secret.json e o segredo INTEIRO, JWT_SECRET junto. Por isso nasce com
-  # umask 077, dentro de um subshell para nao mudar o umask de quem cola, e e
-  # apagado mesmo quando o put falha - so o resend_key.txt fica, para a nova
-  # tentativa. `rc`, e nao `status`: no zsh `status` e somente leitura.
-  SetResendKeyCommand:
-    Description: Injeta o RESEND_API_KEY lendo de ./resend_key.txt, preservando os demais campos
-    Value: !Sub '(umask 077 && aws secretsmanager get-secret-value --secret-id ${AppSecret} --region ${AWS::Region} --query SecretString --output text | python3 -c ''import json,sys;s=json.load(sys.stdin);s["resend_api_key"]=open("resend_key.txt").read().strip();sys.stdout.write(json.dumps(s))'' > secret.json && aws secretsmanager put-secret-value --secret-id ${AppSecret} --region ${AWS::Region} --secret-string file://secret.json; rc=$?; rm -f secret.json; [ $rc -eq 0 ] && rm -f resend_key.txt; exit $rc)'
-
-  # Mesmo cuidado do SetResendKeyCommand: o valor vem de arquivo, nunca de argv.
-  # O arquivo e o JSON inteiro do segredo, com as tres chaves.
-  SetPortoSecretCommand:
-    Description: >
-      Grava as credenciais da Porto lendo ./porto_secret.json, no formato
-      {"client_id":"...","client_secret":"...","webhook_secret":"..."}
-    Value: !Sub 'aws secretsmanager put-secret-value --secret-id ${PortoSecret} --region ${AWS::Region} --secret-string file://porto_secret.json && rm -f porto_secret.json'
