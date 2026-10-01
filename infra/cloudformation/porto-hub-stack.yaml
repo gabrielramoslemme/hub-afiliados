@@ -1444,7 +1444,8 @@ Resources:
   # confirmada no link que o SNS manda para o AlertEmail.
   #
   # O 5xx do CloudFront nao esta aqui: a metrica so existe em us-east-1, e
-  # alarme nao le metrica de outra regiao. Mora na porto-hub-edge-alarms.yaml.
+  # alarme nao le metrica de outra regiao. Mora na porto-hub-edge-alarms.yaml,
+  # junto com o log de acesso do CloudFront, que so se configura la.
   AlertTopic:
     Type: AWS::SNS::Topic
     Condition: IsProd
@@ -1606,10 +1607,10 @@ Outputs:
     Description: Origin para a Imperva, e alvo dos CNAMEs de DomainName e ApiDomainName
     Value: !GetAtt Distribution.DomainName
 
-  # Entrada da porto-hub-edge-alarms.yaml: o alarme de 5xx do CloudFront so
-  # enxerga a metrica em us-east-1, e prod roda em ca-central-1.
+  # Entrada da porto-hub-edge-alarms.yaml: o alarme de 5xx e o log de acesso
+  # do CloudFront so se configuram em us-east-1, e prod roda em ca-central-1.
   DistributionId:
-    Description: Id da distribuicao, parametro da stack de alarmes de borda
+    Description: Id da distribuicao, parametro da stack de borda (alarme de 5xx e log de acesso)
     Value: !Ref Distribution
 
   # Condicional porque sem ApiDomainName o Caddy nao escreve o bloco, e uma URL

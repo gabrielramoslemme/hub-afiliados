@@ -523,6 +523,7 @@ docs (`specs/21-ambiente-de-producao.md`).
 | Gateway da Porto | padrões da API (HML) | `PortoOAuthUrl` e `PortoApiBaseUrl` **obrigatórios** |
 | Seed de operadores | a cada deploy | **não roda**, e o `SeedSecret` não existe |
 | Alarmes | nenhum | SNS por e-mail: status check (recover e reboot), CPU, disco e conexões do RDS; o 5xx do CloudFront numa stack à parte, em `us-east-1` |
+| Log de acesso do CloudFront | stack de borda em `us-east-1`, 14 dias | stack de borda em `us-east-1`, 90 dias |
 | Logs | 14 dias | 90 dias |
 | Deploy | push na `development` | push na `main` + **aprovação** no environment `production` |
 
@@ -573,7 +574,8 @@ esperado); grave as mesmas credenciais no `PortoSecret` pelo
 
 Produção roda em **`ca-central-1`**. Tudo abaixo leva `--region ca-central-1`,
 menos duas coisas que continuam em `us-east-1` porque o CloudFront é global e
-só olha para lá: o certificado do ACM e a stack do alarme de 5xx (passo 4).
+só olha para lá: o certificado do ACM e a stack de borda — alarme de 5xx e log
+de acesso (passo 4).
 
 **1. Escolher as zonas e o prefix list.** VPC origin não funciona na
 `cac1-az3`, e o nome `ca-central-1x` aponta para um id diferente em cada conta:
@@ -631,9 +633,11 @@ no Resend. Conte 30 a 40 minutos: Multi-AZ e VPC origin são os lentos.
 **3. Confirmar a assinatura do SNS** no e-mail que chega ao `AlertEmail`. Sem
 isso, alarme nenhum avisa ninguém.
 
-**4. Alarme de 5xx do CloudFront**, numa stack à parte e **em `us-east-1`**: o
-CloudFront só publica métrica lá, e alarme não lê métrica de outra região. A
-stack recusa subir fora de `us-east-1`.
+**4. Stack de borda: alarme de 5xx e log de acesso do CloudFront**, numa stack
+à parte e **em `us-east-1`**: o CloudFront só publica métrica lá, alarme não lê
+métrica de outra região, e a entrega de log v2 do CloudFront só se configura lá.
+A stack recusa subir fora de `us-east-1`. O log está descrito em *Log de acesso
+do CloudFront*, mais abaixo.
 
 ```bash
 aws cloudformation deploy \
@@ -750,6 +754,47 @@ O parâmetro `DeployBranch` da stack é o que amarra uma coisa na outra: a role
 OIDC desta stack só aceita token vindo da branch nomeada ali. A de produção usa
 o mesmo template com `DeployBranch=main` e `GitHubEnvironment=production` — e é
 por isso que os dois são parâmetro, e não literal no YAML.
+
+## Log de acesso do CloudFront
+
+Fica na stack de borda, `porto-hub-edge-alarms.yaml`, **sempre em `us-east-1`** —
+é o único lugar onde a entrega de log v2 do CloudFront se configura. Em prod ela
+já existe pelo alarme de 5xx (passo 4 de *Produção*); o update só acrescenta o
+log. Em dev ela nasce agora, sem `AlertEmail` — sem alarme, só o log:
+
+```bash
+aws cloudformation deploy \
+  --template-file infra/cloudformation/porto-hub-edge-alarms.yaml \
+  --stack-name porto-hub-dev-edge \
+  --region us-east-1 \
+  --parameter-overrides \
+    EnvironmentName=dev \
+    DistributionId=<output DistributionId da porto-hub-dev>
+```
+
+O log vai para o log group `porto-hub-<env>-cloudfront-access`, em `us-east-1`,
+com 14 dias em dev e 90 em prod — a mesma retenção do `/porto-hub/<env>`. A
+consulta é Logs Insights. Quem roda a stack precisa de `logs:PutResourcePolicy`:
+é com ela que a AWS cria a política que deixa a entrega escrever no grupo.
+
+**Ficam de fora a query string, o `Referer` e os cookies**, e é por isso que a
+entrega é a v2 e não o `Logging` legado da distribuição, que grava a query
+sempre. O link de definir e de redefinir senha leva o token de uso único em
+`?token=`, válido por até 48 horas; o `Referer` repete a URL da página, token
+junto, em cada asset que ela carrega; os cookies são a sessão. O que fica — IP,
+método, host, caminho, status, tempos, user agent, TLS, id da requisição — basta
+para investigar acesso.
+
+### Sessões do Session Manager
+
+**Não há log do conteúdo das sessões**, de propósito. Quem abriu sessão, em que
+instância e quando já fica no CloudTrail (`StartSession`), por pessoa. Gravar o
+que passa no terminal levaria para o CloudWatch o `api.env` de quem o abrir e o
+resultado de qualquer `psql` rodado na máquina — CPF e chave PIX, que nunca
+entram em log. E a preferência que liga isso, o documento
+`SSM-SessionManagerRunShell`, é da conta e da região inteiras, não desta stack:
+criá-lo aqui falharia se outro time já o tiver, e tomá-lo mudaria as sessões de
+todo mundo.
 
 ## Mudar configuração
 
