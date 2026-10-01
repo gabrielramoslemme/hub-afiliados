@@ -52,8 +52,9 @@ services:
     image: ${API_IMAGE}:${IMAGE_TAG}
     restart: unless-stopped
     env_file: [/opt/porto-hub/api.env]
-    # Publicada em loopback e só: é por aqui que o port-forward do SSM alcança
-    # o Swagger, sem a porta existir na internet.
+    # Publicada em loopback e só: é por aqui que o health check do deploy e o
+    # port-forward do SSM alcançam a API, sem a porta existir na internet. O
+    # Swagger não está atrás dela: com NODE_ENV=production a API não o monta.
     ports:
       - '127.0.0.1:3000:3000'
     networks: [internal, egress]

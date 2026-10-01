@@ -20,7 +20,7 @@ MIGRATION_APPLIED=false
 # O UserData deixa só a região e o nome do parâmetro — nada que possa mudar
 # durante a vida da instância. A configuração de verdade vem do Parameter Store
 # a cada deploy: é isso que faz um update de stack (endpoint novo do RDS, outro
-# MailProvider) chegar aqui sem substituir a máquina.
+# remetente) chegar aqui sem substituir a máquina.
 # shellcheck source=/dev/null
 source "${APP_DIR}/bootstrap.env"
 
@@ -39,6 +39,16 @@ source "${APP_DIR}/stack.env"
 for key in PORTO_SECRET_ARN PORTO_OAUTH_URL PORTO_API_BASE_URL; do
   if [ -z "${!key+set}" ]; then
     echo "FALHA: ${key} ausente em ${CONFIG_PARAM}. Atualize a stack com o template atual antes do deploy." >&2
+    exit 1
+  fi
+done
+
+# Vazios, a API recusaria a subida com NODE_ENV=production depois da migration,
+# e o deploy terminaria em rollback. A stack de antes deixava os dois vazios em
+# dev; a atual escreve os de homologação.
+for key in PORTO_OAUTH_URL PORTO_API_BASE_URL; do
+  if [ -z "${!key}" ]; then
+    echo "FALHA: ${key} vazio em ${CONFIG_PARAM}. Atualize a stack com o template atual antes do deploy." >&2
     exit 1
   fi
 done
@@ -139,6 +149,13 @@ print("postgres://%s:%s@%s:5432/%s" % (
     echo "Grave-as com o comando do output SetPortoSecretCommand e rode o deploy de novo." >&2
     exit 1
   fi
+  # Mesmo motivo: o Resend é o único envio, e com a chave falsa a aprovação
+  # passaria sem o link de definir senha chegar a ninguém.
+  if [ "${resend_key}" = REPLACE_ME ] || [ -z "${resend_key}" ]; then
+    echo "FALHA: a chave do Resend ainda é REPLACE_ME no ${APP_SECRET_ARN}." >&2
+    echo "Grave-a com o comando do output SetResendKeyCommand e rode o deploy de novo." >&2
+    exit 1
+  fi
 
   # `umask 077` antes de escrever: criar e depois `chmod` deixa uma janela em
   # que o arquivo com a senha do banco é legível por qualquer usuário do host.
@@ -154,8 +171,6 @@ DATABASE_SSL=true
 JWT_SECRET=${jwt_secret}
 JWT_EXPIRES_IN_SECONDS=28800
 APP_BASE_URL=https://${DOMAIN_NAME}
-PANEL_BASE_URL=https://${DOMAIN_NAME}
-MAIL_PROVIDER=${MAIL_PROVIDER}
 RESEND_API_KEY=${resend_key}
 MAIL_FROM_EMAIL=${MAIL_FROM_EMAIL}
 MAIL_FROM_NAME=Hub de Afiliados
@@ -166,16 +181,12 @@ PORTO_CLIENT_SECRET=${PORTO_CLIENT_SECRET}
 PORTO_WEBHOOK_SECRET=${PORTO_WEBHOOK_SECRET}
 ENV
 
-    # Os endereços do gateway só entram quando a stack os traz. Vazios (dev),
-    # valem os padrões da API, que são os de homologação; em prod a stack não
-    # cria sem eles. Linha vazia aqui não serviria: o Joi recusaria a string
-    # vazia em vez de cair no padrão.
-    if [ -n "${PORTO_OAUTH_URL}" ]; then
-      echo "PORTO_OAUTH_URL=${PORTO_OAUTH_URL}" >> "${APP_DIR}/api.env"
-    fi
-    if [ -n "${PORTO_API_BASE_URL}" ]; then
-      echo "PORTO_API_BASE_URL=${PORTO_API_BASE_URL}" >> "${APP_DIR}/api.env"
-    fi
+    # Os endereços do gateway vêm sempre da stack: em dev, os de homologação;
+    # em prod, os que o create exigiu. A API roda com NODE_ENV=production nos
+    # dois e não sobe sem eles — o padrão de homologação dela é só para a
+    # máquina de quem desenvolve.
+    echo "PORTO_OAUTH_URL=${PORTO_OAUTH_URL}" >> "${APP_DIR}/api.env"
+    echo "PORTO_API_BASE_URL=${PORTO_API_BASE_URL}" >> "${APP_DIR}/api.env"
 
     # Nada de segredo aqui, e é essa a fronteira: a web não tem o que vazar.
     # `API_BASE_URL` aponta para o nome do serviço na rede interna do compose —

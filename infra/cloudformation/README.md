@@ -78,8 +78,9 @@ público a regra é a segunda barreira, não a primeira.
 A API inteira sai em `/v1/*` pela mesma URL do CloudFront — o Caddy manda esse
 caminho para `api:3000` e o resto para a web. É de propósito: consumidor externo
 integra com a API sem conta na AWS. Nenhuma rota da web começa com `/v1`, então
-o prefixo separa os dois sem esconder tela nenhuma. O Swagger vem junto, em
-`/v1/docs`.
+o prefixo separa os dois sem esconder tela nenhuma. O Swagger **não** vem
+junto: a API só o monta fora de `NODE_ENV=production`, e os dois ambientes da
+AWS rodam assim. O contrato é o `openapi.json` que a CI gera a cada push.
 
 **O que protege `/v1/admin` e `/v1/affiliate` são os guards**, com audiência de
 JWT — não mais a rede interna do compose, que antes era a segunda camada. Rota
@@ -88,9 +89,10 @@ nova com `@Public()` sai na internet no deploy seguinte; o
 A API não tem rate limit: login e esqueci-a-senha ficam abertos a tentativa em
 volume.
 
-O CORS continua restrito a `PANEL_BASE_URL`. Integração servidor-a-servidor,
-Postman e curl não passam por CORS; uma aplicação de navegador em outra origem
-seria recusada até a origem dela entrar na lista.
+A API não habilita CORS. Integração servidor-a-servidor, Postman e curl não
+passam por ele; uma página de navegador em outra origem é recusada pelo próprio
+navegador — inclusive a da web, que não precisa: quem chama é o servidor do
+Next.
 
 `CLAUDE.md`, regra inviolável: *"o navegador nunca fala com a API; quem chama é o
 servidor do Next"*. Ela continua valendo **para a web** — a sessão é cookie
@@ -229,13 +231,11 @@ Com a Imperva na frente o CNAME é dela, e o CloudFront aparece só como origin
 na RDM — nesse caso o que se confirma é que a resposta é um IP da Imperva, e não
 do CloudFront.
 
-**3. Gravar as credenciais da Porto e injetar a chave do Resend.** As
-credenciais **antes do primeiro deploy**: a API sempre fala com o gateway
-Sensedia, e o deploy falha enquanto o segredo `PortoSecret` tiver `REPLACE_ME`.
-O passo a passo está em *Credenciais da Porto*, mais abaixo.
-
-A chave do Resend nasce `REPLACE_ME`, e só precisa de valor para usar
-`MailProvider=resend`:
+**3. Gravar as credenciais da Porto e injetar a chave do Resend**, as duas
+**antes do primeiro deploy**: a API sempre fala com o gateway Sensedia e sempre
+envia e-mail pelo Resend, e o deploy falha enquanto o `PortoSecret` ou a
+`resend_api_key` tiverem `REPLACE_ME`. O passo a passo da Porto está em
+*Credenciais da Porto*, mais abaixo. A chave do Resend:
 
 ```bash
 # `read -s` em vez de `echo 're_…'`: a chave não entra no histórico do shell, e o
@@ -248,9 +248,10 @@ A chave do Resend nasce `REPLACE_ME`, e só precisa de valor para usar
 # mesmo se o put falhar.
 ```
 
-Enquanto o domínio não estiver verificado no Resend, suba com
-`MailProvider=logger`: o link de definir senha sai no CloudWatch em vez da caixa
-de entrada.
+O domínio do `MailFromEmail` precisa estar verificado no Resend. Sem isso, o
+Resend recusa o envio, o link de definir senha não chega, e a recusa fica só no
+log da API. O envio que só registrava no log saiu: ele levava o link, com o
+token em claro, para o CloudWatch.
 
 **4. Ligar o deploy.** Duas coisas no GitHub, e a segunda não é opcional:
 
@@ -296,7 +297,7 @@ coisas que não têm flag equivalente.
 3. *Stack name*: `porto-hub-dev`.
 4. Parâmetros: **deixe `DomainName`, `ApiDomainName` e `CertificateArn`
    vazios** — é o primeiro dos três modos. `GitHubRepo`, `DeployBranch`,
-   `GitHubEnvironment`, `MailProvider` e `MailFromEmail` já vêm com o valor
+   `GitHubEnvironment` e `MailFromEmail` já vêm com o valor
    certo para este ambiente. `CreateGitHubOidcProvider=false` se a conferência
    acima achou o provider.
 5. *Configure stack options*:
@@ -341,8 +342,7 @@ exatamente o que o `cd.yml` faz.
 
 ### Chave do Resend, sem CLI
 
-Só se for passar `MailProvider=resend`; com `logger` o link de definir senha sai
-no CloudWatch e nada disto é necessário. **Secrets Manager** → o segredo
+Obrigatória: sem ela o deploy falha. **Secrets Manager** → o segredo
 descrito *"Segredos de aplicacao do Hub de Afiliados"* → *Retrieve secret value*
 → *Edit* → preencha `resend_api_key`.
 
@@ -377,8 +377,11 @@ Com `REPLACE_ME` no `client_id` ou no `client_secret`, o `install-release.sh`
 para antes de tocar nos containers e diz o que fazer.
 
 Os endereços do gateway são parâmetros da stack, `PortoOAuthUrl` e
-`PortoApiBaseUrl`. Em dev ficam vazios, e valem os padrões da API — os de
-**homologação**. Em prod são obrigatórios: a stack não cria sem eles.
+`PortoApiBaseUrl`. Em dev ficam vazios, e o `ConfigParameter` escreve os de
+**homologação** no lugar. Em prod são obrigatórios: a stack não cria sem eles.
+A API, com `NODE_ENV=production` — o que os dois ambientes usam —, não sobe sem
+os dois, e o `install-release.sh` falha o deploy antes de tocar nos containers
+se o parâmetro os trouxer vazios (o caso de uma stack com o template anterior).
 
 > Até este template, as credenciais eram linhas escritas à mão no fim do
 > `/porto-hub/dev/config`. Elas saíram de lá por dois motivos: todo update de
@@ -528,7 +531,7 @@ docs (`specs/21-ambiente-de-producao.md`).
 | VPC | `10.0.0.0/16` | `10.1.0.0/16` |
 | RDS | single-AZ, backup 1 dia | **Multi-AZ**, backup 14 dias, `DeletionProtection`, disco até 100 GB |
 | Acesso direto ao banco | `DbAccessCidr` opcional | `DbAccessCidr` opcional, com **subnets próprias do banco**, senhas de **64** caracteres, TLS obrigatório no parameter group e **log de cada conexão** no CloudWatch |
-| Gateway da Porto | padrões da API (HML) | `PortoOAuthUrl` e `PortoApiBaseUrl` **obrigatórios** |
+| Gateway da Porto | homologação, escrita pela stack | `PortoOAuthUrl` e `PortoApiBaseUrl` **obrigatórios** |
 | Seed de operadores | a cada deploy | **não roda**, e o `SeedSecret` não existe |
 | Alarmes | nenhum | SNS por e-mail: status check (recover e reboot), CPU, disco e conexões do RDS; o 5xx do CloudFront numa stack à parte, em `us-east-1` |
 | Log de acesso do CloudFront | stack de borda em `us-east-1`, 14 dias | stack de borda em `us-east-1`, 90 dias |
@@ -635,8 +638,8 @@ direto ao banco, sem túnel*. Para `0.0.0.0/0`, some
 `AcknowledgeDbOpenToInternet=true`.
 
 `CreateGitHubOidcProvider=false` porque o provider é da conta, e o dev já o
-criou. `MailProvider` fica `logger` até o domínio do remetente estar verificado
-no Resend. Conte 30 a 40 minutos: Multi-AZ e VPC origin são os lentos.
+criou. O domínio do remetente precisa estar verificado no Resend antes do
+primeiro afiliado aprovado. Conte 30 a 40 minutos: Multi-AZ e VPC origin são os lentos.
 
 **3. Confirmar a assinatura do SNS** no e-mail que chega ao `AlertEmail`. Sem
 isso, alarme nenhum avisa ninguém.
@@ -806,13 +809,13 @@ todo mundo.
 
 ## Mudar configuração
 
-`DomainName`, `ApiDomainName`, `MailProvider` e `MailFromEmail` são
-parâmetros da stack, mas **não vivem no UserData** — vivem no parâmetro
+`DomainName`, `ApiDomainName` e `MailFromEmail` são parâmetros da stack, mas
+**não vivem no UserData** — vivem no parâmetro
 `/porto-hub/dev/config` do Parameter Store, que o `install-release.sh` lê a cada
 deploy. Trocar um valor é:
 
 ```bash
-aws cloudformation deploy ... --parameter-overrides MailProvider=resend ...   # 1
+aws cloudformation deploy ... --parameter-overrides MailFromEmail=<remetente> ... # 1
 aws ssm send-command --document-name porto-hub-dev-deploy \
   --instance-ids <id> --parameters imageTag=<sha-no-ar>                        # 2
 ```
@@ -946,7 +949,7 @@ aplicação e deixar o master fora de circulação.
 | O quê | Como |
 |---|---|
 | Shell na máquina | `aws ssm start-session --target <id>` |
-| Swagger | `https://<DomainName ou domínio do CloudFront>/v1/docs`; o túnel do output `SwaggerTunnelCommand` continua valendo |
+| Swagger | não é servido no ambiente (`NODE_ENV=production`); o contrato é o artefato `openapi.json` da CI. O túnel do output `ApiTunnelCommand` alcança a API em `localhost:3000/v1` |
 | psql no RDS | `npm run db:tunnel` na raiz, depois `psql -h localhost -p 5433 -U hub_rw hub_afiliados` (ou direto no `RdsEndpoint`, se `DbAccessCidr` estiver preenchido) |
 | Senha do `hub_rw` | `npm run db:password` na raiz |
 | Senha do master | output `ReadDbPasswordCommand` — só para o que exige DDL |

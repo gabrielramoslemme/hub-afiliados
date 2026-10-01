@@ -121,21 +121,10 @@ Parameters:
       PrefixListMatchesRegion). Conferir com
       `aws ec2 describe-managed-prefix-lists --region <regiao> --filters Name=prefix-list-name,Values=com.amazonaws.global.cloudfront.origin-facing`.
 
-  MailProvider:
-    Type: String
-    Default: logger
-    AllowedValues: [resend, logger]
-    Description: >
-      `logger` so registra o e-mail no log em vez de enviar, e e o default
-      porque a verificacao do dominio no Resend depende de registros SPF e DKIM
-      na zona - que nao esta nesta conta. Com ele, o link de definir senha sai
-      no CloudWatch, nao na caixa de entrada. Passe a `resend` no dia em que o
-      dominio aparecer verificado la, ou o cadastro do afiliado para no meio.
-
   MailFromEmail:
     Type: String
     Default: nao-responda@influencersportoservico.com.br
-    Description: Remetente. Com MailProvider=resend, o dominio precisa estar verificado la.
+    Description: Remetente. O dominio precisa estar verificado no Resend, ou o e-mail nao sai.
 
   GitHubRepo:
     Type: String
@@ -216,10 +205,11 @@ Parameters:
       Confirmacao de que DbAccessCidr=0.0.0.0/0 e intencional. Irrelevante com
       qualquer outro CIDR, e ignorado com o banco fechado.
 
-  # VAZIOS em dev, e ai valem os padroes da API - os de homologacao. Em prod sao
-  # obrigatorios (regra ProdRequiresPortoGateway): credencial de producao
-  # falando com HML falharia sem dizer por que. A trava fica aqui, e nao na
-  # API, porque os dois ambientes rodam com NODE_ENV=production.
+  # VAZIOS em dev, e ai o ConfigParameter escreve os de homologacao. Em prod
+  # sao obrigatorios (regra ProdRequiresPortoGateway): credencial de producao
+  # falando com HML falharia sem dizer por que. A API tambem se recusa a subir
+  # sem eles com NODE_ENV=production - e os dois ambientes rodam assim, por isso
+  # o de dev recebe o endereco de HML escrito, e nao o padrao da API.
   #
   # O padrao e lista branca, e nao `\S+`: o valor cai sem aspas no
   # ConfigParameter, que o install-release.sh le com `source`. Um `&` ou `;`
@@ -310,8 +300,8 @@ Rules:
           - !Not [!Equals [!Ref PortoOAuthUrl, '']]
           - !Not [!Equals [!Ref PortoApiBaseUrl, '']]
         AssertDescription: >
-          Producao exige PortoOAuthUrl e PortoApiBaseUrl. Vazios, a API cai nos
-          padroes, que sao os de homologacao.
+          Producao exige PortoOAuthUrl e PortoApiBaseUrl. Vazios, o ambiente
+          receberia os enderecos de homologacao.
 
   # O default e o id de us-east-1. Em outra regiao ele nao existe, e o erro so
   # apareceria no security group, com InvalidPrefixListID.NotFound.
@@ -368,6 +358,8 @@ Conditions:
   # Duas, e nao uma: o modo mais provavel de rodar e dominio na web e nada na
   # API - o host da API so existe para o webhook, que ainda nao foi escrito.
   HasDomain: !Not [!Equals [!Ref DomainName, '']]
+  HasPortoOAuthUrl: !Not [!Equals [!Ref PortoOAuthUrl, '']]
+  HasPortoApiBaseUrl: !Not [!Equals [!Ref PortoApiBaseUrl, '']]
   HasApiDomain: !Not [!Equals [!Ref ApiDomainName, '']]
   DbIsPublic: !Not [!Equals [!Ref DbAccessCidr, '']]
 
@@ -975,7 +967,7 @@ Resources:
   # imutavel na pratica: mudar um valor nele ou substitui a instancia - levando
   # o volume com os certificados do Caddy, e com ele a cota semanal do Let's
   # Encrypt - ou nao roda de novo, porque o cloud-init e `once`, e a mudanca
-  # passa despercebida. No Parameter Store, trocar MailProvider ou absorver um
+  # passa despercebida. No Parameter Store, trocar o remetente ou absorver um
   # endpoint novo do RDS e um update de stack seguido do proximo deploy.
   #
   # O template escreve aqui ARNs de segredo, nunca o conteudo deles. As
@@ -1012,11 +1004,10 @@ Resources:
           APP_SECRET_ARN=${AppSecret}
           SEED_SECRET_ARN=${SeedSecretArn}
           PORTO_SECRET_ARN=${PortoSecret}
-          PORTO_OAUTH_URL=${PortoOAuthUrl}
-          PORTO_API_BASE_URL=${PortoApiBaseUrl}
+          PORTO_OAUTH_URL=${EffectivePortoOAuthUrl}
+          PORTO_API_BASE_URL=${EffectivePortoApiBaseUrl}
           DOMAIN_NAME=${EffectiveDomainName}
           API_DOMAIN_NAME=${ApiDomainName}
-          MAIL_PROVIDER=${MailProvider}
           MAIL_FROM_EMAIL=${MailFromEmail}
         - EffectiveDomainName: !If
             - HasDomain
@@ -1024,6 +1015,17 @@ Resources:
             - !GetAtt Distribution.DomainName
           # Vazio em prod, e e isso que desliga o seed no install-release.sh.
           SeedSecretArn: !If [IsDev, !Ref SeedSecret, '']
+          # Vazios so em dev - em prod a regra ProdRequiresPortoGateway barra o
+          # create. Os de homologacao vao escritos porque a API, com
+          # NODE_ENV=production, nao sobe sem eles.
+          EffectivePortoOAuthUrl: !If
+            - HasPortoOAuthUrl
+            - !Ref PortoOAuthUrl
+            - 'https://portoapicloud-hml.portoseguro.com.br/oauth/v2/access-token'
+          EffectivePortoApiBaseUrl: !If
+            - HasPortoApiBaseUrl
+            - !Ref PortoApiBaseUrl
+            - 'https://portoapicloud-hml.portoseguro.com.br'
 
   # =========================================================== IAM
   InstanceRole:
@@ -1661,10 +1663,10 @@ Outputs:
     Description: Shell na maquina, sem SSH e sem porta 22
     Value: !Sub 'aws ssm start-session --target ${Instance} --region ${AWS::Region}'
 
-  SwaggerTunnelCommand:
+  ApiTunnelCommand:
     Description: >
-      Swagger em http://localhost:3000/v1/docs, sem passar pelo CloudFront.
-      A API tambem sai em /v1/* no host da web.
+      API em http://localhost:3000/v1, sem passar pelo CloudFront. Sem Swagger:
+      com NODE_ENV=production a API nao o monta.
     Value: !Sub 'aws ssm start-session --target ${Instance} --region ${AWS::Region} --document-name AWS-StartPortForwardingSession --parameters ''{"portNumber":["3000"],"localPortNumber":["3000"]}'''
 
   RdsTunnelCommand:
