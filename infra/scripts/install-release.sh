@@ -149,12 +149,13 @@ print("postgres://%s:%s@%s:5432/%s" % (
     echo "Grave-as com o comando do output SetPortoSecretCommand e rode o deploy de novo." >&2
     exit 1
   fi
-  # Mesmo motivo: o Resend é o único envio, e com a chave falsa a aprovação
-  # passaria sem o link de definir senha chegar a ninguém.
-  if [ "${resend_key}" = REPLACE_ME ] || [ -z "${resend_key}" ]; then
-    echo "FALHA: a chave do Resend ainda é REPLACE_ME no ${APP_SECRET_ARN}." >&2
-    echo "Grave-a com o comando do output SetResendKeyCommand e rode o deploy de novo." >&2
-    exit 1
+  # Diferente da Porto, a chave do Resend não trava o deploy: sem e-mail o
+  # ambiente ainda serve para todo o resto. Vai vazia, a API sobe, e cada envio
+  # falha no log dela — a aprovação passa sem o link de definir senha chegar.
+  if [ "${resend_key}" = REPLACE_ME ]; then
+    echo "AVISO: a chave do Resend ainda é REPLACE_ME no ${APP_SECRET_ARN}." >&2
+    echo "A API sobe sem enviar e-mail. Grave-a com o output SetResendKeyCommand e rode o deploy de novo." >&2
+    resend_key=""
   fi
 
   # `umask 077` antes de escrever: criar e depois `chmod` deixa uma janela em

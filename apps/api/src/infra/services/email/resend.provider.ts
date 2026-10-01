@@ -16,12 +16,17 @@ export class ResendProvider implements MailProvider {
   constructor(private readonly configService: ConfigService<EnvironmentVariables, true>) {}
 
   /*
-    Criado no primeiro envio, e não na construção: o SDK lança sem chave, e em
-    `test` não há chave — a geração do OpenAPI da CI sobe o AppModule inteiro.
-    Fora de `test`, quem garante a chave é o schema do ambiente.
+    Criado no primeiro envio, e não na construção: o SDK lança sem chave, e a
+    chave é opcional — a API sobe sem ela, e a geração do OpenAPI da CI sobe o
+    AppModule inteiro. Sem chave o envio falha aqui, e o MailService registra.
   */
   private resend(): Resend {
-    this.client ??= new Resend(this.configService.get('RESEND_API_KEY', { infer: true }));
+    if (this.client) return this.client;
+
+    const apiKey = this.configService.get('RESEND_API_KEY', { infer: true });
+    if (!apiKey) throw new Error('RESEND_API_KEY ausente: e-mail não enviado');
+
+    this.client = new Resend(apiKey);
     return this.client;
   }
 

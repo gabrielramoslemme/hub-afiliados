@@ -117,8 +117,9 @@ timestamp vem da CLI do TypeORM — nunca escreva o nome do arquivo à mão.
 
 ## E-mails
 
-Todo ambiente envia pelo Resend, e a API não sobe sem `RESEND_API_KEY` — em
-desenvolvimento também, então cada cadastro local manda e-mail de verdade. Só o
+Todo ambiente envia pelo Resend — em desenvolvimento também, então cada
+cadastro local manda e-mail de verdade. Sem `RESEND_API_KEY` a API sobe, mas
+nenhum e-mail sai: cada envio falha no log. Só o
 e2e não envia: ele troca o envio pelo `FakeMailProvider`. Os templates são componentes React Email
 versionados em `apps/api/src/infra/services/email/templates/`, não ficam no
 painel do fornecedor. Detalhes em

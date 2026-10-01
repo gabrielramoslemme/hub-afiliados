@@ -93,26 +93,20 @@ describe('envValidationSchema', () => {
 
   describe('Resend key', () => {
     /*
-      Não há outro jeito de mandar e-mail: sem a chave, o link de definir senha
-      da aprovação nunca chegaria a ninguém. Recusar a subida mostra isso no
-      deploy, e não no primeiro afiliado aprovado.
+      Opcional enquanto a conta do Resend não existe: travar a subida travaria o
+      deploy inteiro por causa do e-mail. Sem a chave a API sobe, e cada envio
+      falha no log — nunca com o link, que leva o token em claro.
     */
-    it.each(['development', 'production'])('refuses to start in %s without the key', (nodeEnv) => {
+    it.each(['development', 'production'])('starts in %s without the key', (nodeEnv) => {
       expect(
-        validate({ ...credentialsWithout('RESEND_API_KEY'), NODE_ENV: nodeEnv }).error?.message,
-      ).toContain('RESEND_API_KEY');
+        validate({ ...credentialsWithout('RESEND_API_KEY'), NODE_ENV: nodeEnv }).error,
+      ).toBeUndefined();
     });
 
-    it('refuses a blank key', () => {
+    it('accepts a blank key', () => {
       expect(
-        validate({ ...credentials, ...gateway, NODE_ENV: 'production', RESEND_API_KEY: '' }).error
-          ?.message,
-      ).toContain('RESEND_API_KEY');
-    });
-
-    // O e2e troca o envio pelo `FakeMailProvider` antes de a API subir.
-    it('starts without the key in test', () => {
-      expect(validate({ NODE_ENV: 'test' }).error).toBeUndefined();
+        validate({ ...credentials, ...gateway, NODE_ENV: 'production', RESEND_API_KEY: '' }).error,
+      ).toBeUndefined();
     });
   });
 
