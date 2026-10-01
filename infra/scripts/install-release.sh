@@ -34,15 +34,39 @@ MIGRATION_APPLIED=false
 source "${APP_DIR}/bootstrap.env"
 AWS_CONFIG_PARAM="${CONFIG_PARAM%/*}/aws-config"
 
+# Grava o valor de um parâmetro no arquivo do segundo argumento. Devolve 2 só
+# quando o parâmetro não existe: throttling, AccessDenied ou credencial vencida
+# tratados como "não existe" mandariam quem lê o log para o caminho errado — e
+# o erro da AWS, nesses casos, vai inteiro para o stderr.
+get_param() {
+  local name="$1" out="$2" err
+  shift 2
+  if err="$(aws ssm get-parameter --name "${name}" "$@" --region "${AWS_REGION}" \
+    --query Parameter.Value --output text 2>&1 > "${out}")"; then
+    return 0
+  fi
+  case "${err}" in
+    *ParameterNotFound*) return 2 ;;
+  esac
+  echo "${err}" >&2
+  return 1
+}
+
 # `umask 077` por hábito: o parâmetro só traz ARNs de segredo, mas o arquivo
 # fica no disco da instância entre um deploy e outro.
-if ! ( umask 077
-  aws ssm get-parameter --name "${AWS_CONFIG_PARAM}" --region "${AWS_REGION}" \
-    --query Parameter.Value --output text > "${APP_DIR}/stack.env"
-); then
-  echo "FALHA: ${AWS_CONFIG_PARAM} não existe. Atualize a stack com o template atual antes do deploy." >&2
-  exit 1
-fi
+rc=0
+( umask 077 && get_param "${AWS_CONFIG_PARAM}" "${APP_DIR}/stack.env" ) || rc=$?
+case "${rc}" in
+  0) ;;
+  2)
+    echo "FALHA: ${AWS_CONFIG_PARAM} não existe. Atualize a stack com o template atual antes do deploy." >&2
+    exit 1
+    ;;
+  *)
+    echo "FALHA: não consegui ler ${AWS_CONFIG_PARAM} (erro da AWS acima)." >&2
+    exit 1
+    ;;
+esac
 # shellcheck source=/dev/null
 source "${APP_DIR}/stack.env"
 
@@ -90,6 +114,12 @@ AVISO
   fi
 
   echo "FALHA — voltando para ${IMAGE_TAG_PREVIOUS}" >&2
+  # A imagem anterior volta com o api.env com que ela estava rodando. Com o
+  # novo, um valor que a API recusa derrubaria também o rollback: o compose
+  # recria o container quando o env_file muda.
+  if [ -f "${APP_DIR}/api.env.previous" ]; then
+    mv "${APP_DIR}/api.env.previous" "${APP_DIR}/api.env"
+  fi
   write_env_file "${IMAGE_TAG_PREVIOUS}"
   compose up -d --remove-orphans --quiet-pull
   exit 1
@@ -118,12 +148,22 @@ REQUIRED_API_ENV_KEYS="JWT_SECRET PORTO_CLIENT_ID PORTO_CLIENT_SECRET PORTO_OAUT
 # conteúdo dela: a mensagem vai para o log do SSM.
 #
 # Aspas simples na saída porque o compose não interpola nada dentro delas: um
-# `$` numa senha chegaria inteiro à API. Por isso mesmo aspas (simples ou
-# duplas), barra invertida e espaço no meio do valor são recusados.
+# `$` numa senha chegaria inteiro à API, e espaço no meio do valor também
+# (`MAIL_FROM_NAME=Hub de Afiliados`). Por isso mesmo aspas, simples ou duplas,
+# e barra invertida são recusadas.
+#
+# Chave sem valor também: para a API, vazia não é ausente — o Joi aplica o
+# padrão só à ausente, e recusa vazia em número, URI e e-mail. Quem quer o
+# padrão apaga a linha.
+#
+# Em prod, endereço de homologação da Porto é recusado: sem a regra da stack que
+# exigia os de produção, um api-env copiado do dev passaria, e toda aprovação de
+# cupom voltaria CPN-004 sem apontar para cá.
 api_env_lines() {
   python3 -c 'import re, sys
 reserved = set(sys.argv[1].split())
 required = sys.argv[2].split()
+environment = sys.argv[3]
 env, problems = {}, []
 for number, line in enumerate(sys.stdin.read().splitlines(), 1):
     line = line.strip()
@@ -137,15 +177,20 @@ for number, line in enumerate(sys.stdin.read().splitlines(), 1):
         problems.append("%s é escrita pelo deploy a partir da stack" % key)
     elif key in env:
         problems.append("%s aparece mais de uma vez" % key)
-    elif re.search(r"[\x27\"\\\s]", value):
-        problems.append("%s tem aspas, barra invertida ou espaço no valor" % key)
+    elif value == "":
+        problems.append("%s está vazia: apague a linha para valer o padrão da API" % key)
+    elif re.search(r"[\x27\"\\\n]", value):
+        problems.append("%s tem aspas ou barra invertida no valor" % key)
+    elif environment == "prod" and key.startswith("PORTO_") and key.endswith("_URL") and "-hml" in value:
+        problems.append("%s aponta para homologação em prod" % key)
     elif key == "JWT_SECRET" and len(value) < 32:
         problems.append("JWT_SECRET precisa de pelo menos 32 caracteres: openssl rand -hex 32")
     else:
         env[key] = value
+reported = {p.split()[0] for p in problems}
 for key in required:
-    if not env.get(key):
-        problems.append("%s ausente ou vazia" % key)
+    if key not in env and key not in reported:
+        problems.append("%s ausente" % key)
 if problems:
     sys.exit("\n".join(problems))
 for key in sorted(env):
@@ -155,7 +200,7 @@ for key in sorted(env):
 write_secret_files() {
   set +x
 
-  local db_secret api_env database_url api_env_lines_out
+  local db_secret api_env database_url api_env_lines_out rc
 
   db_secret="$(aws secretsmanager get-secret-value --secret-id "${DB_MASTER_SECRET_ARN}" \
     --region "${AWS_REGION}" --query SecretString --output text)"
@@ -170,17 +215,34 @@ print("postgres://%s:%s@%s:5432/%s" % (
     u.quote(s["username"], safe=""), u.quote(s["password"], safe=""),
     sys.argv[1], sys.argv[2]))' "${DB_HOST}" "${DB_NAME}")"
 
-  if ! api_env="$(aws ssm get-parameter --name "${API_ENV_PARAM}" --with-decryption \
-    --region "${AWS_REGION}" --query Parameter.Value --output text)"; then
-    echo "FALHA: não consegui ler o ${API_ENV_PARAM}. Crie-o no Parameter Store, como SecureString." >&2
-    exit 1
-  fi
+  # Pelo disco, e não por variável, para separar o valor do erro da AWS. O
+  # arquivo nasce 0600 e some logo abaixo; o api.env leva o mesmo conteúdo.
+  rc=0
+  ( umask 077 && get_param "${API_ENV_PARAM}" "${APP_DIR}/api-env.raw" --with-decryption ) || rc=$?
+  case "${rc}" in
+    0) ;;
+    2)
+      echo "FALHA: ${API_ENV_PARAM} não existe. Crie-o no Parameter Store, como SecureString." >&2
+      exit 1
+      ;;
+    *)
+      echo "FALHA: não consegui ler ${API_ENV_PARAM} (erro da AWS acima)." >&2
+      exit 1
+      ;;
+  esac
+  api_env="$(cat "${APP_DIR}/api-env.raw")"
+  rm -f "${APP_DIR}/api-env.raw"
   # Falhar aqui, antes de tocar em container, é melhor que subir uma API que só
   # descobre a credencial faltando na primeira aprovação de cupom.
   if ! api_env_lines_out="$(printf '%s' "${api_env}" \
-    | api_env_lines "${STACK_OWNED_KEYS}" "${REQUIRED_API_ENV_KEYS}")"; then
+    | api_env_lines "${STACK_OWNED_KEYS}" "${REQUIRED_API_ENV_KEYS}" "${ENVIRONMENT_NAME}")"; then
     echo "FALHA: o ${API_ENV_PARAM} não está pronto (acima). Corrija no Parameter Store e rode o deploy de novo." >&2
     exit 1
+  fi
+
+  # O que está rodando agora, para o rollback. `cp -p` mantém o 0600.
+  if [ -f "${APP_DIR}/api.env" ]; then
+    cp -p "${APP_DIR}/api.env" "${APP_DIR}/api.env.previous"
   fi
 
   # `umask 077` antes de escrever: criar e depois `chmod` deixa uma janela em
@@ -344,6 +406,20 @@ docker image prune -af --filter 'until=168h' > /dev/null
 # ler inteira quando algo falha.
 compose pull --quiet || rollback
 
+# O schema Joi da própria release, contra o api.env que ela vai receber, antes
+# da migration. As checagens do api-env acima só conhecem formato e as
+# obrigatórias; esta conhece cada regra — `PORTO_WEBHOOK_SECRET` curto, número
+# que não é número. Sem ela, um valor recusado só aparecia no boot, com o schema
+# já migrado. Mesmas opções do ConfigModule do Nest. Sai só a chave e a regra,
+# nunca o valor: isto vai para o log do SSM.
+# shellcheck disable=SC2016 # é JavaScript: a crase e o ${} são do node
+compose run --rm --no-deps api node -e '
+const { envValidationSchema } = require("./dist/infra/config/env.validation");
+const { error } = envValidationSchema.validate(process.env, { allowUnknown: true, abortEarly: false });
+if (error) {
+  for (const d of error.details) console.error(`api-env: ${d.context.label} recusada (${d.type})`);
+  process.exit(1);
+}' || rollback
 
 # Instância única: não há corrida entre processos aplicando migration. Quando
 # aparecer a segunda, este passo sai daqui e vira job à parte, antes do fan-out.

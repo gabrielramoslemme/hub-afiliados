@@ -16,9 +16,12 @@ set -euo pipefail
 
 ENVIRONMENT="${1:-}"
 case "${ENVIRONMENT}" in
-  # Cada ambiente na sua região, como as stacks.
-  dev) AWS_REGION="${AWS_REGION:-us-east-1}" ;;
-  prod) AWS_REGION="${AWS_REGION:-ca-central-1}" ;;
+  # A região é a do ambiente, e um AWS_REGION exportado no shell NÃO ganha: com
+  # ele apontando para outro lugar, o parâmetro antigo "não existiria", e quem
+  # lê poderia concluir que a stack já foi atualizada e executar o change set
+  # que apaga os segredos antes de migrá-los.
+  dev) AWS_REGION=us-east-1 ;;
+  prod) AWS_REGION=ca-central-1 ;;
   *)
     echo "uso: infra/scripts/migrate-api-env.sh <dev|prod>" >&2
     exit 1
@@ -28,25 +31,58 @@ esac
 LEGACY_PARAM="/porto-hub/${ENVIRONMENT}/config"
 API_ENV_PARAM="/porto-hub/${ENVIRONMENT}/api-env"
 
+echo "${ENVIRONMENT} em ${AWS_REGION}" >&2
+
 # `mktemp -d` nasce 0700, e o trap apaga tudo até quando um passo falha.
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "${WORK_DIR}"' EXIT
 
+# Grava o valor do parâmetro no arquivo do segundo argumento. Devolve 2 só
+# quando ele não existe; qualquer outro erro da AWS (credencial vencida,
+# AccessDenied, throttling) sai inteiro no stderr, e não vira "não existe".
+get_param() {
+  local err
+  if err="$(aws ssm get-parameter --name "$1" --region "${AWS_REGION}" \
+    --query Parameter.Value --output text 2>&1 > "$2")"; then
+    return 0
+  fi
+  case "${err}" in
+    *ParameterNotFound*) return 2 ;;
+  esac
+  echo "${err}" >&2
+  return 1
+}
+
 # Sobrescrever apagaria o que alguém já digitou no console. Existindo, a
 # migração já foi feita, ou o parâmetro nasceu à mão — nos dois casos não há o
 # que copiar.
-if aws ssm get-parameter --name "${API_ENV_PARAM}" --region "${AWS_REGION}" > /dev/null 2>&1; then
-  echo "FALHA: ${API_ENV_PARAM} já existe. Confira-o no console do Parameter Store." >&2
-  exit 1
-fi
+rc=0
+get_param "${API_ENV_PARAM}" /dev/null || rc=$?
+case "${rc}" in
+  0)
+    echo "FALHA: ${API_ENV_PARAM} já existe. Confira-o no console do Parameter Store." >&2
+    exit 1
+    ;;
+  2) ;;
+  *)
+    echo "FALHA: não consegui conferir se ${API_ENV_PARAM} existe (erro da AWS acima). Nada foi feito." >&2
+    exit 1
+    ;;
+esac
 
-if ! ( umask 077
-  aws ssm get-parameter --name "${LEGACY_PARAM}" --region "${AWS_REGION}" \
-    --query Parameter.Value --output text > "${WORK_DIR}/legacy.env"
-); then
-  echo "FALHA: ${LEGACY_PARAM} não existe — a stack já foi atualizada, e os segredos antigos estão na janela de recuperação (aws secretsmanager restore-secret)." >&2
-  exit 1
-fi
+rc=0
+( umask 077 && get_param "${LEGACY_PARAM}" "${WORK_DIR}/legacy.env" ) || rc=$?
+case "${rc}" in
+  0) ;;
+  2)
+    echo "FALHA: ${LEGACY_PARAM} não existe em ${AWS_REGION} — a stack já foi atualizada, e os segredos antigos estão na janela de recuperação (aws secretsmanager restore-secret)." >&2
+    exit 1
+    ;;
+  *)
+    echo "FALHA: não consegui ler ${LEGACY_PARAM} (erro da AWS acima). Nada foi feito; NÃO atualize a stack." >&2
+    exit 1
+    ;;
+esac
 
 app_arn="$(sed -n 's/^APP_SECRET_ARN=//p' "${WORK_DIR}/legacy.env")"
 porto_arn="$(sed -n 's/^PORTO_SECRET_ARN=//p' "${WORK_DIR}/legacy.env")"
@@ -81,6 +117,17 @@ values = {
     "PORTO_WEBHOOK_SECRET": porto.get("webhook_secret", ""),
 }
 kept = {k: v for k, v in values.items() if v not in ("", "REPLACE_ME")}
+# As mesmas regras do install-release.sh. Gravar um valor que o deploy recusa
+# deixaria o ambiente sem deploy depois que o update de stack apagasse os
+# segredos de onde ele veio; falhar aqui, antes do put, não apaga nada.
+problems = [
+    "%s tem aspas ou barra invertida" % k
+    for k, v in kept.items() if any(c in v for c in "\x27\"\\\n")
+]
+if len(kept.get("JWT_SECRET", "")) < 32:
+    problems.append("JWT_SECRET tem menos de 32 caracteres")
+if problems:
+    sys.exit("FALHA, nada foi gravado:\n  " + "\n  ".join(problems))
 with open(work + "/api-env.txt", "w") as f:
     f.write("".join("%s=%s\n" % kv for kv in kept.items()))
 print("chaves: " + " ".join(kept), file=sys.stderr)

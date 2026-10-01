@@ -903,6 +903,7 @@ Resources:
       # Com o fallback aqui, o install-release.sh nao precisa saber de nada.
       Value: !Sub
         - |
+          ENVIRONMENT_NAME=${EnvironmentName}
           AWS_REGION=${AWS::Region}
           ECR_REGISTRY=${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com
           API_IMAGE=${ApiRepository.RepositoryUri}

@@ -304,13 +304,21 @@ Linha em branco, comentário com `#` e espaço em volta do `=` são ignorados. E
 para antes da migration, sem tocar em container, e diz a linha ou a chave
 (nunca o valor) quando:
 
-- falta uma obrigatória, ou ela está vazia, ou o `JWT_SECRET` é curto;
+- falta uma obrigatória, ou o `JWT_SECRET` é curto;
+- uma chave está sem valor — vazia não é ausente para a API: quem quer o padrão
+  apaga a linha;
 - uma linha não é `CHAVE=valor`, ou a mesma chave aparece duas vezes;
 - aparece uma chave que o próprio deploy escreve a partir da stack:
   `NODE_ENV`, `PORT`, `DATABASE_URL`, `DATABASE_SSL`, `APP_BASE_URL`;
-- um valor tem aspas, barra invertida ou espaço — o `api.env` é escrito entre
-  aspas simples para o compose não interpolar `$`, e nenhum valor deste projeto
-  precisa deles.
+- um valor tem aspas ou barra invertida — o `api.env` é escrito entre aspas
+  simples para o compose não interpolar `$`. Espaço no meio do valor passa
+  (`MAIL_FROM_NAME=Hub de Afiliados`);
+- em **prod**, `PORTO_OAUTH_URL` ou `PORTO_API_BASE_URL` aponta para
+  homologação (`-hml`): toda aprovação de cupom voltaria `CPN-004`;
+- o schema Joi da própria release (`env.validation.ts`) recusa algum valor —
+  `PORTO_WEBHOOK_SECRET` curto, número que não é número. Essa checagem roda na
+  imagem nova, depois do pull e antes da migration; se ela falhar, o deploy
+  volta para a tag anterior **com o `api.env` anterior**.
 
 **Mudar um valor** é editar o parâmetro (*Parameter Store* → `api-env` → *Edit*;
 o valor aparece com *Show decrypted value*) e rodar um deploy — um push, ou o
@@ -477,8 +485,25 @@ Até este template, a configuração da stack ficava em `/porto-hub/<env>/config
 e o que se digitava estava espalhado: `AppSecret` (JWT e Resend), `PortoSecret`
 (credenciais e webhook) e os parâmetros `MailFromEmail`, `PortoOAuthUrl` e
 `PortoApiBaseUrl`. O update com o template novo **apaga os dois segredos e o
-parâmetro antigo**, então o conteúdo vai para o `api-env` antes. Uma vez por
-ambiente, nesta ordem — dev primeiro, prod depois:
+parâmetro antigo**, então o conteúdo vai para o `api-env` antes.
+
+**Entre executar o change set e o deploy do script novo, nenhum outro deploy
+pode rodar.** O `install-release.sh` anterior lê o `/config`, o `AppSecret` e o
+`PortoSecret`, que o change set acabou de apagar, e a role da instância perdeu
+o acesso a eles: qualquer deploy com ele morre com erro cru da AWS. A ordem não
+dá para inverter, porque o script novo precisa do `aws-config`, que só nasce no
+change set. Então, por ambiente:
+
+| | dev | prod |
+|---|---|---|
+| Antes de começar | **congele os merges na `development`** | este PR **já na `main`**, com o deploy dele esperando aprovação — não aprove ainda; e **congele os merges na `main`** |
+| Passos 1 a 3 abaixo | `migrate-api-env.sh dev`, change set, execute | `migrate-api-env.sh prod`, change set, execute |
+| Deploy com o script novo | merge deste PR na `development` | aprovar o deploy que estava esperando |
+| Fim | descongele | descongele |
+
+Durante o congelamento também não vale o *Redeploy sem passar pela CI*: o
+`install-release.sh` que está no bucket é o anterior até o deploy do script
+novo. O passo a passo, dev primeiro e prod depois:
 
 ```bash
 ENV=dev; STACK=porto-hub-dev; REGION=us-east-1   # prod: prod, porto-hub-prod, ca-central-1
@@ -518,11 +543,11 @@ O change set esperado: `Remove` em `AppSecret`, `PortoSecret` e
 `Instance`, só é aceitável se vier do `LatestAmiId` (AMI nova publicada desde o
 último update), e aí o deploy seguinte reinstala a release.
 
-**3. Executar o change set**, e **4. rodar um deploy** — em dev, o merge na
-`development`; em prod, o merge na `main` e a aprovação. A API no ar não sente
-o intervalo: ela lê o `api.env` só ao subir. Um deploy que rode antes do passo 3
-para com *"/porto-hub/<env>/aws-config não existe"*, sem tocar em container — é
-só rodar de novo depois.
+**3. Executar o change set**, e **4. rodar o deploy do script novo**, como na
+tabela acima. A API no ar não sente o intervalo: ela lê o `api.env` só ao
+subir. Um deploy do script novo que rode antes do passo 3 para com
+*"/porto-hub/<env>/aws-config não existe"*, sem tocar em container — é só rodar
+de novo depois.
 
 Os segredos removidos ficam agendados para exclusão, com janela de recuperação.
 Se algo não veio no passo 1, `aws secretsmanager restore-secret --secret-id <arn>`
