@@ -6,7 +6,10 @@ services:
       POSTGRES_USER: porto
       POSTGRES_PASSWORD: porto
       POSTGRES_DB: hub_afiliados
-    ports: ['5432:5432']
+    # Loopback e só: com usuário e senha `porto` públicos neste arquivo, a porta
+    # aberta em todas as interfaces entregava o banco a quem estivesse na mesma
+    # rede — wi-fi de café, de evento, de escritório.
+    ports: ['127.0.0.1:5432:5432']
     volumes: ['porto-hub-afiliados-pgdata:/var/lib/postgresql/data']
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U porto -d hub_afiliados']
