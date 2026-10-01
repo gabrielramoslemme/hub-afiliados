@@ -89,24 +89,20 @@ export interface AffiliateAuditLogItem {
 /*
   O que a própria pessoa vê da sua conta. Diferente do `AffiliateDetail`, que é
   a visão da analista: aqui não há `approvedByName` nem `rejectionReason` de
-  outra pessoa. CPF, RG e chave PIX chegam inteiros e mascarados — o perfil abre
-  com a máscara, porque a tela pode estar aberta em público, e revela o valor
-  inteiro a pedido da própria pessoa.
+  outra pessoa. CPF, RG e chave PIX chegam só mascarados: esta resposta alimenta
+  toda tela da área do afiliado, e o valor inteiro sai apenas pelo
+  `AffiliateDocumentsResponse`, que pede a senha.
 */
 export interface AffiliateMeResponse {
   publicId: string;
   name: string;
   email: string;
-  /** Só dígitos. */
-  cpf: string;
   maskedCpf: string;
-  rg: string;
   maskedRg: string;
   occupation: OccupationEnum;
   socialNetwork: SocialNetworkEnum | null;
   socialHandle: string | null;
   pixKeyType: PixKeyTypeEnum;
-  pixKey: string;
   maskedPixKey: string;
   status: AffiliateStatusEnum;
   /** Nulo enquanto a Porto não emitir o cupom do afiliado aprovado. */
@@ -114,6 +110,25 @@ export interface AffiliateMeResponse {
   /** O desconto que o cupom concede a quem compra, de 1 a 25. Nulo junto com o cupom. */
   couponDiscountPercent: number | null;
   createdAt: string;
+}
+
+/**
+ * CPF, RG e chave PIX inteiros, que o perfil revela a pedido da própria pessoa.
+ * A senha atual confirma o pedido, como confirma a troca da chave: uma sessão
+ * esquecida aberta não basta para ler os documentos.
+ */
+export const revealDocumentsSchema = z.object({
+  // Sem `trim`, pelo mesmo motivo da troca da chave PIX.
+  currentPassword: z.string().min(1, 'Informe sua senha atual.'),
+});
+
+export type RevealDocumentsRequest = z.infer<typeof revealDocumentsSchema>;
+
+export interface AffiliateDocumentsResponse {
+  /** Só dígitos. */
+  cpf: string;
+  rg: string;
+  pixKey: string;
 }
 
 export interface AffiliateStatementEntry {

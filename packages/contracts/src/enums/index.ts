@@ -73,6 +73,7 @@ export enum AuthErrorCodeEnum {
   INVALID_CREDENTIALS = 'AUTH-001',
   REGISTRATION_UNDER_REVIEW = 'AUTH-002',
   REGISTRATION_REJECTED = 'AUTH-003',
+  /** Aposentado: o login não distingue mais conta sem senha. O número não volta a ser usado. */
   PASSWORD_NOT_SET = 'AUTH-004',
   ACCOUNT_INACTIVE = 'AUTH-005',
   /** Link de definir senha usado, vencido ou adulterado — a tela oferece um novo. */
@@ -207,9 +208,20 @@ export enum IncentiveErrorCodeEnum {
   INVALID_PAYLOAD = 'INC-006',
 }
 
+/**
+ * Limite de tentativas por visitante. Prefixo próprio porque não é regra de
+ * autenticação: o mesmo limite vale para o cadastro e para quem confere senha
+ * com a sessão aberta.
+ */
+export enum RateLimitErrorCodeEnum {
+  /** Tentativas demais em pouco tempo; o `Retry-After` diz quando tentar de novo. */
+  TOO_MANY_REQUESTS = 'RATE-001',
+}
+
 /** Todo `code` que o corpo de erro da API pode carregar. */
 export type ApiErrorCode =
   | AuthErrorCodeEnum
   | RegistrationErrorCodeEnum
   | CouponErrorCodeEnum
-  | IncentiveErrorCodeEnum;
+  | IncentiveErrorCodeEnum
+  | RateLimitErrorCodeEnum;

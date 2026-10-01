@@ -25,6 +25,9 @@ export interface AdminLoginResponse {
   a do painel não — e compartilhar o schema faria a divergência quebrar a tela
   errada.
 */
+/** O que o painel mostra de quem está logado, lido da API a cada página. */
+export type AdminMeResponse = AdminLoginResponse['user'];
+
 export const affiliateLoginSchema = z.object({
   /*
     Normaliza antes de validar, como `createAffiliateSchema`: quem se cadastrou
@@ -68,10 +71,41 @@ export const forgotPasswordSchema = z.object({
 
 export type ForgotPasswordRequest = z.infer<typeof forgotPasswordSchema>;
 
+/** O bcrypt ignora o que passa de 72 bytes: acima disso, a senha não seria a digitada. */
+const PASSWORD_MAX_BYTES = 72;
+
+/**
+ * As regras da senha, na ordem em que a tela as lista. Mora aqui, e não num
+ * schema só, porque a API confere a mesma lista no DTO: um POST montado à mão
+ * não pode gravar a senha que a tela recusaria.
+ */
+export const PASSWORD_RULES: readonly { message: string; test: (password: string) => boolean }[] = [
+  { message: 'Use ao menos 12 caracteres.', test: (password) => password.length >= 12 },
+  {
+    message: 'Use no máximo 72 caracteres.',
+    test: (password) => new TextEncoder().encode(password).length <= PASSWORD_MAX_BYTES,
+  },
+  { message: 'Inclua uma letra maiúscula.', test: (password) => /\p{Lu}/u.test(password) },
+  { message: 'Inclua uma letra minúscula.', test: (password) => /\p{Ll}/u.test(password) },
+  { message: 'Inclua um número.', test: (password) => /\p{Nd}/u.test(password) },
+  {
+    message: 'Inclua um caractere especial, como ! @ # ou $.',
+    test: (password) => /[^\p{L}\p{N}\s]/u.test(password),
+  },
+];
+
+/** A primeira regra que a senha descumpre, ou nulo quando ela atende a todas. */
+export function passwordPolicyIssue(password: string): string | null {
+  return PASSWORD_RULES.find((rule) => !rule.test(password))?.message ?? null;
+}
+
 export const resetPasswordSchema = z
   .object({
     token: z.string().min(1),
-    password: z.string().min(8, 'A senha precisa ter ao menos 8 caracteres'),
+    password: z.string().superRefine((password, ctx) => {
+      const issue = passwordPolicyIssue(password);
+      if (issue) ctx.addIssue({ code: 'custom', message: issue });
+    }),
     passwordConfirmation: z.string(),
   })
   .refine((data) => data.password === data.passwordConfirmation, {
