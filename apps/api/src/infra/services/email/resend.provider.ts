@@ -11,14 +11,22 @@ function formatSender(name: string, email: string): string {
 
 @Injectable()
 export class ResendProvider implements MailProvider {
-  private readonly client: Resend;
+  private client: Resend | null = null;
 
-  constructor(private readonly configService: ConfigService<EnvironmentVariables, true>) {
-    this.client = new Resend(this.configService.get('RESEND_API_KEY', { infer: true }));
+  constructor(private readonly configService: ConfigService<EnvironmentVariables, true>) {}
+
+  /*
+    Criado no primeiro envio, e não na construção: o SDK lança sem chave, e em
+    `test` não há chave — a geração do OpenAPI da CI sobe o AppModule inteiro.
+    Fora de `test`, quem garante a chave é o schema do ambiente.
+  */
+  private resend(): Resend {
+    this.client ??= new Resend(this.configService.get('RESEND_API_KEY', { infer: true }));
+    return this.client;
   }
 
   async send(input: SendRenderedMailInput): Promise<void> {
-    const { error } = await this.client.emails.send({
+    const { error } = await this.resend().emails.send({
       from: formatSender(
         this.configService.get('MAIL_FROM_NAME', { infer: true }),
         this.configService.get('MAIL_FROM_EMAIL', { infer: true }),

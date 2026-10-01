@@ -51,6 +51,20 @@ export class CouponProviderAccessDeniedError extends DomainError {
 }
 
 /**
+ * As alterações de um cupom passam uma por vez, e esta esperou demais pela que
+ * estava na frente — que pode ter mudado o cupom. Conflito, e não queda: a
+ * analista confere como o cupom ficou antes de repetir.
+ */
+export class CouponChangeInProgressError extends DomainError {
+  readonly kind = DomainErrorKindEnum.CONFLICT;
+  readonly code = CouponErrorCodeEnum.CHANGE_IN_PROGRESS;
+
+  constructor() {
+    super('Outra alteração deste cupom está em andamento. Confira o cupom e tente novamente.');
+  }
+}
+
+/**
  * Sem `code`: como em `AffiliateNotFoundError`, o painel não escolhe mensagem
  * por ele. Cobre os dois desencontros — o afiliado que ainda não tem cupom
  * porque não foi aprovado, e o cupom que existe aqui e não existe lá.

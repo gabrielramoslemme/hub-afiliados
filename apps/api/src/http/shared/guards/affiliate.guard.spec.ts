@@ -32,6 +32,7 @@ const affiliateClaims: AccessTokenClaims = {
   aud: AuthAudienceEnum.AFFILIATE,
   role: UserRoleEnum.AFFILIATE,
   name: 'Marina Ferraz',
+  ver: 0,
 };
 
 function guardForRoute(roles?: UserRoleEnum[]): AffiliateGuard {

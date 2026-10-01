@@ -3,6 +3,7 @@
 import { type CreateAffiliateResponse, createAffiliateSchema } from '@porto/contracts';
 import { publicApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
+import { rateLimitOf } from '@/shared/lib/retry-after';
 import { fieldForErrorCode } from '../lib/errors';
 import type { RegistrationFieldErrors, RegistrationResult } from '../lib/result';
 
@@ -41,6 +42,9 @@ export async function registerAffiliate(input: unknown): Promise<RegistrationRes
 
     return { status: 'success' };
   } catch (error) {
+    const limited = rateLimitOf(error);
+    if (limited) return { status: 'failed', ...limited };
+
     if (!(error instanceof ApiError)) return { status: 'failed', message: UNEXPECTED_FAILURE };
 
     const field = fieldForErrorCode(error.code);

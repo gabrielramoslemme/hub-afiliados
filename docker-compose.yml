@@ -1,12 +1,17 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # Digest fixo, o mesmo do serviço do e2e no ci.yml. Atualizar é
+    # `docker buildx imagetools inspect postgres:16-alpine` e trocar nos dois.
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     container_name: porto-hub-afiliados-db
     environment:
       POSTGRES_USER: porto
       POSTGRES_PASSWORD: porto
       POSTGRES_DB: hub_afiliados
-    ports: ['5432:5432']
+    # Loopback e só: com usuário e senha `porto` públicos neste arquivo, a porta
+    # aberta em todas as interfaces entregava o banco a quem estivesse na mesma
+    # rede — wi-fi de café, de evento, de escritório.
+    ports: ['127.0.0.1:5432:5432']
     volumes: ['porto-hub-afiliados-pgdata:/var/lib/postgresql/data']
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U porto -d hub_afiliados']

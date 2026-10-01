@@ -10,11 +10,15 @@ import { ListAffiliateAuditLogsUseCase } from '@Application/affiliates/list-affi
 import { ListAffiliatesUseCase } from '@Application/affiliates/list-affiliates.use-case';
 import { ListAffiliatesReportUseCase } from '@Application/affiliates/list-affiliates-report.use-case';
 import { RejectAffiliateUseCase } from '@Application/affiliates/reject-affiliate.use-case';
+import { RevealAffiliateDocumentsUseCase } from '@Application/affiliates/reveal-affiliate-documents.use-case';
 import { AdminLoginUseCase } from '@Application/auth/admin-login.use-case';
 import { AffiliateLoginUseCase } from '@Application/auth/affiliate-login.use-case';
+import { GetOperatorUseCase } from '@Application/auth/get-operator.use-case';
 import { RequestPasswordResetUseCase } from '@Application/auth/request-password-reset.use-case';
 import { ResetPasswordUseCase } from '@Application/auth/reset-password.use-case';
+import { RevokeSessionsUseCase } from '@Application/auth/revoke-sessions.use-case';
 import { SetPasswordUseCase } from '@Application/auth/set-password.use-case';
+import { ValidateSessionUseCase } from '@Application/auth/validate-session.use-case';
 import { ChangeAffiliateCouponUseCase } from '@Application/coupons/change-affiliate-coupon.use-case';
 import { CheckCouponAvailabilityUseCase } from '@Application/coupons/check-coupon-availability.use-case';
 import { CompleteTrainingModuleUseCase } from '@Application/materials/complete-training-module.use-case';
@@ -75,6 +79,9 @@ function provideUseCase<TDependencies extends unknown[], TUseCase>(
 const USE_CASES = [
   provideUseCase(CreateAffiliateUseCase, [USER_REPOSITORY, AFFILIATE_REPOSITORY, MAILER, CLOCK]),
   provideUseCase(AdminLoginUseCase, [USER_REPOSITORY, PASSWORD_HASHER, ACCESS_TOKEN_ISSUER, CLOCK]),
+  provideUseCase(ValidateSessionUseCase, [USER_REPOSITORY]),
+  provideUseCase(RevokeSessionsUseCase, [USER_REPOSITORY]),
+  provideUseCase(GetOperatorUseCase, [USER_REPOSITORY]),
   provideUseCase(ListAffiliatesUseCase, [AFFILIATE_REPOSITORY]),
   provideUseCase(ListAffiliatesReportUseCase, [AFFILIATE_REPOSITORY]),
   provideUseCase(GetAffiliateUseCase, [AFFILIATE_REPOSITORY]),
@@ -105,7 +112,6 @@ const USE_CASES = [
     CLOCK,
   ]),
   provideUseCase(SetPasswordUseCase, [
-    USER_REPOSITORY,
     PASSWORD_RESET_TOKEN_REPOSITORY,
     PASSWORD_HASHER,
     TOKEN_GENERATOR,
@@ -127,6 +133,7 @@ const USE_CASES = [
     CLOCK,
   ]),
   provideUseCase(GetAffiliateAccountUseCase, [USER_REPOSITORY]),
+  provideUseCase(RevealAffiliateDocumentsUseCase, [USER_REPOSITORY, PASSWORD_HASHER]),
   provideUseCase(ChangePixKeyUseCase, [
     USER_REPOSITORY,
     AFFILIATE_REPOSITORY,

@@ -15,7 +15,9 @@ import { type ApiErrorCode, AuthErrorCodeEnum } from '@porto/contracts';
  * estiver tentando.
  */
 const MESSAGES: Partial<Record<AuthErrorCodeEnum, string>> = {
-  [AuthErrorCodeEnum.INVALID_CREDENTIALS]: 'E-mail ou senha inválidos.',
+  // A API não conta mais se a conta existe sem senha: a dica vale para todos.
+  [AuthErrorCodeEnum.INVALID_CREDENTIALS]:
+    'E-mail ou senha inválidos. Se ainda não criou sua senha, use o link do e-mail de aprovação ou "Esqueci minha senha".',
   [AuthErrorCodeEnum.REGISTRATION_UNDER_REVIEW]:
     'Seu cadastro ainda está em análise. Assim que houver decisão, você recebe um e-mail.',
   [AuthErrorCodeEnum.REGISTRATION_REJECTED]:

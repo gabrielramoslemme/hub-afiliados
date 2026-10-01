@@ -24,6 +24,11 @@ concurrency:
 permissions:
   contents: read
 
+# Toda action de terceiro vai por SHA de commit, com a versao em comentario.
+# Tag e ponteiro movel: quem assume o repositorio da action - ou so empurra uma
+# tag - passa a rodar codigo aqui, com o token OIDC que assume a role de
+# deploy. Atualizar e trocar o SHA de proposito, num PR que da para revisar.
+
 # Dev mora em us-east-1 e prod em ca-central-1 - a regiao segue a branch, como
 # a stack e a role do job `images`.
 env:
@@ -37,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: ./.github/actions/setup
 
       - run: npm run lint
@@ -52,7 +57,9 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:16-alpine
+        # Mesmo digest do docker-compose.yml da raiz: o e2e roda contra o
+        # mesmo Postgres do desenvolvimento local.
+        image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
         env:
           POSTGRES_USER: porto
           POSTGRES_PASSWORD: porto
@@ -68,10 +75,9 @@ jobs:
       JWT_SECRET: ci-secret-with-at-least-32-characters-here
       JWT_EXPIRES_IN_SECONDS: 28800
       APP_BASE_URL: http://localhost:3000
-      PANEL_BASE_URL: http://localhost:3005
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: ./.github/actions/setup
 
       # Roda as migrations de verdade contra um Postgres de verdade: e o unico
@@ -84,7 +90,7 @@ jobs:
         env:
           OPENAPI_VERSION: ${{ github.sha }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: openapi-${{ github.sha }}
           path: apps/api/openapi.json
@@ -95,12 +101,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # Os workflows referenciam a action composta por caminho e usam contextos
       # que so falham em runtime. O actionlint pega isso aqui.
       - name: Validar os workflows
-        uses: raven-actions/actionlint@v2
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+        # O padrao da action e `latest`: sem isto o binario que roda aqui
+        # mudaria sem commit nenhum, e o SHA fixado acima so prenderia o
+        # instalador.
+        with:
+          version: 1.7.12
 
       - name: Validar o template do CloudFormation
         run: |
@@ -136,12 +147,12 @@ jobs:
       api-repo: ${{ steps.stack.outputs.ApiRepositoryUri }}
       web-repo: ${{ steps.stack.outputs.WebRepositoryUri }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Credenciais da AWS
         if: env.PUBLISH == 'true'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           role-to-assume: ${{ github.ref == 'refs/heads/main' && secrets.AWS_PROD_DEPLOY_ROLE_ARN || secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -158,8 +169,28 @@ jobs:
             echo "$key=$value" >> "$GITHUB_OUTPUT"
           done
 
-      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
         if: env.PUBLISH == 'true'
+
+      # As tags no ECR sao imutaveis. Re-executar um workflow cujo `images` ja
+      # publicou este SHA falharia no push com ImageTagAlreadyExistsException;
+      # a imagem que esta la saiu deste mesmo commit, entao pular e o certo.
+      - name: Conferir o que ja foi publicado
+        id: published
+        if: env.PUBLISH == 'true'
+        env:
+          API_REPO: ${{ steps.stack.outputs.ApiRepositoryUri }}
+          WEB_REPO: ${{ steps.stack.outputs.WebRepositoryUri }}
+        run: |
+          set -euo pipefail
+          published() {
+            # O nome do repositorio e o URI sem o host do registro.
+            count="$(aws ecr batch-get-image --repository-name "${1#*/}" \
+              --image-ids imageTag="$GITHUB_SHA" --query 'length(images)' --output text)"
+            if [ "$count" -gt 0 ]; then echo true; else echo false; fi
+          }
+          echo "api=$(published "$API_REPO")" >> "$GITHUB_OUTPUT"
+          echo "web=$(published "$WEB_REPO")" >> "$GITHUB_OUTPUT"
 
       # `linux/amd64` explicito para casar com a AMI x86_64 da stack. O `bcrypt`
       # e modulo nativo: imagem de arquitetura errada sobe e so quebra no
@@ -169,24 +200,26 @@ jobs:
       # imagem. E o que faz o segundo push do dia reaproveitar o `npm ci` em vez
       # de baixar o mundo de novo.
       - name: API
-        uses: docker/build-push-action@v6
+        if: env.PUBLISH != 'true' || steps.published.outputs.api != 'true'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: apps/api/Dockerfile
           platforms: linux/amd64
           push: ${{ env.PUBLISH == 'true' }}
-          tags: ${{ env.PUBLISH == 'true' && format('{0}:{1},{0}:latest', steps.stack.outputs.ApiRepositoryUri, github.sha) || 'porto-hub/api:ci' }}
+          tags: ${{ env.PUBLISH == 'true' && format('{0}:{1}', steps.stack.outputs.ApiRepositoryUri, github.sha) || 'porto-hub/api:ci' }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
 
       - name: Web
-        uses: docker/build-push-action@v6
+        if: env.PUBLISH != 'true' || steps.published.outputs.web != 'true'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: apps/web/Dockerfile
           platforms: linux/amd64
           push: ${{ env.PUBLISH == 'true' }}
-          tags: ${{ env.PUBLISH == 'true' && format('{0}:{1},{0}:latest', steps.stack.outputs.WebRepositoryUri, github.sha) || 'porto-hub/web:ci' }}
+          tags: ${{ env.PUBLISH == 'true' && format('{0}:{1}', steps.stack.outputs.WebRepositoryUri, github.sha) || 'porto-hub/web:ci' }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
 

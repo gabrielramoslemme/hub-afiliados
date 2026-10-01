@@ -1,15 +1,17 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  porto-hub-afiliados - alarme de 5xx do CloudFront de um ambiente. Sobe SEMPRE
-  em us-east-1, qualquer que seja a regiao da stack principal: o CloudFront so
-  publica metrica la, e alarme do CloudWatch nao le metrica de outra regiao.
+  porto-hub-afiliados - a borda de um ambiente: log de acesso do CloudFront e,
+  com AlertEmail, o alarme de 5xx. Sobe SEMPRE em us-east-1, qualquer que seja a
+  regiao da stack principal: o CloudFront so publica metrica la, alarme do
+  CloudWatch nao le metrica de outra regiao, e a entrega de log v2 do
+  CloudFront so e configuravel la.
 
 Parameters:
   EnvironmentName:
     Type: String
     Default: prod
     AllowedValues: [dev, prod]
-    Description: Mesmo valor da stack principal - so entra no nome dos recursos.
+    Description: Mesmo valor da stack principal - entra no nome dos recursos e na retencao do log.
 
   DistributionId:
     Type: String
@@ -18,10 +20,12 @@ Parameters:
 
   AlertEmail:
     Type: String
-    AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+    Default: ''
+    AllowedPattern: '^$|^[^@\s]+@[^@\s]+\.[^@\s]+$'
     Description: >
       Quem recebe o alarme. O topico da stack principal esta em outra regiao,
-      entao este e outro, com outra assinatura para confirmar.
+      entao este e outro, com outra assinatura para confirmar. VAZIO so em dev:
+      sobe o log de acesso e nenhum alarme.
 
 Rules:
   RunsInUsEast1:
@@ -29,11 +33,23 @@ Rules:
       - Assert: !Equals [!Ref 'AWS::Region', 'us-east-1']
         AssertDescription: >
           Esta stack precisa estar em us-east-1 - e so la que o CloudFront
-          publica 5xxErrorRate. Em outra regiao o alarme nunca dispara.
+          publica 5xxErrorRate e aceita a configuracao do log de acesso. Em
+          outra regiao o alarme nunca dispara e o log nao e criado.
+
+  ProdRequiresAlertEmail:
+    RuleCondition: !Equals [!Ref EnvironmentName, 'prod']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AlertEmail, '']]
+        AssertDescription: Producao exige AlertEmail - alarme sem destino nao avisa ninguem.
+
+Conditions:
+  IsProd: !Equals [!Ref EnvironmentName, 'prod']
+  HasAlertEmail: !Not [!Equals [!Ref AlertEmail, '']]
 
 Resources:
   AlertTopic:
     Type: AWS::SNS::Topic
+    Condition: HasAlertEmail
     Properties:
       TopicName: !Sub 'porto-hub-${EnvironmentName}-edge-alerts'
       Subscription:
@@ -45,6 +61,7 @@ Resources:
   # trafego nao ha dado, e sem dado nao ha problema.
   CdnErrorRateAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: HasAlertEmail
     Properties:
       AlarmName: !Sub 'porto-hub-${EnvironmentName}-cdn-5xx'
       AlarmDescription: Mais de 5% das respostas do CloudFront em 5xx por 5 minutos
@@ -63,3 +80,93 @@ Resources:
       TreatMissingData: notBreaching
       AlarmActions: [!Ref AlertTopic]
       OKActions: [!Ref AlertTopic]
+
+  # =========================================================== Log de acesso
+  # Quem pediu o que, de onde, e o que a borda respondeu - inclusive o que o
+  # CloudFront recusou e a instancia nunca viu. A instancia nao guarda isso: o
+  # Caddy nao escreve log de acesso.
+  #
+  # Entrega v2, e nao o `Logging` da distribuicao (legado), por um motivo so: a
+  # v2 escolhe os campos, e o legado grava a query string sempre. O link de
+  # definir e de redefinir senha leva o token de uso unico em `?token=`, valido
+  # por ate 48 horas - e o token so pode existir em claro no e-mail. O Referer
+  # sai pelo mesmo motivo: o navegador manda a URL inteira da pagina, token
+  # junto, em cada asset que ela carrega. Os cookies sao a sessao. O que fica
+  # basta para investigar acesso: IP, metodo, host, caminho, status, tempos,
+  # user agent, TLS e o id da requisicao.
+  #
+  # Em CloudWatch Logs, e nao em S3: a retencao e propriedade do log group, como
+  # no /porto-hub/<env> da stack principal, e a consulta e Logs Insights, sem
+  # Athena. Cifrado em repouso pela chave da AWS, como todo log group; chave KMS
+  # propria seria uma politica a mais para manter sem ganho aqui.
+  #
+  # A politica de recurso que deixa delivery.logs.amazonaws.com escrever no
+  # grupo a AWS cria sozinha no CreateDelivery, desde que quem roda a stack
+  # tenha logs:PutResourcePolicy - o caso de quem tem administrador na conta.
+  AccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      # Sem barra: o nome do destino de entrega so aceita [\w-].
+      LogGroupName: !Sub 'porto-hub-${EnvironmentName}-cloudfront-access'
+      RetentionInDays: !If [IsProd, 90, 14]
+
+  AccessLogSource:
+    Type: AWS::Logs::DeliverySource
+    Properties:
+      # Uma por distribuicao, e o nome e unico na conta e na regiao: dev e prod
+      # dividem us-east-1 aqui, dai o ambiente no nome.
+      Name: !Sub 'porto-hub-${EnvironmentName}-cloudfront'
+      ResourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${DistributionId}'
+      LogType: ACCESS_LOGS
+
+  AccessLogDestination:
+    Type: AWS::Logs::DeliveryDestination
+    Properties:
+      Name: !Sub 'porto-hub-${EnvironmentName}-cloudfront-cwl'
+      # ARN montado a mao: `AccessLogGroup.Arn` termina em `:*`, e o destino
+      # quer o ARN do grupo sem o sufixo.
+      DestinationResourceArn: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AccessLogGroup}'
+      OutputFormat: json
+
+  AccessLogDelivery:
+    Type: AWS::Logs::Delivery
+    Properties:
+      DeliverySourceName: !Ref AccessLogSource
+      DeliveryDestinationArn: !GetAtt AccessLogDestination.Arn
+      # Ficam de fora, de proposito: cs-uri-query, cs(Referer) e cs(Cookie) -
+      # o motivo esta no comentario do AccessLogGroup. Campo novo aqui passa
+      # pela mesma pergunta: ele pode carregar token, senha ou sessao?
+      RecordFields:
+        - date
+        - time
+        - x-edge-location
+        - c-ip
+        - c-port
+        - c-country
+        - x-forwarded-for
+        - cs-method
+        - cs(Host)
+        - x-host-header
+        - cs-uri-stem
+        - cs-protocol
+        - cs-protocol-version
+        - sc-status
+        - sc-bytes
+        - cs-bytes
+        - time-taken
+        - time-to-first-byte
+        - cs(User-Agent)
+        - ssl-protocol
+        - ssl-cipher
+        - x-edge-result-type
+        - x-edge-response-result-type
+        - x-edge-detailed-result-type
+        - x-edge-request-id
+        - cache-behavior-path-pattern
+
+Outputs:
+  AccessLogGroupName:
+    Description: Log group com o log de acesso do CloudFront, sem query string, Referer nem cookies
+    Value: !Ref AccessLogGroup

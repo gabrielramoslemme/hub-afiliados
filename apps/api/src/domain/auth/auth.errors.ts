@@ -15,15 +15,6 @@ export class InvalidCredentialsError extends DomainError {
   }
 }
 
-export class PasswordNotSetError extends DomainError {
-  readonly kind = DomainErrorKindEnum.UNAUTHORIZED;
-  readonly code = AuthErrorCodeEnum.PASSWORD_NOT_SET;
-
-  constructor() {
-    super('Sua senha ainda não foi definida. Use o link enviado por e-mail.');
-  }
-}
-
 export class AccountInactiveError extends DomainError {
   readonly kind = DomainErrorKindEnum.UNAUTHORIZED;
   readonly code = AuthErrorCodeEnum.ACCOUNT_INACTIVE;
@@ -90,6 +81,20 @@ export class UnknownAffiliateError extends DomainError {
 
   constructor() {
     super('Sessão inválida. Entre novamente.');
+  }
+}
+
+/**
+ * Token bem assinado de uma sessão que não vale mais: a pessoa saiu, trocou a
+ * senha pelo link ou teve a conta desativada. Mesma resposta de um token
+ * vencido, porque para quem está na tela é a mesma coisa.
+ */
+export class SessionRevokedError extends DomainError {
+  readonly kind = DomainErrorKindEnum.UNAUTHORIZED;
+  readonly code = AuthErrorCodeEnum.INVALID_CREDENTIALS;
+
+  constructor() {
+    super('Sessão expirada. Entre novamente.');
   }
 }
 

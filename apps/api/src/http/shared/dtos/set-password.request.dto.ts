@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { IsNotEmpty, IsString } from 'class-validator';
+import { IsPasswordPolicy } from './password-policy.decorator';
 
 /**
  * Espelha o `resetPasswordSchema` de `@porto/contracts` — o mesmo schema serve
@@ -17,8 +18,11 @@ export class SetPasswordRequestDto {
   @IsNotEmpty({ message: 'Link inválido.' })
   token: string;
 
-  @ApiProperty({ minLength: 8 })
-  @IsString({ message: 'A senha precisa ter ao menos 8 caracteres' })
-  @MinLength(8, { message: 'A senha precisa ter ao menos 8 caracteres' })
+  @ApiProperty({
+    minLength: 12,
+    description:
+      'Ao menos 12 caracteres, no máximo 72 bytes, com maiúscula, minúscula, número e caractere especial',
+  })
+  @IsPasswordPolicy()
   password: string;
 }

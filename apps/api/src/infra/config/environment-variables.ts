@@ -24,8 +24,6 @@ export interface EnvironmentVariables {
    */
   JWT_EXPIRES_IN_SECONDS: number;
   APP_BASE_URL: string;
-  PANEL_BASE_URL: string;
-  MAIL_PROVIDER: 'resend' | 'logger';
   RESEND_API_KEY: string;
   /** Remetente e nome de exibição não são do fornecedor: valem em qualquer um. */
   MAIL_FROM_EMAIL: string;

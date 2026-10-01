@@ -63,22 +63,16 @@ describe('ResetPasswordUseCase', () => {
     );
   });
 
-  it('stores the new password hashed and stamps when it was set', async () => {
+  it('redeems the link into the new password, hashed and stamped', async () => {
     await useCase.execute(input);
 
     expect(passwordHasher.hash).toHaveBeenCalledWith('SenhaNova!2026');
-    expect(userRepository.save).toHaveBeenCalledWith({
-      id: affiliate.id,
-      password: '$2b$10$hashed',
+    expect(passwordResetTokenRepository.redeem).toHaveBeenCalledWith({
+      tokenId: 7,
+      userId: affiliate.id,
+      passwordHash: '$2b$10$hashed',
       passwordSetAt: NOW,
-      shouldChangePassword: false,
     });
-  });
-
-  it('burns the token so the link works exactly once', async () => {
-    await useCase.execute(input);
-
-    expect(passwordResetTokenRepository.markUsed).toHaveBeenCalledWith(7);
   });
 
   /*
@@ -99,7 +93,7 @@ describe('ResetPasswordUseCase', () => {
     passwordResetTokenRepository.findUsable.mockResolvedValue(null);
 
     await expect(useCase.execute(input)).rejects.toThrow(InvalidResetTokenError);
-    expect(userRepository.save).not.toHaveBeenCalled();
+    expect(passwordResetTokenRepository.redeem).not.toHaveBeenCalled();
   });
 
   /*
@@ -110,14 +104,14 @@ describe('ResetPasswordUseCase', () => {
     passwordResetTokenRepository.findUsable.mockResolvedValue(usableToken(buildAdminUser()));
 
     await expect(useCase.execute(input)).rejects.toThrow(InvalidResetTokenError);
-    expect(userRepository.save).not.toHaveBeenCalled();
+    expect(passwordResetTokenRepository.redeem).not.toHaveBeenCalled();
   });
 
   it('refuses an affiliate token on the panel channel', async () => {
     await expect(useCase.execute({ ...input, audience: AuthAudienceEnum.ADMIN })).rejects.toThrow(
       InvalidResetTokenError,
     );
-    expect(userRepository.save).not.toHaveBeenCalled();
+    expect(passwordResetTokenRepository.redeem).not.toHaveBeenCalled();
   });
 
   it('accepts an operator token on the panel channel', async () => {
@@ -126,13 +120,26 @@ describe('ResetPasswordUseCase', () => {
 
     await useCase.execute({ ...input, audience: AuthAudienceEnum.ADMIN });
 
-    expect(userRepository.save).toHaveBeenCalledWith(expect.objectContaining({ id: admin.id }));
+    expect(passwordResetTokenRepository.redeem).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: admin.id }),
+    );
   });
 
-  it('does not burn the token when the password write fails', async () => {
-    userRepository.save.mockRejectedValue(new Error('boom'));
+  // Dois pedidos com o mesmo link chegam juntos: só o resgate, no banco, decide
+  // qual grava a senha — e o perdedor não encerra sessão nem mata link nenhum.
+  it('refuses a link another request redeemed first, touching nothing else', async () => {
+    passwordResetTokenRepository.redeem.mockResolvedValue(false);
 
-    await expect(useCase.execute(input)).rejects.toThrow('boom');
-    expect(passwordResetTokenRepository.markUsed).not.toHaveBeenCalled();
+    await expect(useCase.execute(input)).rejects.toThrow(InvalidResetTokenError);
+    expect(userRepository.revokeSessions).not.toHaveBeenCalled();
+    expect(passwordResetTokenRepository.invalidateAllFor).not.toHaveBeenCalled();
+  });
+
+  // O link pode ter sido pedido por quem desconfia que a conta foi tomada: a
+  // senha nova encerra as sessões abertas com a antiga.
+  it('ends every session open with the previous password', async () => {
+    await useCase.execute(input);
+
+    expect(userRepository.revokeSessions).toHaveBeenCalledWith(affiliate.id);
   });
 });

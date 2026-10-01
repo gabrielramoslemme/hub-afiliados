@@ -86,7 +86,7 @@ describe('Admin — affiliate queue (e2e)', () => {
 **`createE2eApp()`, nunca `Test.createTestingModule` direto.** Ele faz três coisas que o spec esqueceria:
 
 - **Troca o `COUPON_GATEWAY` pelo `FakeCouponGateway`.** A API sempre fala com a Porto: sem a troca, a aprovação do teste registra cupom de verdade com as credenciais do `.env`.
-- **Troca o `MAIL_PROVIDER` pelo `FakeMailProvider`**, que guarda o e-mail **já renderizado**. Com `MAIL_PROVIDER=resend` no `.env`, cada cadastro do teste sairia de verdade. E trocar o provider, e não o `MAILER`, mantém o `ReactEmailRenderer` no caminho: variável que o use case manda com outro nome faz o e-mail não chegar, e o `MailService` engole esse erro de propósito. Para afirmar sobre o e-mail, leia o texto: `e2e.mail.sentTo(email).at(-1)?.text` ou `lastLinkTo(e2e.mail, email)`.
+- **Troca o `MAIL_PROVIDER` pelo `FakeMailProvider`**, que guarda o e-mail **já renderizado**. A API sempre envia pelo Resend, e sem a troca cada cadastro do teste sairia de verdade. E trocar o provider, e não o `MAILER`, mantém o `ReactEmailRenderer` no caminho: variável que o use case manda com outro nome faz o e-mail não chegar, e o `MailService` engole esse erro de propósito. Para afirmar sobre o e-mail, leia o texto: `e2e.mail.sentTo(email).at(-1)?.text` ou `lastLinkTo(e2e.mail, email)`.
 - **Aplica o `configureApp(app)`** (`src/configure-app.ts`), a mesma função do `main.ts`: prefixo `v1`, `ValidationPipe` e `HttpExceptionFilter`. Cópia à mão já tinha divergido — um spec rodava sem `forbidNonWhitelisted` nem o filtro.
 
 Spec que não precisa de HTTP (varredura de rotas, seed) usa `createE2eTestingModule()`, que faz as duas trocas e devolve o builder.

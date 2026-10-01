@@ -12,6 +12,7 @@ describe('JwtAccessTokenService', () => {
     aud: AuthAudienceEnum.ADMIN,
     role: UserRoleEnum.PORTO_ANALYST,
     name: 'Analista Porto',
+    ver: 0,
   };
 
   it('verifies the claims it issued', async () => {
@@ -40,5 +41,12 @@ describe('JwtAccessTokenService', () => {
     const stranger = await jwtService.signAsync({ hello: 'world' });
 
     await expect(service.verify(stranger)).resolves.toBeNull();
+  });
+
+  // Emitido antes de as sessões poderem ser encerradas: não há versão a conferir.
+  it('answers null for a token without the session version', async () => {
+    const { ver: _ver, ...withoutVersion } = claims;
+
+    await expect(service.verify(await jwtService.signAsync(withoutVersion))).resolves.toBeNull();
   });
 });

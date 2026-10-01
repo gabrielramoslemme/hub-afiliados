@@ -120,30 +120,10 @@ Parameters:
       PrefixListMatchesRegion). Conferir com
       `aws ec2 describe-managed-prefix-lists --region <regiao> --filters Name=prefix-list-name,Values=com.amazonaws.global.cloudfront.origin-facing`.
 
-  MailProvider:
-    Type: String
-    Default: logger
-    AllowedValues: [resend, logger]
-    Description: >
-      `logger` so registra o e-mail no log em vez de enviar, e e o default
-      porque a verificacao do dominio no Resend depende de registros SPF e DKIM
-      na zona - que nao esta nesta conta. Com ele, o link de definir senha sai
-      no CloudWatch, nao na caixa de entrada. Passe a `resend` no dia em que o
-      dominio aparecer verificado la, ou o cadastro do afiliado para no meio.
-
   MailFromEmail:
     Type: String
     Default: nao-responda@influencersportoservico.com.br
-    Description: Remetente. Com MailProvider=resend, o dominio precisa estar verificado la.
-
-  ApiMocking:
-    Type: String
-    Default: enabled
-    AllowedValues: [enabled, disabled]
-    Description: >
-      `enabled` dubla em memoria apenas /affiliate/me/wallet, que ainda nao
-      existe na API; todo o resto vai para a API de verdade. Passe a `disabled`
-      quando a rota da carteira nascer, ou a tela de saldo quebra.
+    Description: Remetente. O dominio precisa estar verificado no Resend, ou o e-mail nao sai.
 
   GitHubRepo:
     Type: String
@@ -224,10 +204,11 @@ Parameters:
       Confirmacao de que DbAccessCidr=0.0.0.0/0 e intencional. Irrelevante com
       qualquer outro CIDR, e ignorado com o banco fechado.
 
-  # VAZIOS em dev, e ai valem os padroes da API - os de homologacao. Em prod sao
-  # obrigatorios (regra ProdRequiresPortoGateway): credencial de producao
-  # falando com HML falharia sem dizer por que. A trava fica aqui, e nao na
-  # API, porque os dois ambientes rodam com NODE_ENV=production.
+  # VAZIOS em dev, e ai o ConfigParameter escreve os de homologacao. Em prod
+  # sao obrigatorios (regra ProdRequiresPortoGateway): credencial de producao
+  # falando com HML falharia sem dizer por que. A API tambem se recusa a subir
+  # sem eles com NODE_ENV=production - e os dois ambientes rodam assim, por isso
+  # o de dev recebe o endereco de HML escrito, e nao o padrao da API.
   #
   # O padrao e lista branca, e nao `\S+`: o valor cai sem aspas no
   # ConfigParameter, que o install-release.sh le com `source`. Um `&` ou `;`
@@ -312,8 +293,8 @@ Rules:
           - !Not [!Equals [!Ref PortoOAuthUrl, '']]
           - !Not [!Equals [!Ref PortoApiBaseUrl, '']]
         AssertDescription: >
-          Producao exige PortoOAuthUrl e PortoApiBaseUrl. Vazios, a API cai nos
-          padroes, que sao os de homologacao.
+          Producao exige PortoOAuthUrl e PortoApiBaseUrl. Vazios, o ambiente
+          receberia os enderecos de homologacao.
 
   # O default e o id de us-east-1. Em outra regiao ele nao existe, e o erro so
   # apareceria no security group, com InvalidPrefixListID.NotFound.
@@ -370,6 +351,8 @@ Conditions:
   # Duas, e nao uma: o modo mais provavel de rodar e dominio na web e nada na
   # API - o host da API so existe para o webhook, que ainda nao foi escrito.
   HasDomain: !Not [!Equals [!Ref DomainName, '']]
+  HasPortoOAuthUrl: !Not [!Equals [!Ref PortoOAuthUrl, '']]
+  HasPortoApiBaseUrl: !Not [!Equals [!Ref PortoApiBaseUrl, '']]
   HasApiDomain: !Not [!Equals [!Ref ApiDomainName, '']]
   DbIsPublic: !Not [!Equals [!Ref DbAccessCidr, '']]
 
@@ -861,10 +844,15 @@ Resources:
           Value: !Sub 'porto-hub-${EnvironmentName}-db'
 
   # =========================================================== Registro e deploy
+  # Tags imutaveis: o deploy e por SHA, e uma tag que pudesse ser regravada
+  # deixaria o rollback para "a tag anterior" apontar para outra imagem. Quem
+  # tem a role de deploy tambem nao consegue trocar, por baixo, a imagem de uma
+  # release ja aprovada. Por isso a CI nao publica mais `latest`.
   ApiRepository:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: !Sub 'porto-hub-${EnvironmentName}/api'
+      ImageTagMutability: IMMUTABLE
       ImageScanningConfiguration:
         ScanOnPush: true
       EmptyOnDelete: true
@@ -878,6 +866,7 @@ Resources:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: !Sub 'porto-hub-${EnvironmentName}/web'
+      ImageTagMutability: IMMUTABLE
       ImageScanningConfiguration:
         ScanOnPush: true
       EmptyOnDelete: true
@@ -944,7 +933,7 @@ Resources:
   # imutavel na pratica: mudar um valor nele ou substitui a instancia - levando
   # o volume com os certificados do Caddy, e com ele a cota semanal do Let's
   # Encrypt - ou nao roda de novo, porque o cloud-init e `once`, e a mudanca
-  # passa despercebida. No Parameter Store, trocar MailProvider ou absorver um
+  # passa despercebida. No Parameter Store, trocar o remetente ou absorver um
   # endpoint novo do RDS e um update de stack seguido do proximo deploy.
   #
   # O template escreve aqui ARNs de segredo, nunca o conteudo deles. As
@@ -981,19 +970,28 @@ Resources:
           APP_SECRET_ARN=${AppSecret}
           SEED_SECRET_ARN=${SeedSecretArn}
           PORTO_SECRET_ARN=${PortoSecret}
-          PORTO_OAUTH_URL=${PortoOAuthUrl}
-          PORTO_API_BASE_URL=${PortoApiBaseUrl}
+          PORTO_OAUTH_URL=${EffectivePortoOAuthUrl}
+          PORTO_API_BASE_URL=${EffectivePortoApiBaseUrl}
           DOMAIN_NAME=${EffectiveDomainName}
           API_DOMAIN_NAME=${ApiDomainName}
-          MAIL_PROVIDER=${MailProvider}
           MAIL_FROM_EMAIL=${MailFromEmail}
-          API_MOCKING=${ApiMocking}
         - EffectiveDomainName: !If
             - HasDomain
             - !Ref DomainName
             - !GetAtt Distribution.DomainName
           # Vazio em prod, e e isso que desliga o seed no install-release.sh.
           SeedSecretArn: !If [IsDev, !Ref SeedSecret, '']
+          # Vazios so em dev - em prod a regra ProdRequiresPortoGateway barra o
+          # create. Os de homologacao vao escritos porque a API, com
+          # NODE_ENV=production, nao sobe sem eles.
+          EffectivePortoOAuthUrl: !If
+            - HasPortoOAuthUrl
+            - !Ref PortoOAuthUrl
+            - 'https://portoapicloud-hml.portoseguro.com.br/oauth/v2/access-token'
+          EffectivePortoApiBaseUrl: !If
+            - HasPortoApiBaseUrl
+            - !Ref PortoApiBaseUrl
+            - 'https://portoapicloud-hml.portoseguro.com.br'
 
   # =========================================================== IAM
   InstanceRole:
@@ -1269,7 +1267,9 @@ Resources:
         # O objeto inteiro sob o !If, e nao campo a campo: com
         # CloudFrontDefaultCertificate o CloudFront recusa MinimumProtocolVersion
         # declarado, e o certificado padrao serve so o dominio cloudfront.net -
-        # e por isso que ele anda junto com a ausencia de alias.
+        # e por isso que ele anda junto com a ausencia de alias. Consequencia:
+        # sem dominio a borda aceita TLS 1.0. Vale so para a janela de
+        # bootstrap; o README diz isso na tabela dos modos de dominio.
         ViewerCertificate: !If
           - HasDomain
           - AcmCertificateArn: !Ref CertificateArn
@@ -1314,11 +1314,15 @@ Resources:
           # CachingDisabled: pagina de afiliado servida para outro afiliado seria
           # incidente, nao bug - ha CPF e chave PIX nessa arvore.
           CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
-          # AllViewer encaminha Host, cookies e query string. Os tres importam:
-          # o Host, para o Caddy rotear e para a Server Action nao abortar com
+          # AllViewerAndCloudFrontHeaders-2022-06: o que o AllViewer encaminha -
+          # Host, cookies e query string - mais os headers do CloudFront. O
+          # Host, para o Caddy rotear e para a Server Action nao abortar com
           # `Invalid Server Actions request`; os cookies, porque a sessao inteira
-          # e cookie httpOnly e o default do CloudFront os removeria.
-          OriginRequestPolicyId: 216adef6-5c7f-47e4-b989-5492eafa07d3
+          # e cookie httpOnly. E o CloudFront-Viewer-Address, que a API usa para
+          # contar tentativas por visitante: com esta politica o CloudFront o
+          # escreve por cima do que o navegador mandar. Sem ela, o header chega
+          # como o visitante quis, e o limite de tentativas vira opcional.
+          OriginRequestPolicyId: 33f36d7e-f396-46d9-90e0-52428a34d9dc
         CacheBehaviors:
           - PathPattern: /_next/static/*
             TargetOriginId: instance
@@ -1454,7 +1458,8 @@ Resources:
   # confirmada no link que o SNS manda para o AlertEmail.
   #
   # O 5xx do CloudFront nao esta aqui: a metrica so existe em us-east-1, e
-  # alarme nao le metrica de outra regiao. Mora na porto-hub-edge-alarms.yaml.
+  # alarme nao le metrica de outra regiao. Mora na porto-hub-edge-alarms.yaml,
+  # junto com o log de acesso do CloudFront, que so se configura la.
   AlertTopic:
     Type: AWS::SNS::Topic
     Condition: IsProd
@@ -1616,10 +1621,10 @@ Outputs:
     Description: Origin para a Imperva, e alvo dos CNAMEs de DomainName e ApiDomainName
     Value: !GetAtt Distribution.DomainName
 
-  # Entrada da porto-hub-edge-alarms.yaml: o alarme de 5xx do CloudFront so
-  # enxerga a metrica em us-east-1, e prod roda em ca-central-1.
+  # Entrada da porto-hub-edge-alarms.yaml: o alarme de 5xx e o log de acesso
+  # do CloudFront so se configuram em us-east-1, e prod roda em ca-central-1.
   DistributionId:
-    Description: Id da distribuicao, parametro da stack de alarmes de borda
+    Description: Id da distribuicao, parametro da stack de borda (alarme de 5xx e log de acesso)
     Value: !Ref Distribution
 
   # Condicional porque sem ApiDomainName o Caddy nao escreve o bloco, e uma URL
@@ -1672,10 +1677,10 @@ Outputs:
     Description: Shell na maquina, sem SSH e sem porta 22
     Value: !Sub 'aws ssm start-session --target ${Instance} --region ${AWS::Region}'
 
-  SwaggerTunnelCommand:
+  ApiTunnelCommand:
     Description: >
-      Swagger em http://localhost:3000/v1/docs, sem passar pelo CloudFront.
-      A API tambem sai em /v1/* no host da web.
+      API em http://localhost:3000/v1, sem passar pelo CloudFront. Sem Swagger:
+      com NODE_ENV=production a API nao o monta.
     Value: !Sub 'aws ssm start-session --target ${Instance} --region ${AWS::Region} --document-name AWS-StartPortForwardingSession --parameters ''{"portNumber":["3000"],"localPortNumber":["3000"]}'''
 
   RdsTunnelCommand:
@@ -1709,9 +1714,14 @@ Outputs:
 
   # O valor vem de ARQUIVO, nunca de argv: segredo em argv fica visivel em `ps`
   # e no historico do shell - exatamente o que tira-lo do template evitou.
+  #
+  # O secret.json e o segredo INTEIRO, JWT_SECRET junto. Por isso nasce com
+  # umask 077, dentro de um subshell para nao mudar o umask de quem cola, e e
+  # apagado mesmo quando o put falha - so o resend_key.txt fica, para a nova
+  # tentativa. `rc`, e nao `status`: no zsh `status` e somente leitura.
   SetResendKeyCommand:
     Description: Injeta o RESEND_API_KEY lendo de ./resend_key.txt, preservando os demais campos
-    Value: !Sub 'aws secretsmanager get-secret-value --secret-id ${AppSecret} --region ${AWS::Region} --query SecretString --output text | python3 -c ''import json,sys;s=json.load(sys.stdin);s["resend_api_key"]=open("resend_key.txt").read().strip();sys.stdout.write(json.dumps(s))'' > secret.json && aws secretsmanager put-secret-value --secret-id ${AppSecret} --region ${AWS::Region} --secret-string file://secret.json && rm -f secret.json resend_key.txt'
+    Value: !Sub '(umask 077 && aws secretsmanager get-secret-value --secret-id ${AppSecret} --region ${AWS::Region} --query SecretString --output text | python3 -c ''import json,sys;s=json.load(sys.stdin);s["resend_api_key"]=open("resend_key.txt").read().strip();sys.stdout.write(json.dumps(s))'' > secret.json && aws secretsmanager put-secret-value --secret-id ${AppSecret} --region ${AWS::Region} --secret-string file://secret.json; rc=$?; rm -f secret.json; [ $rc -eq 0 ] && rm -f resend_key.txt; exit $rc)'
 
   # Mesmo cuidado do SetResendKeyCommand: o valor vem de arquivo, nunca de argv.
   # O arquivo e o JSON inteiro do segredo, com as tres chaves.

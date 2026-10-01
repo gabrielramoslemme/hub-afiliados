@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { redirect } from 'next/navigation';
+import { cache } from 'react';
 import type {
   AffiliateMaterialsResponse,
   AffiliateMeResponse,
@@ -32,9 +33,14 @@ async function readOrSignIn<T>(read: () => Promise<T>): Promise<T> {
   }
 }
 
-export function fetchAccount(): Promise<AffiliateMeResponse> {
-  return readOrSignIn(() => affiliateApiFetch<AffiliateMeResponse>('/affiliate/me', FRESH));
-}
+/*
+  O layout e a página leem a conta na mesma navegação: o `cache` do React faz
+  disso uma chamada só por requisição, sem guardar nada entre uma e outra.
+*/
+export const fetchAccount = cache(
+  (): Promise<AffiliateMeResponse> =>
+    readOrSignIn(() => affiliateApiFetch<AffiliateMeResponse>('/affiliate/me', FRESH)),
+);
 
 export function fetchWallet(): Promise<AffiliateWalletResponse> {
   return readOrSignIn(() =>

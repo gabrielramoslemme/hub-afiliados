@@ -7,9 +7,11 @@ import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { type ForgotPasswordRequest, forgotPasswordSchema } from '@porto/contracts';
 import { LOGIN_PATH } from '@/backoffice/shared/routes';
+import { RetryNotice } from '@/shared/components/retry-notice';
 import { Button } from '@/shared/components/ui/button';
 import { Field, fieldAria } from '@/shared/components/ui/field';
 import { Input } from '@/shared/components/ui/input';
+import { useRetryCountdown } from '@/shared/hooks/use-retry-countdown';
 import { requestPasswordReset } from '../actions/forgot-password.action';
 
 /**
@@ -19,6 +21,7 @@ import { requestPasswordReset } from '../actions/forgot-password.action';
  */
 export function ForgotPasswordForm() {
   const [pending, startTransition] = useTransition();
+  const retry = useRetryCountdown();
   const [formError, setFormError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
 
@@ -38,7 +41,8 @@ export function ForgotPasswordForm() {
       const result = await requestPasswordReset(values);
 
       if (!result.ok) {
-        setFormError(result.message);
+        if (result.retryAfterSeconds) retry.start(result.retryAfterSeconds);
+        else setFormError(result.message);
         return;
       }
 
@@ -69,6 +73,8 @@ export function ForgotPasswordForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+      <RetryNotice remaining={retry.remaining} />
+
       {formError && (
         <div
           role="alert"
@@ -92,7 +98,7 @@ export function ForgotPasswordForm() {
         />
       </Field>
 
-      <Button type="submit" disabled={pending} className="mt-1 w-full">
+      <Button type="submit" disabled={pending || retry.remaining > 0} className="mt-1 w-full">
         {pending ? (
           <>
             <Loader2 className="animate-spin" aria-hidden />

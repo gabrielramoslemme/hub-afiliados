@@ -62,6 +62,35 @@ describe('createAffiliateSchema', () => {
     );
   });
 
+  /*
+    O nome entra no e-mail que a Porto manda ao próprio afiliado e aparece no
+    painel: um endereço ali vira link de phishing assinado pela Porto.
+  */
+  it.each([
+    ['a url', 'Marina https://porto-premio.example/pix'],
+    ['a bare domain', 'Marina porto-premio.example'],
+    ['a digit', 'Marina Ferraz 2'],
+    ['a line break', 'Marina\nFerraz'],
+    ['a tab', 'Marina\tFerraz'],
+    ['a slash', 'Marina Ferraz/Souza'],
+    ['a colon', 'Marina: Ferraz'],
+  ])('rejects a name with %s', (_case, fullName) => {
+    expect(firstErrorOn(parse({ fullName }), 'fullName')).toBe(
+      'Use só letras, espaços, apóstrofo e hífen no nome.',
+    );
+  });
+
+  it.each([
+    'João da Silva',
+    "Ana D'Ávila",
+    'Ana D’Ávila',
+    'Maria-Clara Nakamura',
+    'Zoë Ølsen',
+    'José Ferraz',
+  ])('accepts the name %s', (fullName) => {
+    expect(parse({ fullName }).success).toBe(true);
+  });
+
   it('rejects a name longer than the column', () => {
     expect(parse({ fullName: `${'a'.repeat(260)} Ferraz` }).success).toBe(false);
   });

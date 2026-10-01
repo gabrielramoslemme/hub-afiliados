@@ -2,14 +2,12 @@ import { TokenPurposeEnum } from '@porto/contracts';
 import { InvalidResetTokenError } from '@Domain/auth/auth.errors';
 import { buildUser } from '@Testing/factories/user.factory';
 import { passwordResetTokenRepositoryMock } from '@Testing/mocks/repositories/password-reset-token.repository.mock';
-import { userRepositoryMock } from '@Testing/mocks/repositories/user.repository.mock';
 import { clockMock } from '@Testing/mocks/services/clock.mock';
 import { passwordHasherMock } from '@Testing/mocks/services/password-hasher.mock';
 import { tokenGeneratorMock } from '@Testing/mocks/services/token-generator.mock';
 import { SetPasswordUseCase } from './set-password.use-case';
 
 describe('SetPasswordUseCase', () => {
-  let userRepository: ReturnType<typeof userRepositoryMock>;
   let passwordResetTokenRepository: ReturnType<typeof passwordResetTokenRepositoryMock>;
   let passwordHasher: ReturnType<typeof passwordHasherMock>;
   let tokenGenerator: ReturnType<typeof tokenGeneratorMock>;
@@ -21,13 +19,11 @@ describe('SetPasswordUseCase', () => {
   const input = { token: 'plain-token', password: 'SenhaNova!2026' };
 
   beforeEach(() => {
-    userRepository = userRepositoryMock();
     passwordResetTokenRepository = passwordResetTokenRepositoryMock();
     passwordHasher = passwordHasherMock();
     tokenGenerator = tokenGeneratorMock();
     clock = clockMock(NOW);
     useCase = new SetPasswordUseCase(
-      userRepository,
       passwordResetTokenRepository,
       passwordHasher,
       tokenGenerator,
@@ -56,35 +52,30 @@ describe('SetPasswordUseCase', () => {
     );
   });
 
-  it('stores the password hashed and stamps when it was set', async () => {
+  it('redeems the link into the password, hashed and stamped', async () => {
     await useCase.execute(input);
 
     expect(passwordHasher.hash).toHaveBeenCalledWith('SenhaNova!2026');
-    expect(userRepository.save).toHaveBeenCalledWith({
-      id: user.id,
-      password: '$2b$10$hashed',
+    expect(passwordResetTokenRepository.redeem).toHaveBeenCalledWith({
+      tokenId: 7,
+      userId: user.id,
+      passwordHash: '$2b$10$hashed',
       passwordSetAt: NOW,
-      shouldChangePassword: false,
     });
-  });
-
-  it('burns the token so the link works exactly once', async () => {
-    await useCase.execute(input);
-
-    expect(passwordResetTokenRepository.markUsed).toHaveBeenCalledWith(7);
   });
 
   it('refuses a token that is used, expired or forged', async () => {
     passwordResetTokenRepository.findUsable.mockResolvedValue(null);
 
     await expect(useCase.execute(input)).rejects.toThrow(InvalidResetTokenError);
-    expect(userRepository.save).not.toHaveBeenCalled();
+    expect(passwordResetTokenRepository.redeem).not.toHaveBeenCalled();
   });
 
-  it('does not burn the token when the password write fails', async () => {
-    userRepository.save.mockRejectedValue(new Error('boom'));
+  // Dois pedidos com o mesmo link chegam juntos: os dois acham o token usável, e
+  // só o resgate, no banco, decide qual grava a senha.
+  it('refuses a link another request redeemed first', async () => {
+    passwordResetTokenRepository.redeem.mockResolvedValue(false);
 
-    await expect(useCase.execute(input)).rejects.toThrow('boom');
-    expect(passwordResetTokenRepository.markUsed).not.toHaveBeenCalled();
+    await expect(useCase.execute(input)).rejects.toThrow(InvalidResetTokenError);
   });
 });

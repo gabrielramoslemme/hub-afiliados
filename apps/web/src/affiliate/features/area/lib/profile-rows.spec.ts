@@ -5,21 +5,18 @@ import {
   PixKeyTypeEnum,
   SocialNetworkEnum,
 } from '@porto/contracts';
-import { type ProfileField, profileRows } from './profile-rows';
+import { type ProfileField, profileRows, revealedDocuments } from './profile-rows';
 
 const account: AffiliateMeResponse = {
   publicId: '10000000-0000-4000-8000-000000000001',
   name: 'Marina Ferraz',
   email: 'marina@email.com',
-  cpf: '52998224725',
   maskedCpf: '***.***.247-25',
-  rg: '12345678X',
   maskedRg: '*****678X',
   occupation: OccupationEnum.INFLUENCER,
   socialNetwork: SocialNetworkEnum.INSTAGRAM,
   socialHandle: 'marina.ferraz',
   pixKeyType: PixKeyTypeEnum.PHONE,
-  pixKey: '11987654321',
   maskedPixKey: '(11) *****-4321',
   status: AffiliateStatusEnum.APPROVED,
   coupon: 'MARINA25',
@@ -46,19 +43,16 @@ describe('profileRows', () => {
     ]);
   });
 
-  it('opens the documents masked and keeps the whole value formatted for the reveal', () => {
-    expect(row('cpf')).toMatchObject({ value: '***.***.247-25', revealed: '529.982.247-25' });
-    expect(row('rg')).toMatchObject({ value: '*****678X', revealed: '12345678X' });
-    expect(row('pixKey')).toMatchObject({
-      value: '(11) *****-4321',
-      revealed: '(11) 98765-4321',
-    });
+  it('marks the documents as revealable, carrying only the masked value', () => {
+    expect(row('cpf')).toMatchObject({ value: '***.***.247-25', revealable: true });
+    expect(row('rg')).toMatchObject({ value: '*****678X', revealable: true });
+    expect(row('pixKey')).toMatchObject({ value: '(11) *****-4321', revealable: true });
   });
 
   it('has nothing to reveal on a field that is not a document', () => {
-    expect(row('name')).not.toHaveProperty('revealed');
-    expect(row('email')).not.toHaveProperty('revealed');
-    expect(row('social')).not.toHaveProperty('revealed');
+    expect(row('name')).not.toHaveProperty('revealable');
+    expect(row('email')).not.toHaveProperty('revealable');
+    expect(row('social')).not.toHaveProperty('revealable');
   });
 
   it('keeps the social network line when the optional field was left blank', () => {
@@ -66,5 +60,16 @@ describe('profileRows', () => {
 
     expect(row('social', withoutSocial)?.value).toBe('Não informada');
     expect(row('social')?.value).toBe('@marina.ferraz no Instagram');
+  });
+});
+
+describe('revealedDocuments', () => {
+  it('formats the whole documents the way the masked ones are shown', () => {
+    expect(
+      revealedDocuments(
+        { cpf: '52998224725', rg: '12345678X', pixKey: '11987654321' },
+        PixKeyTypeEnum.PHONE,
+      ),
+    ).toEqual({ cpf: '529.982.247-25', rg: '12345678X', pixKey: '(11) 98765-4321' });
   });
 });

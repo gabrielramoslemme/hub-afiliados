@@ -10,6 +10,7 @@ import {
   CouponGateway,
   IssueCouponInput,
 } from '../src/domain/coupons/coupon-gateway';
+import { CouponProviderUnavailableError } from '../src/domain/coupons/coupons.errors';
 import { FakeCouponGateway } from '../src/testing/fakes/fake-coupon.gateway';
 import { createE2eApp, type E2eApp, resetDatabase } from './e2e-app';
 import {
@@ -113,6 +114,24 @@ describe('Admin affiliates (e2e)', () => {
         .expect(200);
 
       expect(response.body.data.map((row: { name: string }) => row.name)).toEqual([name]);
+    });
+
+    // O que a analista digita é texto, nunca curinga do LIKE.
+    it.each([
+      ['a percent sign', '%'],
+      ['an underscore', '_'],
+      ['a backslash', '\\'],
+    ])('treats %s in the search as text', async (_label, search) => {
+      await register(e2e.app, MARINA);
+      await register(e2e.app, CLEIDE);
+
+      const response = await api()
+        .get('/v1/admin/affiliates')
+        .query({ search })
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(response.body).toMatchObject({ total: 0, data: [] });
     });
 
     it('filters by status', async () => {
@@ -402,6 +421,37 @@ describe('Admin affiliates (e2e)', () => {
         .set('Authorization', `Bearer ${token}`);
     }
 
+    /**
+     * Devolve, na ordem, o percentual de cada mudança que a Porto registrou. A
+     * primeira fica parada depois de registrada até a segunda chegar à Porto —
+     * ou, com a fila, até a segunda aparecer esperando o lock do cupom.
+     */
+    function holdFirstChangeUntilTheSecondIsQueued(): Array<number | undefined> {
+      const gateway = e2e.app.get<CouponGateway>(COUPON_GATEWAY);
+      const register = gateway.change.bind(gateway);
+      const received: Array<number | undefined> = [];
+      let release: () => void = () => undefined;
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+
+      void waitUntil(async () => {
+        const waiting = await e2e.dataSource.query(
+          "SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND NOT granted",
+        );
+        return waiting.length > 0;
+      }).then(release, release);
+
+      jest.spyOn(gateway, 'change').mockImplementation(async (input) => {
+        await register(input);
+        received.push(input.discountPercent);
+        if (received.length === 1) await released;
+        else release();
+      });
+
+      return received;
+    }
+
     it('deactivates the coupon and answers it as it ended up', async () => {
       const publicId = await register(e2e.app, MARINA);
       const code = await approve(e2e.app, token, publicId);
@@ -451,6 +501,50 @@ describe('Admin affiliates (e2e)', () => {
       expect(entities).toEqual(['COUPON', 'AFFILIATE', 'AFFILIATE']);
     });
 
+    /*
+      Duas analistas no mesmo cupom. A primeira mudança chega à Porto e fica
+      parada antes de gravar; a segunda é disparada nesse intervalo. Sem a fila
+      por cupom, a segunda passaria pela Porto e gravaria antes, e a primeira
+      gravaria por cima: o banco ficaria com 15 e a Porto com 20.
+    */
+    it('keeps our coupon equal to the last change Porto received when two race', async () => {
+      const publicId = await register(e2e.app, MARINA);
+      await approve(e2e.app, token, publicId);
+      const received = holdFirstChangeUntilTheSecondIsQueued();
+
+      const first = change(publicId)
+        .send({ discountPercent: 15 })
+        .then((response) => response);
+      await waitUntil(async () => received.length === 1);
+      const second = change(publicId)
+        .send({ discountPercent: 20 })
+        .then((response) => response);
+      const responses = await Promise.all([first, second]);
+
+      expect(responses.map((response) => response.status)).toEqual([200, 200]);
+      const [row] = await e2e.dataSource.query('SELECT discount_percent FROM affiliate_coupons');
+      expect(received).toEqual([15, 20]);
+      expect(row.discount_percent).toBe(received.at(-1));
+    });
+
+    // A fila não pode prender o cupom quando a Porto recusa a mudança.
+    it('lets the next change through after Porto refuses one', async () => {
+      const publicId = await register(e2e.app, MARINA);
+      await approve(e2e.app, token, publicId);
+      const gateway = e2e.app.get<CouponGateway>(COUPON_GATEWAY);
+      jest.spyOn(gateway, 'change').mockRejectedValueOnce(new CouponProviderUnavailableError());
+
+      await change(publicId).send({ discountPercent: 15 }).expect(503);
+
+      // O lock é da sessão, e a conexão volta ao pool: sem destravar, a mesma
+      // conexão reentraria nele, e só uma outra ficaria esperando.
+      expect(
+        await e2e.dataSource.query("SELECT 1 FROM pg_locks WHERE locktype = 'advisory'"),
+      ).toEqual([]);
+      const response = await change(publicId).send({ discountPercent: 20 }).expect(200);
+      expect(response.body.discountPercent).toBe(20);
+    });
+
     it('refuses a discount above the ceiling the provider accepts', async () => {
       const publicId = await register(e2e.app, MARINA);
       await approve(e2e.app, token, publicId);
@@ -485,4 +579,14 @@ function holdUntilBothArrive(
   jest.spyOn(gateway, 'issue').mockImplementationOnce(held).mockImplementationOnce(held);
 
   return bothArrived;
+}
+
+/** Confere a condição a cada 20ms; desiste em 5s para o teste falhar em vez de travar. */
+async function waitUntil(condition: () => Promise<boolean>): Promise<void> {
+  const deadline = Date.now() + 5_000;
+
+  while (!(await condition())) {
+    if (Date.now() > deadline) throw new Error('A condição não aconteceu em 5s.');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
 }

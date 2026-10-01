@@ -85,4 +85,8 @@ export class UserTypeormRepository implements UserRepository {
       throw translateEmailViolation(error);
     }
   }
+
+  async revokeSessions(userId: number): Promise<void> {
+    await this.repository.increment({ id: userId }, 'tokenVersion', 1);
+  }
 }

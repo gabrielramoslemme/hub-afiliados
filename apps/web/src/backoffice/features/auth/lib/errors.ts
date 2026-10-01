@@ -10,7 +10,9 @@ import { type ApiErrorCode, AuthErrorCodeEnum } from '@porto/contracts';
  * quem estiver tentando.
  */
 const MESSAGES: Partial<Record<AuthErrorCodeEnum, string>> = {
-  [AuthErrorCodeEnum.INVALID_CREDENTIALS]: 'E-mail ou senha inválidos.',
+  // A API não conta mais se a conta existe sem senha: a dica vale para todos.
+  [AuthErrorCodeEnum.INVALID_CREDENTIALS]:
+    'E-mail ou senha inválidos. Se ainda não criou sua senha, use "Esqueci minha senha".',
   [AuthErrorCodeEnum.ACCOUNT_INACTIVE]:
     'Esta conta está inativa. Procure quem administra o painel.',
   [AuthErrorCodeEnum.PASSWORD_NOT_SET]:

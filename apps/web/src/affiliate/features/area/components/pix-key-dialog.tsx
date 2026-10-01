@@ -7,6 +7,7 @@ import { useState, useTransition } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { type ChangePixKeyRequest, changePixKeySchema, PixKeyTypeEnum } from '@porto/contracts';
+import { RetryNotice } from '@/shared/components/retry-notice';
 import { Button } from '@/shared/components/ui/button';
 import {
   Dialog,
@@ -27,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import { useRetryCountdown } from '@/shared/hooks/use-retry-countdown';
 import { pixKeyTypeName } from '@/shared/lib/format';
 import { formatPixKey, pixKeyPlaceholder } from '@/shared/lib/masks';
 import { changePixKey } from '../actions/change-pix-key.action';
@@ -47,6 +49,7 @@ export function ChangePixKeyDialog({ pixKeyType, maskedPixKey }: ChangePixKeyDia
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const retry = useRetryCountdown();
 
   const defaultValues: ChangePixKeyRequest = { pixKeyType, pixKey: '', currentPassword: '' };
 
@@ -79,7 +82,8 @@ export function ChangePixKeyDialog({ pixKeyType, maskedPixKey }: ChangePixKeyDia
       const result = await changePixKey(values);
 
       if (result.status === 'failed') {
-        toast.error(result.message);
+        if (result.retryAfterSeconds) retry.start(result.retryAfterSeconds);
+        else toast.error(result.message);
         return;
       }
 
@@ -202,6 +206,8 @@ export function ChangePixKeyDialog({ pixKeyType, maskedPixKey }: ChangePixKeyDia
             </Field>
           </div>
 
+          <RetryNotice remaining={retry.remaining} />
+
           <DialogFooter>
             <Button
               type="button"
@@ -211,7 +217,7 @@ export function ChangePixKeyDialog({ pixKeyType, maskedPixKey }: ChangePixKeyDia
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" disabled={pending || retry.remaining > 0}>
               {pending ? <Loader2 className="animate-spin" aria-hidden /> : <Check aria-hidden />}
               Salvar nova chave
             </Button>

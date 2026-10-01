@@ -80,7 +80,10 @@ export class RequestPasswordResetUseCase implements UseCase<RequestPasswordReset
       expiresAt: new Date(now.getTime() + TOKEN_TTL_MS),
     });
 
-    await this.mailer.send({
+    // Sem esperar o envio: renderizar e entregar o e-mail leva centenas de
+    // milissegundos, e responder só depois disso contaria, pelo relógio, que o
+    // e-mail tem conta. O `Mailer` nunca lança, então não há erro a perder.
+    void this.mailer.send({
       template: MailTemplateEnum.PASSWORD_RECOVERY,
       to: user.email,
       toName: user.name,

@@ -1,10 +1,11 @@
 import * as Joi from 'joi';
 
 /*
-  Fora de `test` a API sempre fala com a Porto, e sem credencial cada aprovação
-  voltaria 503. Em `test` o e2e troca o gateway pelo falso antes de subir, então
-  a credencial não teria uso ali. Sai numa constante porque as duas credenciais
-  dividem a mesma condição — e porque assim a exceção do lint vive num lugar só.
+  Fora de `test` a API sempre fala com a Porto e com o Resend, e sem credencial
+  cada aprovação voltaria 503 ou sairia sem e-mail. Em `test` o e2e troca o
+  gateway e o envio por falsos antes de subir, então as credenciais não teriam
+  uso ali. Sai numa constante porque as três dividem a mesma condição — e porque
+  assim a exceção do lint vive num lugar só.
 */
 const REQUIRED_OUTSIDE_TEST = {
   is: 'test',
@@ -12,6 +13,24 @@ const REQUIRED_OUTSIDE_TEST = {
   then: Joi.string().allow('').default(''),
   otherwise: Joi.string().required().disallow(''),
 };
+
+const PORTO_HML_OAUTH_URL = 'https://portoapicloud-hml.portoseguro.com.br/oauth/v2/access-token';
+const PORTO_HML_API_BASE_URL = 'https://portoapicloud-hml.portoseguro.com.br';
+
+/*
+  Padrão de homologação em produção faria a credencial de produção falar com
+  HML: cada aprovação falharia sem dizer por quê. Lá o endereço vem sempre de
+  fora, e sem ele a API não sobe. Os dois ambientes da AWS rodam com
+  `NODE_ENV=production`, e por isso a stack escreve o endereço até no de dev.
+*/
+function requiredInProduction(fallback: string) {
+  return {
+    is: 'production',
+    // biome-ignore lint/suspicious/noThenProperty: `then` é a chave da condicional do Joi, não um thenable
+    then: Joi.required(),
+    otherwise: Joi.optional().default(fallback),
+  };
+}
 
 export const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'test', 'production').default('development'),
@@ -27,20 +46,21 @@ export const envValidationSchema = Joi.object({
   JWT_SECRET: Joi.string().min(32).required(),
   JWT_EXPIRES_IN_SECONDS: Joi.number().default(28800),
   APP_BASE_URL: Joi.string().uri().required(),
-  PANEL_BASE_URL: Joi.string().uri().required(),
-  MAIL_PROVIDER: Joi.string().valid('resend', 'logger').default('logger'),
-  RESEND_API_KEY: Joi.string().allow('').default(''),
+  // O Resend é o único jeito de mandar e-mail, em todo ambiente. Em `test` o
+  // e2e troca o envio pelo `FakeMailProvider`, e a chave não teria uso.
+  RESEND_API_KEY: Joi.string().when('NODE_ENV', REQUIRED_OUTSIDE_TEST),
   MAIL_FROM_EMAIL: Joi.string()
     .email({ tlds: { allow: false } })
     .default('nao-responda@afiliados.porto.example'),
   MAIL_FROM_NAME: Joi.string().default('Hub de Afiliados'),
 
-  // Não é o host de OAuth da doc da Porto (`hml.api.portoseguro.com.br`): esse
-  // não resolve em DNS público. O token sai do próprio host da API, e é aceito.
-  PORTO_OAUTH_URL: Joi.string()
+  // Fora de produção, homologação. Não é o host de OAuth da doc da Porto
+  // (`hml.api.portoseguro.com.br`): esse não resolve em DNS público. O token
+  // sai do próprio host da API, e é aceito.
+  PORTO_OAUTH_URL: Joi.string().uri().when('NODE_ENV', requiredInProduction(PORTO_HML_OAUTH_URL)),
+  PORTO_API_BASE_URL: Joi.string()
     .uri()
-    .default('https://portoapicloud-hml.portoseguro.com.br/oauth/v2/access-token'),
-  PORTO_API_BASE_URL: Joi.string().uri().default('https://portoapicloud-hml.portoseguro.com.br'),
+    .when('NODE_ENV', requiredInProduction(PORTO_HML_API_BASE_URL)),
   PORTO_API_BASE_PATH: Joi.string().default('/porto-assistencia/campanhasneo'),
   PORTO_CLIENT_ID: Joi.string().when('NODE_ENV', REQUIRED_OUTSIDE_TEST),
   PORTO_CLIENT_SECRET: Joi.string().when('NODE_ENV', REQUIRED_OUTSIDE_TEST),

@@ -41,6 +41,31 @@ Hoje `@Public()` marca exatamente dez rotas: `GET /v1/health`, `POST /v1/affilia
 
 **O claim `sub` é o `public_id`.** O token viaja para fora da API, e o id serial não sai daqui; quando o use case precisa do id interno — `approved_by_user_id` é FK —, ele resolve pelo `UserRepository.findByPublicId`.
 
+### Sessão: o JWT não basta
+
+**A assinatura diz que o token é nosso; o banco diz se a sessão ainda vale.** O `AuthenticatedGuard` passa os claims pelo `ValidateSessionUseCase`, que recusa com 401 a conta que sumiu, a desativada e o token cuja versão (`ver`) não é mais a `users.token_version`. Perfil e nome que seguem para o guard do canal saem do banco, não do token: rebaixar alguém vale na requisição seguinte. Custa uma consulta por requisição autenticada.
+
+**Somar um na `token_version` encerra toda sessão aberta da conta** (`UserRepository.revokeSessions`). Fazem isso o `POST /v1/{affiliate,admin}/auth/logout` e a redefinição de senha pelo link — esta última atende o critério do card 3.4, que antes ficava de fora porque o guard não consultava o banco. Token sem `ver`, emitido antes desta mudança, é recusado.
+
+O painel lê quem está logado em `GET /v1/admin/me`, a cada página, e não de um cookie escrito no login.
+
+### Senha e enumeração
+
+- **Login responde igual, no mesmo tempo, para e-mail desconhecido, conta sem senha e senha errada.** O `PasswordHasher.compare` recebe `null` quando não há hash e gasta uma comparação bcrypt de verdade antes de responder `false`. Não há mais `PASSWORD_NOT_SET` no login (o código `AUTH-004` fica aposentado).
+- **"Esqueci minha senha" responde sem esperar o e-mail sair** — renderizar e entregar leva centenas de milissegundos, e o relógio contaria quem tem cadastro. O `MailService` guarda os envios em curso: o desligamento (`enableShutdownHooks`) espera por eles, e o e2e que lê o link chama `mailSettled(e2e)`.
+- **O link de definir/redefinir senha é resgatado numa transação só** (`PasswordResetTokenRepository.redeem`): o `UPDATE` condicionado a `used_at IS NULL` decide qual de dois pedidos simultâneos grava a senha.
+- **A política de senha é `PASSWORD_RULES` de `@porto/contracts`**: 12 caracteres ou mais, até 72 bytes (o que o bcrypt lê), maiúscula, minúscula, número e caractere especial. O DTO a aplica com `@IsPasswordPolicy()`, a tela com o mesmo schema. Sem expiração periódica, por decisão (NIST SP 800-63B).
+
+### Limite de tentativas
+
+`@nestjs/throttler`, com o `ThrottleGuard` global antes do `AuthenticatedGuard`. **A chave é o visitante que o CloudFront viu** (`CloudFront-Viewer-Address`, sem a porta) e cai no IP da conexão fora da AWS — **nunca o `X-Forwarded-For`**, que o Caddy reescreve com o IP do CloudFront. O header só é confiável porque a política de origem da stack manda o CloudFront escrevê-lo por cima do que o navegador mandar: sem ela, ele é do visitante. O Next repassa o mesmo header quando chama a API em nome de quem está na tela.
+
+A conta é por rota e por visitante, com dois limites nomeados (`THROTTLERS`). O `default`, 300 por minuto em toda rota, fica em memória: existe para conter volume, e perder a conta num deploy não custa nada. O `sensitive` só vale nas rotas marcadas pelos decorators de `src/http/shared/throttling/throttle-limits.ts` — `PasswordAttemptThrottle` (logins, trocas de PIX e e-mail, revelar documentos), `RecoveryThrottle`, `LinkRedemptionThrottle` e `SignUpThrottle` (cinco cadastros por hora) — e **conta no Postgres**, na tabela `throttle_counters`: sobrevive a deploy e reinício e vale entre instâncias. Quem decide para onde vai cada conta é o `RoutedThrottlerStorage`; o `PostgresThrottlerStorage` soma, reabre a janela e bloqueia num `UPSERT` só, para tentativas simultâneas não se perderem, e apaga as linhas vencidas de tempos em tempos (a API não tem agendador). A chave gravada é o hash de rota e visitante, sem o IP. Passou do limite, espera o bloqueio inteiro: 429 `RATE-001`, com `Retry-After` em segundos — o guard o escreve, porque com limite nomeado a biblioteca usaria `Retry-After-<nome>`. Health e webhook ficam fora (`@SkipThrottle()`). No e2e, a parte em memória é o `ResettableThrottlerStorage`, zerado no `resetDatabase` junto com o `TRUNCATE` da tabela, porque a suíte inteira conecta do mesmo 127.0.0.1.
+
+### Documentos do afiliado
+
+**CPF, RG e chave PIX inteiros só saem de `POST /v1/affiliate/me/documents`**, com a senha atual no corpo, `Cache-Control: no-store` e o limite de tentativas do login. O `GET /v1/affiliate/me` alimenta toda tela da área do afiliado e devolve só a versão mascarada; o e2e reprova o documento inteiro nessa resposta.
+
 O tempo de vida vem de `JWT_EXPIRES_IN_SECONDS` (oito horas), casado com o cookie de sessão do painel: token que morre antes do cookie vira 401 numa tela que se acha logada.
 
 ## Arquitetura
@@ -193,7 +218,8 @@ Token trocado de posição no `provideUseCase` **era** a quarta, e a pior: dois 
 | Teste unitário | ao lado do arquivo, `.spec.ts` |
 | Teste de integração | `test/<assunto>.e2e-spec.ts` |
 | Seed | `src/infra/database/typeorm/seeds/` — `seed-operators.ts` (a lógica) e `run-seed.ts` (a entrada) |
-| Prefixo, `ValidationPipe`, filtro, helmet e CORS | `src/configure-app.ts` — o `main.ts` e o e2e chamam a mesma função |
+| Prefixo, `ValidationPipe`, filtro e helmet | `src/configure-app.ts` — o `main.ts` e o e2e chamam a mesma função. Sem CORS, de propósito: o navegador nunca fala com a API |
+| Swagger em `/v1/docs` | `src/configure-api-docs.ts` — só fora de `NODE_ENV=production` |
 | Apoio do e2e | `test/e2e-app.ts` (app e reset), `test/e2e-fixtures.ts` (operador, cadastros, cupom, link do e-mail) |
 
 ## Nome da dependência injetada
@@ -318,8 +344,8 @@ O `HttpExceptionFilter` global normaliza toda resposta de erro:
   }
   ```
 
-- **Traduzir `kind` para status é do filtro**, e é a tabela inteira: `NOT_FOUND` 404 · `CONFLICT` 409 · `INVALID_INPUT` 400 · `UNAUTHORIZED` 401 · `FORBIDDEN` 403 · `UNAVAILABLE` 503.
-- `code` vem de um `*ErrorCodeEnum` de `@porto/contracts` (`AuthErrorCodeEnum`, `RegistrationErrorCodeEnum`, `CouponErrorCodeEnum`, `IncentiveErrorCodeEnum`) quando o cliente precisa distinguir o caso para escolher a mensagem; nas demais respostas é `null`.
+- **Traduzir `kind` para status é do filtro**, e é a tabela inteira: `NOT_FOUND` 404 · `CONFLICT` 409 · `INVALID_INPUT` 400 · `UNAUTHORIZED` 401 · `FORBIDDEN` 403 · `UNAVAILABLE` 503. O 429 não passa por aqui: é o `ThrottleGuard` que o lança, já com `code` `RATE-001`.
+- `code` vem de um `*ErrorCodeEnum` de `@porto/contracts` (`AuthErrorCodeEnum`, `RegistrationErrorCodeEnum`, `CouponErrorCodeEnum`, `IncentiveErrorCodeEnum`, `RateLimitErrorCodeEnum`) quando o cliente precisa distinguir o caso para escolher a mensagem; nas demais respostas é `null`.
 - **Guard e controller continuam podendo lançar exceção do Nest** — eles já são a camada de HTTP.
 - 5xx é logado com stack e responde `Erro interno`: a mensagem original pode carregar nome de coluna ou detalhe de schema. 4xx não é logado. **Não logue a exceção você mesmo** — o filtro já faz.
 - O `ValidationPipe` global usa `whitelist`, `forbidNonWhitelisted`, `transform` e `stopAtFirstError`: campo fora do DTO devolve 400 sozinho, com uma mensagem por campo. Ele é montado em `configureApp` (`src/configure-app.ts`), junto com o filtro — nunca direto no `main.ts`, senão o e2e volta a testar uma configuração que produção não usa.
@@ -330,6 +356,7 @@ O `openapi.json` é o contrato publicado da API — rota sem decorator vira cont
 
 - Toda rota precisa de `@ApiTags`, decorator de resposta (`@ApiOkResponse`, `@ApiCreatedResponse`, …) e DTO de **classe** com `@ApiProperty`.
 - DTO de resposta é classe em `src/http/<canal>/<agregado>/dtos/`, nunca a `interface` de `@porto/contracts` — o Swagger precisa do metadado em runtime. Os dois coexistem: a classe descreve, o tipo compartilhado tipa o painel.
+- **A tela do Swagger (`/v1/docs`) só existe fora de produção** (`configureApiDocs`). A API sai na internet pelo CloudFront, e os dois ambientes da AWS rodam com `NODE_ENV=production`: lá o mapa das rotas não é servido a quem pedir. O contrato publicado continua sendo o `openapi.json` que a CI gera.
 
 ## E-mail
 
@@ -339,7 +366,7 @@ O use case recebe o port `Mailer` (`src/domain/notifications/mailer.ts`) pelo co
 
 O log da falha leva o template e o stack, **sem o endereço de quem receberia**: o fornecedor costuma citá-lo na mensagem do erro, e o `MailService` o troca por `[destinatário]` antes de logar.
 
-Dentro de infra o trabalho se parte em dois contratos: `MailRenderer` monta o conteúdo e `MailProvider` despacha. `MAIL_PROVIDER` escolhe o fornecedor concreto (`logger` em dev e teste, `resend` fora) — três ports em camadas diferentes, de propósito: o domínio quer enviar, infra sabe o que escrever e por onde mandar. **O template mora em código**, como componente React Email em `services/email/templates/`, nunca no painel do fornecedor: o registry é um `Record<MailTemplateEnum, …>`, então template novo sem entrada ali é erro de type-check. Templates, gatilhos e variáveis em [`docs/EMAILS.md`](docs/EMAILS.md).
+Dentro de infra o trabalho se parte em dois contratos: `MailRenderer` monta o conteúdo e `MailProvider` despacha. O fornecedor é o Resend em todo ambiente, desenvolvimento inclusive, e fora de `test` a API não sobe sem `RESEND_API_KEY`; só o e2e troca o envio pelo `FakeMailProvider`. O envio que só registrava no log saiu: ele levava o link de definir senha, com o token em claro, para o CloudWatch. São três ports em camadas diferentes, de propósito: o domínio quer enviar, infra sabe o que escrever e por onde mandar. **O template mora em código**, como componente React Email em `services/email/templates/`, nunca no painel do fornecedor: o registry é um `Record<MailTemplateEnum, …>`, então template novo sem entrada ali é erro de type-check. Templates, gatilhos e variáveis em [`docs/EMAILS.md`](docs/EMAILS.md).
 
 ## Auditoria
 
@@ -359,7 +386,7 @@ O painel lê tudo numa rota só, `GET /v1/admin/affiliates/:publicId/audit-logs`
 
 **A API sempre fala com a Porto** — nenhuma variável escolhe o emissor. Dentro de infra o trabalho se parte em dois, como no e-mail: `AccessTokenProvider` autentica, `CouponGateway` sabe o que é um cupom. O `FakeCouponGateway`, que registra em memória, mora em `src/testing/fakes/` e só entra no e2e.
 
-**Fora de `test`, a API não sobe sem `PORTO_CLIENT_ID` e `PORTO_CLIENT_SECRET`** — em desenvolvimento também, e lá os endereços padrão são os de homologação: cada aprovação local registra cupom de verdade. Em `test` as duas não têm uso, porque o e2e troca o gateway pelo falso, e a CI não as carrega. No ambiente provisionado as duas moram no segredo `PortoSecret` da stack, preenchido à mão depois do create, e com `REPLACE_ME` o deploy falha; em produção os endereços do gateway vêm da stack, obrigatórios ([`infra/cloudformation/README.md`](../../infra/cloudformation/README.md)).
+**Fora de `test`, a API não sobe sem `PORTO_CLIENT_ID` e `PORTO_CLIENT_SECRET`** — em desenvolvimento também, e lá os endereços padrão são os de homologação: cada aprovação local registra cupom de verdade. Em `test` as duas não têm uso, porque o e2e troca o gateway pelo falso, e a CI não as carrega. No ambiente provisionado as duas moram no segredo `PortoSecret` da stack, preenchido à mão depois do create, e com `REPLACE_ME` o deploy falha. **Com `NODE_ENV=production` os endereços do gateway (`PORTO_OAUTH_URL`, `PORTO_API_BASE_URL`) não têm padrão**, e a API não sobe sem eles: o padrão de homologação em produção faria a credencial de produção falar com HML. Os dois ambientes da AWS rodam assim, e por isso a stack escreve os de homologação no de dev ([`infra/cloudformation/README.md`](../../infra/cloudformation/README.md)).
 
 **O registro na Porto vem antes de qualquer escrita nossa.** Ser dono não é gravar primeiro: um cupom gravado aqui e não registrado lá chegaria ao afiliado sem valer no checkout. Se a Porto recusar ou não responder, o erro sobe e o cadastro fica exatamente como estava — em análise, sem e-mail enviado e sem trilha registrando decisão que não houve. As falhas são separadas pelo que a analista faz em seguida:
 
@@ -369,6 +396,7 @@ O painel lê tudo numa rota só, `GET /v1/admin/affiliates/:publicId/audit-logs`
 | `CouponProviderUnavailableError` | 503 `CPN-002` | tenta de novo com o mesmo |
 | `CouponRefusedError` | 409 `CPN-003` | revê o que pediu — é o 400 do INT-01, e trocar o código pode não ser o caso |
 | `CouponProviderAccessDeniedError` | 503 `CPN-004` | avisa o suporte — a credencial da integração foi recusada, e repetir não resolve |
+| `CouponChangeInProgressError` | 409 `CPN-005` | confere o cupom e repete — outra alteração do mesmo cupom demorou demais na frente desta |
 
 **Credencial recusada não é queda.** O OAuth que responde 400, 401 ou 403, o 401 que volta mesmo depois de trocar o token e o 403 do gateway viram `CPN-004`: dizer "tente novamente" mandaria a analista insistir no que só quem configura o ambiente corrige. O corpo da recusa fica no log. Timeout, rede, 5xx e 429 continuam `CPN-002` — e só eles levam a emissão a confirmar o cupom pela consulta, porque só eles deixam dúvida se o registro entrou.
 
@@ -385,6 +413,8 @@ O painel lê tudo numa rota só, `GET /v1/admin/affiliates/:publicId/audit-logs`
 O que sobra é o registro **e** a consulta ficarem sem resposta seguidas: o cupom pode ter entrado lá, e a nova tentativa ouve "código em uso". Reconciliar esse caso pede à Porto um jeito de distinguir cupom de afiliado dos demais (P8).
 
 **Alterar é `PATCH /v1/admin/affiliates/:publicId/coupon`** — desativar, reativar ou mudar o percentual, nunca o código, que é a chave da atribuição das vendas. Mesma ordem da aprovação: a Porto registra a mudança, e só então se grava o que a analista pediu.
+
+**Uma alteração por vez, por cupom.** Duas analistas no mesmo cupom, sem fila, deixariam a Porto com A e depois B e o banco com B e depois A — o painel mostraria um percentual que o checkout não aplica. O use case roda a releitura do cupom, a chamada à Porto e a escrita dentro de `CouponRepository.runExclusive(couponId, work)`; o adapter implementa com um lock consultivo do Postgres (`pg_advisory_lock`, chave `(1001, id do cupom)`) numa conexão só dele, solto no `finally`. A conexão é dedicada porque o lock atravessa a chamada HTTP e a transação do `change`. Quem espera segura uma conexão do pool, então a espera tem limite (`lock_timeout` de 30s) e vira `CPN-005` — sem ele, com o pool cheio de esperas, a alteração da vez não teria conexão para gravar. O e2e força a corrida segurando a primeira mudança no gateway até a segunda aparecer esperando em `pg_locks`.
 
 **Divergência consciente da aprovação: a alteração não se desfaz na Porto se a gravação daqui falhar.** A aprovação desativa o cupom órfão porque perder a corrida é caminho normal; na alteração, falhar depois de a Porto aceitar exigiria o banco cair entre as duas chamadas ou o cupom sumir no meio — e não há fluxo que exclua cupom. Se acontecer, o painel mostra o valor anterior até alguém repetir a alteração — foi a escolha, no lugar de uma compensação que também pode falhar.
 
@@ -466,4 +496,4 @@ npm run db:grants:prod --workspace apps/api                  # papel hub_rw, com
 npm run seed:prod --workspace apps/api                       # operadores em dist/
 ```
 
-Swagger em `http://localhost:3000/v1/docs`.
+Swagger em `http://localhost:3000/v1/docs` — só fora de `NODE_ENV=production`.

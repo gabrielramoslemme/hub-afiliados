@@ -89,24 +89,20 @@ export interface AffiliateAuditLogItem {
 /*
   O que a própria pessoa vê da sua conta. Diferente do `AffiliateDetail`, que é
   a visão da analista: aqui não há `approvedByName` nem `rejectionReason` de
-  outra pessoa. CPF, RG e chave PIX chegam inteiros e mascarados — o perfil abre
-  com a máscara, porque a tela pode estar aberta em público, e revela o valor
-  inteiro a pedido da própria pessoa.
+  outra pessoa. CPF, RG e chave PIX chegam só mascarados: esta resposta alimenta
+  toda tela da área do afiliado, e o valor inteiro sai apenas pelo
+  `AffiliateDocumentsResponse`, que pede a senha.
 */
 export interface AffiliateMeResponse {
   publicId: string;
   name: string;
   email: string;
-  /** Só dígitos. */
-  cpf: string;
   maskedCpf: string;
-  rg: string;
   maskedRg: string;
   occupation: OccupationEnum;
   socialNetwork: SocialNetworkEnum | null;
   socialHandle: string | null;
   pixKeyType: PixKeyTypeEnum;
-  pixKey: string;
   maskedPixKey: string;
   status: AffiliateStatusEnum;
   /** Nulo enquanto a Porto não emitir o cupom do afiliado aprovado. */
@@ -114,6 +110,25 @@ export interface AffiliateMeResponse {
   /** O desconto que o cupom concede a quem compra, de 1 a 25. Nulo junto com o cupom. */
   couponDiscountPercent: number | null;
   createdAt: string;
+}
+
+/**
+ * CPF, RG e chave PIX inteiros, que o perfil revela a pedido da própria pessoa.
+ * A senha atual confirma o pedido, como confirma a troca da chave: uma sessão
+ * esquecida aberta não basta para ler os documentos.
+ */
+export const revealDocumentsSchema = z.object({
+  // Sem `trim`, pelo mesmo motivo da troca da chave PIX.
+  currentPassword: z.string().min(1, 'Informe sua senha atual.'),
+});
+
+export type RevealDocumentsRequest = z.infer<typeof revealDocumentsSchema>;
+
+export interface AffiliateDocumentsResponse {
+  /** Só dígitos. */
+  cpf: string;
+  rg: string;
+  pixKey: string;
 }
 
 export interface AffiliateStatementEntry {
@@ -231,7 +246,16 @@ export type ApproveAffiliateFormValues = z.input<typeof approveAffiliateSchema>;
  * `cpf-cnpj-validator`. Reimplementar o cálculo criaria uma segunda fonte da
  * mesma regra; o `INVALID_CPF` da resposta vira erro no campo do CPF.
  */
-const FULL_NAME_PATTERN = /^\S+(\s+\S+)+$/;
+/*
+  Só letra (com o acento composto ou separado), espaço, apóstrofo — o reto e o
+  tipográfico, que o teclado do celular troca sozinho — e hífen. O nome vai no
+  e-mail que a Porto manda e aparece no painel: com dígito, ponto, barra ou dois
+  pontos ele carregaria um endereço, e o e-mail viraria phishing assinado por
+  ela. Espaço é só o espaço: quebra de linha forjaria uma linha a mais no e-mail.
+*/
+export const FULL_NAME_CHARACTERS_PATTERN = /^[\p{L}\p{M}'’ -]+$/u;
+/** Nome e sobrenome, cada palavra começando por letra. */
+export const FULL_NAME_PATTERN = /^\p{L}[\p{L}\p{M}'’-]*( +\p{L}[\p{L}\p{M}'’-]*)+$/u;
 const PIX_PHONE_PATTERN = /^\d{10,13}$/;
 const CPF_LENGTH = 11;
 /*
@@ -297,6 +321,7 @@ export const createAffiliateSchema = z
       .trim()
       .min(1, 'Informe o nome completo.')
       .max(255, 'O nome deve ter no máximo 255 caracteres.')
+      .regex(FULL_NAME_CHARACTERS_PATTERN, 'Use só letras, espaços, apóstrofo e hífen no nome.')
       .regex(FULL_NAME_PATTERN, 'Informe o nome e o sobrenome.'),
     email: z
       .string()

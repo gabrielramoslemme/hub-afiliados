@@ -160,3 +160,28 @@ describe('rejectAffiliate', () => {
     expect(JSON.parse(String(init?.body)).reason).toBe('Documentação ilegível no envio.');
   });
 });
+
+/*
+  O id entra no path, e Server Action aceita qualquer argumento num POST montado
+  à mão: sem a checagem, `../../affiliate/me/pix-key` levaria o servidor do Next
+  a chamar outra rota da API com o token do operador.
+*/
+describe.each([
+  ['approveAffiliate', (publicId: string) => approveAffiliate(publicId, COUPON)],
+  [
+    'rejectAffiliate',
+    (publicId: string) =>
+      rejectAffiliate(publicId, { reason: 'Perfil sem relação com o programa.' }),
+  ],
+])('%s with an id that is not a uuid', (_name, decide) => {
+  it.each(['../../affiliate/me/pix-key', `${PUBLIC_ID}/../../coupons`, ''])(
+    'refuses %p without calling the api',
+    async (publicId) => {
+      await expect(decide(publicId)).resolves.toEqual({
+        ok: false,
+        message: 'Afiliado não encontrado. Atualize a página e tente de novo.',
+      });
+      expect(apiFetch).not.toHaveBeenCalled();
+    },
+  );
+});

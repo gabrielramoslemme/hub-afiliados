@@ -48,23 +48,35 @@ export class ChangeAffiliateCouponUseCase
     if (!actor) throw new UnknownOperatorError();
 
     /*
-      O registro da mudança na Porto vem antes da escrita, como na aprovação: se
-      ela recusar ou não responder, o erro sobe daqui e nada muda — gravar antes
-      deixaria o painel mostrando um cupom que o checkout não conhece.
+      Uma alteração por vez, por cupom. Duas analistas no mesmo cupom deixariam a
+      Porto com A e depois B e o banco com B e depois A: o painel mostraria um
+      percentual que o checkout não aplica. Por isso o cupom é relido aqui
+      dentro, e a chamada à Porto e a escrita saem juntas, na mesma ordem.
     */
-    await this.couponGateway.change({
-      code: affiliate.coupon.code,
-      status: input.status,
-      discountPercent: input.discountPercent,
-    });
+    const { id: couponId, code } = affiliate.coupon;
+    const coupon = await this.couponRepository.runExclusive(couponId, async () => {
+      const current = await this.couponRepository.findByCode(code);
+      if (!current) throw new CouponNotFoundError();
 
-    // O cupom é nosso: grava-se o que a analista pediu, e não o que a Porto
-    // devolveu. Campo ausente continua ausente — o repositório não mexe nele.
-    const coupon = await this.couponRepository.change({
-      couponId: affiliate.coupon.id,
-      status: input.status,
-      discountPercent: input.discountPercent,
-      actorUserId: actor.id,
+      /*
+        O registro da mudança na Porto vem antes da escrita, como na aprovação:
+        se ela recusar ou não responder, o erro sobe daqui e nada muda — gravar
+        antes deixaria o painel mostrando um cupom que o checkout não conhece.
+      */
+      await this.couponGateway.change({
+        code: current.code,
+        status: input.status,
+        discountPercent: input.discountPercent,
+      });
+
+      // O cupom é nosso: grava-se o que a analista pediu, e não o que a Porto
+      // devolveu. Campo ausente continua ausente — o repositório não mexe nele.
+      return this.couponRepository.change({
+        couponId: current.id,
+        status: input.status,
+        discountPercent: input.discountPercent,
+        actorUserId: actor.id,
+      });
     });
 
     if (!coupon) throw new CouponNotFoundError();

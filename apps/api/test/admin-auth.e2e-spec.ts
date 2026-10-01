@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { AuthErrorCodeEnum } from '@porto/contracts';
-import { createE2eApp, type E2eApp, resetDatabase } from './e2e-app';
+import { createE2eApp, type E2eApp, mailSettled, resetDatabase } from './e2e-app';
 import { insertOperator, lastLinkTo, OPERATOR, tokenOf } from './e2e-fixtures';
 
 describe('Admin authentication (e2e)', () => {
@@ -33,6 +33,20 @@ describe('Admin authentication (e2e)', () => {
   });
 
   describe('POST /v1/admin/auth/login', () => {
+    /*
+      O navegador nunca fala com a API: quem chama é o servidor do Next. Uma
+      origem liberada com credenciais só servia para uma página de lá ler, com
+      o cookie de quem a abriu, o que a API responde.
+    */
+    it('does not let a page on the panel origin call it from the browser', async () => {
+      const response = await api()
+        .options('/v1/admin/auth/login')
+        .set('Origin', 'http://localhost:3005')
+        .set('Access-Control-Request-Method', 'POST');
+
+      expect(response.headers['access-control-allow-origin']).toBeUndefined();
+    });
+
     it('signs an operator in and records the instant', async () => {
       await insertOperator(e2e.dataSource);
 
@@ -73,6 +87,7 @@ describe('Admin authentication (e2e)', () => {
       await insertOperator(e2e.dataSource);
 
       await forgotPassword().expect(204);
+      await mailSettled(e2e);
 
       expect(lastLinkTo(e2e.mail, OPERATOR.email).pathname).toBe('/admin/redefinir-senha');
     });
@@ -82,6 +97,7 @@ describe('Admin authentication (e2e)', () => {
 
       await forgotPassword().expect(204);
       await forgotPassword().expect(204);
+      await mailSettled(e2e);
 
       expect(e2e.mail.sentTo(OPERATOR.email)).toHaveLength(1);
     });
@@ -90,6 +106,7 @@ describe('Admin authentication (e2e)', () => {
   describe('POST /v1/admin/auth/reset-password', () => {
     async function recoveryToken(): Promise<string> {
       await forgotPassword().expect(204);
+      await mailSettled(e2e);
 
       return tokenOf(lastLinkTo(e2e.mail, OPERATOR.email));
     }

@@ -72,8 +72,9 @@ souber o Elastic IP não consegue nada com ele.
 A API inteira sai em `/v1/*` pela mesma URL do CloudFront — o Caddy manda esse
 caminho para `api:3000` e o resto para a web. É de propósito: consumidor externo
 integra com a API sem conta na AWS. Nenhuma rota da web começa com `/v1`, então
-o prefixo separa os dois sem esconder tela nenhuma. O Swagger vem junto, em
-`/v1/docs`.
+o prefixo separa os dois sem esconder tela nenhuma. O Swagger **não** vem
+junto: a API só o monta fora de `NODE_ENV=production`, e os dois ambientes da
+AWS rodam assim. O contrato é o `openapi.json` que a CI gera a cada push.
 
 **O que protege `/v1/admin` e `/v1/affiliate` são os guards**, com audiência de
 JWT — não mais a rede interna do compose, que antes era a segunda camada. Rota
@@ -82,9 +83,10 @@ nova com `@Public()` sai na internet no deploy seguinte; o
 A API não tem rate limit: login e esqueci-a-senha ficam abertos a tentativa em
 volume.
 
-O CORS continua restrito a `PANEL_BASE_URL`. Integração servidor-a-servidor,
-Postman e curl não passam por CORS; uma aplicação de navegador em outra origem
-seria recusada até a origem dela entrar na lista.
+A API não habilita CORS. Integração servidor-a-servidor, Postman e curl não
+passam por ele; uma página de navegador em outra origem é recusada pelo próprio
+navegador — inclusive a da web, que não precisa: quem chama é o servidor do
+Next.
 
 `CLAUDE.md`, regra inviolável: *"o navegador nunca fala com a API; quem chama é o
 servidor do Next"*. Ela continua valendo **para a web** — a sessão é cookie
@@ -158,6 +160,14 @@ restrição de origem, e quem souber dela entra.
 | `dev.…` | vazio | cobre `dev.` | Ambiente de verdade. **É o modo esperado hoje** |
 | `dev.…` | `api-dev.…` | cobre os dois | Quando a API precisar de host próprio |
 
+**O primeiro modo aceita TLS 1.0.** Com o certificado padrão do
+`*.cloudfront.net` (`CloudFrontDefaultCertificate: true`) o CloudFront fixa a
+política mínima em `TLSv1`, e recusa `MinimumProtocolVersion` declarado — não há
+como subir esse piso sem certificado próprio. É aceitável só como janela de
+bootstrap, para validar o ambiente antes de a Porto emitir o certificado; o
+segundo e o terceiro modos usam `TLSv1.2_2021`. Nada de dado real enquanto o
+ambiente estiver nele.
+
 O segundo modo basta porque a API já sai em `/v1/*` no host da web — inclusive
 o webhook de incentivos da Porto. O host próprio só separa o nome dela do da
 web; a API que responde nele é a mesma.
@@ -214,23 +224,27 @@ dig +short api-dev.hubafiliados.com.br @1.1.1.1  # idem
 Com a Imperva na frente o CNAME é dela, e o CloudFront aparece só como origin
 na RDM — nesse caso o que se confirma é que a resposta **não** é o Elastic IP.
 
-**3. Gravar as credenciais da Porto e injetar a chave do Resend.** As
-credenciais **antes do primeiro deploy**: a API sempre fala com o gateway
-Sensedia, e o deploy falha enquanto o segredo `PortoSecret` tiver `REPLACE_ME`.
-O passo a passo está em *Credenciais da Porto*, mais abaixo.
-
-A chave do Resend nasce `REPLACE_ME`, e só precisa de valor para usar
-`MailProvider=resend`:
+**3. Gravar as credenciais da Porto e injetar a chave do Resend**, as duas
+**antes do primeiro deploy**: a API sempre fala com o gateway Sensedia e sempre
+envia e-mail pelo Resend, e o deploy falha enquanto o `PortoSecret` ou a
+`resend_api_key` tiverem `REPLACE_ME`. O passo a passo da Porto está em
+*Credenciais da Porto*, mais abaixo. A chave do Resend:
 
 ```bash
-echo -n 're_sua_chave' > resend_key.txt
+# `read -s` em vez de `echo 're_…'`: a chave não entra no histórico do shell, e o
+# umask 077 do subshell cria o arquivo legível só por você.
+# O prompt vem do printf porque `read -p` no zsh é outra coisa (coprocesso).
+( umask 077; printf 'Chave do Resend: '; read -rs k; printf '%s' "$k" > resend_key.txt )
 # O comando exato sai no output SetResendKeyCommand; ele lê de arquivo, nunca de
-# argv, porque segredo em argv fica visível em `ps` e no histórico do shell.
+# argv, porque segredo em argv fica visível em `ps` e no histórico do shell. O
+# JSON intermediário, com o segredo inteiro, nasce com umask 077 e é apagado
+# mesmo se o put falhar.
 ```
 
-Enquanto o domínio não estiver verificado no Resend, suba com
-`MailProvider=logger`: o link de definir senha sai no CloudWatch em vez da caixa
-de entrada.
+O domínio do `MailFromEmail` precisa estar verificado no Resend. Sem isso, o
+Resend recusa o envio, o link de definir senha não chega, e a recusa fica só no
+log da API. O envio que só registrava no log saiu: ele levava o link, com o
+token em claro, para o CloudWatch.
 
 **4. Ligar o deploy.** Duas coisas no GitHub, e a segunda não é opcional:
 
@@ -276,7 +290,7 @@ coisas que não têm flag equivalente.
 3. *Stack name*: `porto-hub-dev`.
 4. Parâmetros: **deixe `DomainName`, `ApiDomainName` e `CertificateArn`
    vazios** — é o primeiro dos três modos. `GitHubRepo`, `DeployBranch`,
-   `GitHubEnvironment`, `MailProvider` e `MailFromEmail` já vêm com o valor
+   `GitHubEnvironment` e `MailFromEmail` já vêm com o valor
    certo para este ambiente. `CreateGitHubOidcProvider=false` se a conferência
    acima achou o provider.
 5. *Configure stack options*:
@@ -320,8 +334,7 @@ exatamente o que o `cd.yml` faz.
 
 ### Chave do Resend, sem CLI
 
-Só se for passar `MailProvider=resend`; com `logger` o link de definir senha sai
-no CloudWatch e nada disto é necessário. **Secrets Manager** → o segredo
+Obrigatória: sem ela o deploy falha. **Secrets Manager** → o segredo
 descrito *"Segredos de aplicacao do Hub de Afiliados"* → *Retrieve secret value*
 → *Edit* → preencha `resend_api_key`.
 
@@ -338,9 +351,10 @@ testes. As credenciais moram no segredo `PortoSecret`, que nasce com
 argv:
 
 ```bash
-cat > porto_secret.json <<'JSON'
-{"client_id":"<client_id>","client_secret":"<client_secret>","webhook_secret":"<segredo>"}
-JSON
+# Pelo editor, e não por heredoc colado no terminal: o heredoc vai inteiro para o
+# histórico do shell. O umask 077 cria o arquivo legível só por você.
+( umask 077; touch porto_secret.json ) && "${EDITOR:-vi}" porto_secret.json
+# {"client_id":"<client_id>","client_secret":"<client_secret>","webhook_secret":"<segredo>"}
 # O comando exato sai no output SetPortoSecretCommand; ele apaga o arquivo no fim.
 ```
 
@@ -355,8 +369,11 @@ Com `REPLACE_ME` no `client_id` ou no `client_secret`, o `install-release.sh`
 para antes de tocar nos containers e diz o que fazer.
 
 Os endereços do gateway são parâmetros da stack, `PortoOAuthUrl` e
-`PortoApiBaseUrl`. Em dev ficam vazios, e valem os padrões da API — os de
-**homologação**. Em prod são obrigatórios: a stack não cria sem eles.
+`PortoApiBaseUrl`. Em dev ficam vazios, e o `ConfigParameter` escreve os de
+**homologação** no lugar. Em prod são obrigatórios: a stack não cria sem eles.
+A API, com `NODE_ENV=production` — o que os dois ambientes usam —, não sobe sem
+os dois, e o `install-release.sh` falha o deploy antes de tocar nos containers
+se o parâmetro os trouxer vazios (o caso de uma stack com o template anterior).
 
 > Até este template, as credenciais eram linhas escritas à mão no fim do
 > `/porto-hub/dev/config`. Elas saíram de lá por dois motivos: todo update de
@@ -431,9 +448,10 @@ docs (`specs/21-ambiente-de-producao.md`).
 | VPC | `10.0.0.0/16` | `10.1.0.0/16` |
 | RDS | single-AZ, backup 1 dia | **Multi-AZ**, backup 14 dias, `DeletionProtection`, disco até 100 GB |
 | Acesso direto ao banco | `DbAccessCidr` opcional | `DbAccessCidr` opcional, com **subnets próprias do banco**, senhas de **64** caracteres, TLS obrigatório no parameter group e **log de cada conexão** no CloudWatch |
-| Gateway da Porto | padrões da API (HML) | `PortoOAuthUrl` e `PortoApiBaseUrl` **obrigatórios** |
+| Gateway da Porto | homologação, escrita pela stack | `PortoOAuthUrl` e `PortoApiBaseUrl` **obrigatórios** |
 | Seed de operadores | a cada deploy | **não roda**, e o `SeedSecret` não existe |
 | Alarmes | nenhum | SNS por e-mail: status check (recover e reboot), CPU, disco e conexões do RDS; o 5xx do CloudFront numa stack à parte, em `us-east-1` |
+| Log de acesso do CloudFront | stack de borda em `us-east-1`, 14 dias | stack de borda em `us-east-1`, 90 dias |
 | Logs | 14 dias | 90 dias |
 | Deploy | push na `development` | push na `main` + **aprovação** no environment `production` |
 
@@ -484,7 +502,8 @@ esperado); grave as mesmas credenciais no `PortoSecret` pelo
 
 Produção roda em **`ca-central-1`**. Tudo abaixo leva `--region ca-central-1`,
 menos duas coisas que continuam em `us-east-1` porque o CloudFront é global e
-só olha para lá: o certificado do ACM e a stack do alarme de 5xx (passo 4).
+só olha para lá: o certificado do ACM e a stack de borda — alarme de 5xx e log
+de acesso (passo 4).
 
 **1. Escolher as zonas e o prefix list.** VPC origin não funciona na
 `cac1-az3`, e o nome `ca-central-1x` aponta para um id diferente em cada conta:
@@ -536,15 +555,17 @@ direto ao banco, sem túnel*. Para `0.0.0.0/0`, some
 `AcknowledgeDbOpenToInternet=true`.
 
 `CreateGitHubOidcProvider=false` porque o provider é da conta, e o dev já o
-criou. `MailProvider` fica `logger` até o domínio do remetente estar verificado
-no Resend. Conte 30 a 40 minutos: Multi-AZ e VPC origin são os lentos.
+criou. O domínio do remetente precisa estar verificado no Resend antes do
+primeiro afiliado aprovado. Conte 30 a 40 minutos: Multi-AZ e VPC origin são os lentos.
 
 **3. Confirmar a assinatura do SNS** no e-mail que chega ao `AlertEmail`. Sem
 isso, alarme nenhum avisa ninguém.
 
-**4. Alarme de 5xx do CloudFront**, numa stack à parte e **em `us-east-1`**: o
-CloudFront só publica métrica lá, e alarme não lê métrica de outra região. A
-stack recusa subir fora de `us-east-1`.
+**4. Stack de borda: alarme de 5xx e log de acesso do CloudFront**, numa stack
+à parte e **em `us-east-1`**: o CloudFront só publica métrica lá, alarme não lê
+métrica de outra região, e a entrega de log v2 do CloudFront só se configura lá.
+A stack recusa subir fora de `us-east-1`. O log está descrito em *Log de acesso
+do CloudFront*, mais abaixo.
 
 ```bash
 aws cloudformation deploy \
@@ -662,15 +683,56 @@ OIDC desta stack só aceita token vindo da branch nomeada ali. A de produção u
 o mesmo template com `DeployBranch=main` e `GitHubEnvironment=production` — e é
 por isso que os dois são parâmetro, e não literal no YAML.
 
+## Log de acesso do CloudFront
+
+Fica na stack de borda, `porto-hub-edge-alarms.yaml`, **sempre em `us-east-1`** —
+é o único lugar onde a entrega de log v2 do CloudFront se configura. Em prod ela
+já existe pelo alarme de 5xx (passo 4 de *Produção*); o update só acrescenta o
+log. Em dev ela nasce agora, sem `AlertEmail` — sem alarme, só o log:
+
+```bash
+aws cloudformation deploy \
+  --template-file infra/cloudformation/porto-hub-edge-alarms.yaml \
+  --stack-name porto-hub-dev-edge \
+  --region us-east-1 \
+  --parameter-overrides \
+    EnvironmentName=dev \
+    DistributionId=<output DistributionId da porto-hub-dev>
+```
+
+O log vai para o log group `porto-hub-<env>-cloudfront-access`, em `us-east-1`,
+com 14 dias em dev e 90 em prod — a mesma retenção do `/porto-hub/<env>`. A
+consulta é Logs Insights. Quem roda a stack precisa de `logs:PutResourcePolicy`:
+é com ela que a AWS cria a política que deixa a entrega escrever no grupo.
+
+**Ficam de fora a query string, o `Referer` e os cookies**, e é por isso que a
+entrega é a v2 e não o `Logging` legado da distribuição, que grava a query
+sempre. O link de definir e de redefinir senha leva o token de uso único em
+`?token=`, válido por até 48 horas; o `Referer` repete a URL da página, token
+junto, em cada asset que ela carrega; os cookies são a sessão. O que fica — IP,
+método, host, caminho, status, tempos, user agent, TLS, id da requisição — basta
+para investigar acesso.
+
+### Sessões do Session Manager
+
+**Não há log do conteúdo das sessões**, de propósito. Quem abriu sessão, em que
+instância e quando já fica no CloudTrail (`StartSession`), por pessoa. Gravar o
+que passa no terminal levaria para o CloudWatch o `api.env` de quem o abrir e o
+resultado de qualquer `psql` rodado na máquina — CPF e chave PIX, que nunca
+entram em log. E a preferência que liga isso, o documento
+`SSM-SessionManagerRunShell`, é da conta e da região inteiras, não desta stack:
+criá-lo aqui falharia se outro time já o tiver, e tomá-lo mudaria as sessões de
+todo mundo.
+
 ## Mudar configuração
 
-`DomainName`, `ApiDomainName`, `MailProvider`, `MailFromEmail` e `ApiMocking`
-são parâmetros da stack, mas **não vivem no UserData** — vivem no parâmetro
+`DomainName`, `ApiDomainName` e `MailFromEmail` são parâmetros da stack, mas
+**não vivem no UserData** — vivem no parâmetro
 `/porto-hub/dev/config` do Parameter Store, que o `install-release.sh` lê a cada
 deploy. Trocar um valor é:
 
 ```bash
-aws cloudformation deploy ... --parameter-overrides MailProvider=resend ...   # 1
+aws cloudformation deploy ... --parameter-overrides MailFromEmail=<remetente> ... # 1
 aws ssm send-command --document-name porto-hub-dev-deploy \
   --instance-ids <id> --parameters imageTag=<sha-no-ar>                        # 2
 ```
@@ -804,13 +866,13 @@ aplicação e deixar o master fora de circulação.
 | O quê | Como |
 |---|---|
 | Shell na máquina | `aws ssm start-session --target <id>` |
-| Swagger | `https://<DomainName ou domínio do CloudFront>/v1/docs`; o túnel do output `SwaggerTunnelCommand` continua valendo |
+| Swagger | não é servido no ambiente (`NODE_ENV=production`); o contrato é o artefato `openapi.json` da CI. O túnel do output `ApiTunnelCommand` alcança a API em `localhost:3000/v1` |
 | psql no RDS | `npm run db:tunnel` na raiz, depois `psql -h localhost -p 5433 -U hub_rw hub_afiliados` (ou direto no `RdsEndpoint`, se `DbAccessCidr` estiver preenchido) |
 | Senha do `hub_rw` | `npm run db:password` na raiz |
 | Senha do master | output `ReadDbPasswordCommand` — só para o que exige DDL |
 | Senha inicial do painel | output `ReadSeedPasswordCommand` |
 | Logs | CloudWatch, grupo `/porto-hub/dev`, streams `api`, `web` e `caddy` |
-| Rollback | *Actions → CD → Run workflow* **na branch do ambiente** (`development`; em prod, `main` com `stackName=porto-hub-prod` e `environment=production`), com o `imageTag` anterior (o ECR guarda as 10 últimas). De outra branch a role recusa o token |
+| Rollback | *Actions → CD → Run workflow* **na branch do ambiente** (`development`; em prod, `main` com `stackName=porto-hub-prod` e `environment=production`), com o `imageTag` anterior (o ECR guarda as 10 últimas, e a tag é **imutável**: o SHA aponta sempre para a mesma imagem, e não existe `latest`). De outra branch a role recusa o token |
 | Certificados | copiados para `s3://<bucket-de-deploy>/caddy-data.tgz` a cada release e restaurados em instância nova |
 
 O seed roda a cada deploy e é idempotente (`ON CONFLICT DO NOTHING`): não

@@ -4,7 +4,6 @@ import { PasswordHasher } from '@Domain/auth/password-hasher';
 import { PasswordResetTokenRepository } from '@Domain/auth/password-reset-token.repository';
 import { TokenGenerator } from '@Domain/auth/token-generator';
 import { Clock } from '@Domain/shared/clock';
-import { UserRepository } from '@Domain/users/user.repository';
 import { UseCase } from '../use-case';
 
 export interface SetPasswordInput {
@@ -21,7 +20,6 @@ export interface SetPasswordInput {
  */
 export class SetPasswordUseCase implements UseCase<SetPasswordInput, void> {
   constructor(
-    private readonly userRepository: UserRepository,
     private readonly passwordResetTokenRepository: PasswordResetTokenRepository,
     private readonly passwordHasher: PasswordHasher,
     private readonly tokenGenerator: TokenGenerator,
@@ -38,15 +36,15 @@ export class SetPasswordUseCase implements UseCase<SetPasswordInput, void> {
 
     if (!token) throw new InvalidResetTokenError();
 
-    await this.userRepository.save({
-      id: token.userId,
-      password: await this.passwordHasher.hash(input.password),
+    const redeemed = await this.passwordResetTokenRepository.redeem({
+      tokenId: token.id,
+      userId: token.userId,
+      passwordHash: await this.passwordHasher.hash(input.password),
       passwordSetAt: this.clock.now(),
-      shouldChangePassword: false,
     });
 
-    // Queimar depois da escrita: falhar entre as duas com o token já gasto
-    // deixaria a pessoa sem senha e sem link.
-    await this.passwordResetTokenRepository.markUsed(token.id);
+    // Outro pedido com o mesmo link chegou junto e levou: mesma resposta de um
+    // link já usado, porque é isso que ele é.
+    if (!redeemed) throw new InvalidResetTokenError();
   }
 }

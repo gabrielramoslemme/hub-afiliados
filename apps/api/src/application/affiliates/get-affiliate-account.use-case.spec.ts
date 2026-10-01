@@ -40,20 +40,25 @@ describe('GetAffiliateAccountUseCase', () => {
       name: 'Marina Ferraz',
       occupation: OccupationEnum.INFLUENCER,
       email: 'marina@email.com',
-      cpf: '52998224725',
       maskedCpf: '***.***.247-25',
-      rg: '12345678X',
       maskedRg: '*****678X',
       socialNetwork: SocialNetworkEnum.TIKTOK,
       socialHandle: 'marina.ferraz',
       pixKeyType: PixKeyTypeEnum.EMAIL,
-      pixKey: 'marina.ferraz@email.com',
       maskedPixKey: 'ma***********@email.com',
       status: AffiliateStatusEnum.APPROVED,
       coupon: 'MARINA25',
       couponDiscountPercent: 15,
       createdAt: new Date('2026-08-17T12:00:00Z'),
     });
+  });
+
+  it('never carries the whole cpf, the whole rg or the whole pix key', async () => {
+    const account = await useCase.execute(user.publicId);
+
+    expect(JSON.stringify(account)).not.toContain('52998224725');
+    expect(JSON.stringify(account)).not.toContain('12345678X');
+    expect(JSON.stringify(account)).not.toContain('marina.ferraz@email.com');
   });
 
   it('answers without a coupon nor its discount while the registration was not approved', async () => {

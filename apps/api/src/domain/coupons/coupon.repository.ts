@@ -25,4 +25,11 @@ export interface CouponRepository {
    * cupom sumiu entre a leitura e a escrita.
    */
   change(input: ChangeCouponRecordInput): Promise<CouponEntity | null>;
+  /**
+   * Roda `work` com exclusividade sobre o cupom: outra chamada para o mesmo
+   * cupom espera esta terminar, com sucesso ou erro. É o que faz a ordem das
+   * mudanças na Porto ser a ordem das escritas aqui. Esperar demais lança
+   * `CouponChangeInProgressError`.
+   */
+  runExclusive<T>(couponId: number, work: () => Promise<T>): Promise<T>;
 }

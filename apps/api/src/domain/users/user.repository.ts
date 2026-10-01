@@ -27,4 +27,6 @@ export interface UserRepository {
    * Nulo quando o usuário não existe.
    */
   updateWithAudit(input: UpdateUserWithAuditInput): Promise<UserEntity | null>;
+  /** Encerra toda sessão aberta da conta. Soma no banco, para dois pedidos juntos não virarem um. */
+  revokeSessions(userId: number): Promise<void>;
 }

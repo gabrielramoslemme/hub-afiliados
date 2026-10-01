@@ -16,13 +16,25 @@ export interface CreateTokenInput {
   expiresAt: Date;
 }
 
+export interface RedeemTokenInput {
+  tokenId: number;
+  userId: number;
+  passwordHash: string;
+  passwordSetAt: Date;
+}
+
 export interface PasswordResetTokenRepository {
   create(input: CreateTokenInput): Promise<PasswordResetTokenEntity>;
   findUsable(
     tokenHash: string,
     purpose: TokenPurposeEnum,
   ): Promise<PasswordResetTokenWithUser | null>;
-  markUsed(id: number): Promise<void>;
+  /**
+   * Queima o link e grava a senha, juntos ou nenhum dos dois. `false` quando o
+   * link já não serve — usado por outro pedido que chegou junto, ou vencido no
+   * meio do caminho —, e aí a senha não muda.
+   */
+  redeem(input: RedeemTokenInput): Promise<boolean>;
   /** Um pedido novo invalida os anteriores — dois links válidos ao mesmo tempo são superfície de ataque. */
   invalidateAllFor(userId: number, purpose: TokenPurposeEnum): Promise<void>;
   /**

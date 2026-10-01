@@ -1,7 +1,6 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
 import {
   type PromotionalMaterialFormValues,
   promotionalMaterialFormSchema,
@@ -10,13 +9,12 @@ import {
 import { MATERIALS_PATH } from '@/backoffice/shared/routes';
 import { authedApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
+import { isPublicId } from '@/shared/lib/public-id';
 import { fieldErrorsOf, type SaveMaterialResult } from '../lib/save-result';
 
 export type SavePromotionalMaterialResult = SaveMaterialResult<keyof PromotionalMaterialFormValues>;
 
 const MATERIAL_GONE = 'Material não encontrado. Atualize a página e tente de novo.';
-
-const idSchema = z.uuid();
 
 function failure(error: unknown, fallback: string): { status: 'failed'; message: string } {
   return { status: 'failed', message: error instanceof ApiError ? error.message : fallback };
@@ -30,7 +28,7 @@ export async function savePromotionalMaterial(
   publicId: string | null,
   input: unknown,
 ): Promise<SavePromotionalMaterialResult> {
-  if (publicId !== null && !idSchema.safeParse(publicId).success) {
+  if (publicId !== null && !isPublicId(publicId)) {
     return { status: 'failed', message: MATERIAL_GONE };
   }
 
@@ -39,7 +37,9 @@ export async function savePromotionalMaterial(
 
   try {
     await authedApiFetch(
-      publicId ? `/admin/promotional-materials/${publicId}` : '/admin/promotional-materials',
+      publicId
+        ? `/admin/promotional-materials/${encodeURIComponent(publicId)}`
+        : '/admin/promotional-materials',
       { method: publicId ? 'PUT' : 'POST', body: JSON.stringify(parsed.data) },
     );
   } catch (error) {
@@ -54,10 +54,12 @@ export async function savePromotionalMaterial(
 export async function deletePromotionalMaterial(
   publicId: string,
 ): Promise<SaveMaterialResult<never>> {
-  if (!idSchema.safeParse(publicId).success) return { status: 'failed', message: MATERIAL_GONE };
+  if (!isPublicId(publicId)) return { status: 'failed', message: MATERIAL_GONE };
 
   try {
-    await authedApiFetch(`/admin/promotional-materials/${publicId}`, { method: 'DELETE' });
+    await authedApiFetch(`/admin/promotional-materials/${encodeURIComponent(publicId)}`, {
+      method: 'DELETE',
+    });
   } catch (error) {
     return failure(error, 'Não foi possível apagar o material. Tente novamente.');
   }

@@ -6,10 +6,7 @@ import {
   SESSION_COOKIE,
   SESSION_COOKIE_PATH,
   SESSION_MAX_AGE_SECONDS,
-  SESSION_USER_COOKIE,
 } from '@/shared/lib/session-cookie';
-
-export type SessionUser = AdminLoginResponse['user'];
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -20,41 +17,17 @@ const COOKIE_OPTIONS = {
 } as const;
 
 /**
- * Nome, e-mail e perfil também vão em cookie `httpOnly`. Não são segredo, mas
- * deixá-los legíveis por script não traria vantagem nenhuma — e a API não expõe
- * rota de perfil do operador nesta onda.
+ * Só o token vai em cookie. Nome e perfil ficavam num segundo cookie que ninguém
+ * conferia — forjá-lo bastava para a tela mostrar outro nome e outro perfil —, e
+ * agora o layout os lê de `GET /admin/me`, a cada página.
  */
 export async function createSession(login: AdminLoginResponse): Promise<void> {
-  const jar = await cookies();
-
-  jar.set(SESSION_COOKIE, login.accessToken, COOKIE_OPTIONS);
-  jar.set(SESSION_USER_COOKIE, JSON.stringify(login.user), COOKIE_OPTIONS);
-}
-
-export async function readSessionUser(): Promise<SessionUser | null> {
-  const raw = (await cookies()).get(SESSION_USER_COOKIE)?.value;
-
-  if (!raw) return null;
-
-  try {
-    return JSON.parse(raw) as SessionUser;
-  } catch {
-    // Cookie corrompido vale o mesmo que cookie ausente: o layout manda para a
-    // sessão expirada, que apaga os cookies, e a pessoa entra de novo.
-    return null;
-  }
+  (await cookies()).set(SESSION_COOKIE, login.accessToken, COOKIE_OPTIONS);
 }
 
 export async function destroySession(): Promise<void> {
-  const jar = await cookies();
-
   // Apagar exige o mesmo `path` da escrita: o navegador guarda um cookie por
   // par nome+caminho, então `delete(nome)` sozinho não alcança o que foi
   // gravado em `/admin` — a pessoa veria a tela de login com a sessão viva.
-  //
-  // E **um** `delete` por cookie: o jar do Next indexa por nome, então apagar o
-  // mesmo nome num segundo caminho não soma — sobrescreve, e só o último vira
-  // `Set-Cookie`.
-  jar.delete({ name: SESSION_COOKIE, path: SESSION_COOKIE_PATH });
-  jar.delete({ name: SESSION_USER_COOKIE, path: SESSION_COOKIE_PATH });
+  (await cookies()).delete({ name: SESSION_COOKIE, path: SESSION_COOKIE_PATH });
 }

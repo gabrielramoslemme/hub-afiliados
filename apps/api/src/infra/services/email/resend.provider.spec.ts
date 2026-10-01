@@ -25,6 +25,7 @@ describe('ResendProvider', () => {
 
   beforeEach(() => {
     send.mockReset().mockResolvedValue({ data: { id: 'email-1' }, error: null });
+    jest.mocked(Resend).mockClear();
     jest.mocked(Resend).mockImplementation(() => ({ emails: { send } }) as unknown as Resend);
   });
 
@@ -60,5 +61,22 @@ describe('ResendProvider', () => {
     await expect(new ResendProvider(configWith('Hub de Afiliados')).send(input)).rejects.toThrow(
       'Invalid `to` field',
     );
+  });
+
+  /*
+    O SDK lança na construção quando não recebe chave. Em `test` não há chave, e a
+    geração do OpenAPI da CI sobe o AppModule inteiro: um cliente criado na
+    construção derrubaria a subida antes de qualquer e-mail.
+  */
+  it('creates the resend client only when the first email goes out', async () => {
+    const provider = new ResendProvider(configWith('Hub de Afiliados'));
+
+    expect(Resend).not.toHaveBeenCalled();
+
+    await provider.send(input);
+    await provider.send(input);
+
+    expect(Resend).toHaveBeenCalledTimes(1);
+    expect(Resend).toHaveBeenCalledWith('test-key');
   });
 });

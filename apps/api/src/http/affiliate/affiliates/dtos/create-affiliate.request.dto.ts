@@ -12,11 +12,15 @@ import {
   MaxLength,
   ValidateIf,
 } from 'class-validator';
-import { OccupationEnum, PixKeyTypeEnum, SocialNetworkEnum } from '@porto/contracts';
+import {
+  FULL_NAME_CHARACTERS_PATTERN,
+  FULL_NAME_PATTERN,
+  OccupationEnum,
+  PixKeyTypeEnum,
+  SocialNetworkEnum,
+} from '@porto/contracts';
 import { CreateAffiliateInput } from '@Application/affiliates/create-affiliate.use-case';
 
-/** Nome e sobrenome: o cadastro do CPF sempre tem os dois, e o AC pede o nome completo. */
-const FULL_NAME_PATTERN = /^\S+(\s+\S+)+$/;
 /*
   Forma, não cálculo: o RG não tem formato nacional, cada estado emite o seu e há
   UF que usa letra como dígito verificador. Só a pontuação de RG é tolerada —
@@ -31,10 +35,18 @@ function informedSocialProfile(dto: CreateAffiliateRequestDto): boolean {
 
 export class CreateAffiliateRequestDto implements CreateAffiliateInput {
   @ApiProperty({ example: 'Marina Ferraz' })
-  @IsString({ message: 'Informe o nome completo.' })
-  @IsNotEmpty({ message: 'Informe o nome completo.' })
-  @MaxLength(255, { message: 'Informe o nome completo.' })
+  // Nome e sobrenome: o cadastro do CPF sempre tem os dois, e o AC pede o nome
+  // completo. O padrão vem dos contratos para o formulário recusar o mesmo.
   @Matches(FULL_NAME_PATTERN, { message: 'Informe o nome completo.' })
+  // Com `stopAtFirstError` sai a mensagem do decorator mais abaixo: a ausência
+  // primeiro, depois o caractere proibido — um endereço no nome é recusado pelo
+  // que é, e não como nome incompleto. O nome vai no e-mail que a Porto manda.
+  @Matches(FULL_NAME_CHARACTERS_PATTERN, {
+    message: 'Use só letras, espaços, apóstrofo e hífen no nome.',
+  })
+  @MaxLength(255, { message: 'Informe o nome completo.' })
+  @IsNotEmpty({ message: 'Informe o nome completo.' })
+  @IsString({ message: 'Informe o nome completo.' })
   @Transform(({ value }: { value: string }) => value?.trim())
   fullName: string;
 

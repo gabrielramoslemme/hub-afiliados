@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { AffiliateStatusEnum, AuthErrorCodeEnum } from '@porto/contracts';
+import { AffiliateStatusEnum, AuthErrorCodeEnum, RateLimitErrorCodeEnum } from '@porto/contracts';
 import { AFFILIATE_AREA_PATH } from '@/affiliate/shared/routes';
 import { publicApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
@@ -12,6 +12,8 @@ jest.mock('../session', () => ({ createSession: jest.fn() }));
 jest.mock('next/navigation', () => ({ redirect: jest.fn() }));
 
 const apiFetch = publicApiFetch as jest.MockedFunction<typeof publicApiFetch>;
+
+const TOO_MANY = 'Muitas tentativas. Tente de novo em 14 minutos.';
 const session = createSession as jest.MockedFunction<typeof createSession>;
 const goTo = redirect as jest.MockedFunction<typeof redirect>;
 
@@ -98,5 +100,18 @@ describe('signIn', () => {
 
     expect(result?.message).toEqual(expect.any(String));
     expect(result?.message).not.toContain('ECONNREFUSED');
+  });
+
+  // A tela trava o envio e mostra a contagem: tentar de novo antes só
+  // renovaria o bloqueio.
+  it('tells the form how long to wait when the api refused for too many attempts', async () => {
+    apiFetch.mockRejectedValue(
+      new ApiError(429, RateLimitErrorCodeEnum.TOO_MANY_REQUESTS, TOO_MANY, 840),
+    );
+
+    await expect(signIn(credentials)).resolves.toEqual({
+      message: TOO_MANY,
+      retryAfterSeconds: 840,
+    });
   });
 });

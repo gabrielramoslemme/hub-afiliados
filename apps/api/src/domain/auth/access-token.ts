@@ -13,6 +13,8 @@ export interface AccessTokenClaims {
   aud: AuthAudienceEnum;
   role: UserRoleEnum | null;
   name: string;
+  /** A `tokenVersion` da conta na emissão; diferente da gravada, a sessão foi encerrada. */
+  ver: number;
 }
 
 export interface AccessTokenIssuer {

@@ -1,3 +1,4 @@
+import { RateLimitErrorCodeEnum } from '@porto/contracts';
 import { publicApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
 import { requestPasswordReset } from './forgot-password.action';
@@ -5,6 +6,8 @@ import { requestPasswordReset } from './forgot-password.action';
 jest.mock('@/shared/http/api-client', () => ({ publicApiFetch: jest.fn() }));
 
 const apiFetch = publicApiFetch as jest.MockedFunction<typeof publicApiFetch>;
+
+const TOO_MANY = 'Muitas tentativas. Tente de novo em 14 minutos.';
 
 beforeEach(() => {
   apiFetch.mockReset();
@@ -47,6 +50,20 @@ describe('requestPasswordReset', () => {
     expect(result).toEqual({
       ok: false,
       message: 'Não foi possível enviar o link agora. Tente novamente em instantes.',
+    });
+  });
+
+  // A tela trava o envio e mostra a contagem: tentar de novo antes só
+  // renovaria o bloqueio.
+  it('tells the form how long to wait when the api refused for too many attempts', async () => {
+    apiFetch.mockRejectedValue(
+      new ApiError(429, RateLimitErrorCodeEnum.TOO_MANY_REQUESTS, TOO_MANY, 840),
+    );
+
+    await expect(requestPasswordReset({ email: 'analista@porto.example' })).resolves.toEqual({
+      ok: false,
+      message: TOO_MANY,
+      retryAfterSeconds: 840,
     });
   });
 });

@@ -38,7 +38,7 @@ npm run dev                                   # sobe API e web juntos
 | Serviço | URL |
 |---|---|
 | API | http://localhost:3000/v1 |
-| Swagger | http://localhost:3000/v1/docs |
+| Swagger (só fora de produção) | http://localhost:3000/v1/docs |
 | Landing page | http://localhost:3005 |
 | Painel de análise | http://localhost:3005/admin/login |
 
@@ -62,9 +62,9 @@ Para ver o fluxo inteiro rodando contra a API:
 
 1. Cadastre-se em http://localhost:3005/cadastro.
 2. Aprove o cadastro no painel, em http://localhost:3005/admin/afiliados.
-3. O e-mail de aprovação sai no **console da API** (`MAIL_PROVIDER=logger` em
-   desenvolvimento). Copie o link de `/definir-senha` — ele vale 48 horas e
-   funciona uma vez só.
+3. O e-mail de aprovação sai **de verdade, pelo Resend** — cadastre-se com um
+   endereço seu. Abra o link de `/definir-senha`: ele vale 48 horas e funciona
+   uma vez só.
 4. Crie a senha e entre em http://localhost:3005/entrar.
 
 ### A carteira e as indicações vêm das vendas da Porto
@@ -117,9 +117,9 @@ timestamp vem da CLI do TypeORM — nunca escreva o nome do arquivo à mão.
 
 ## E-mails
 
-Em desenvolvimento e teste, `MAIL_PROVIDER=logger` simula o envio e imprime o
-conteúdo no log — sem custo e sem risco de disparar para endereço real. Em
-homologação e produção, use `resend`. Os templates são componentes React Email
+Todo ambiente envia pelo Resend, e a API não sobe sem `RESEND_API_KEY` — em
+desenvolvimento também, então cada cadastro local manda e-mail de verdade. Só o
+e2e não envia: ele troca o envio pelo `FakeMailProvider`. Os templates são componentes React Email
 versionados em `apps/api/src/infra/services/email/templates/`, não ficam no
 painel do fornecedor. Detalhes em
 [`apps/api/docs/EMAILS.md`](apps/api/docs/EMAILS.md).

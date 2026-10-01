@@ -1,6 +1,12 @@
 # syntax=docker/dockerfile:1
 
-FROM node:24-bookworm-slim AS base
+# Tag para quem lê, digest para o build. A tag sozinha é ponteiro móvel: o
+# mesmo commit geraria imagens diferentes conforme o dia do build, e quem
+# controlasse a tag escolheria o que roda em produção. O digest é o do índice
+# multi-arquitetura. Atualizar é de propósito, para pegar correção de segurança:
+#   docker buildx imagetools inspect node:24-bookworm-slim
+# O mesmo digest está no Dockerfile da API; os dois andam juntos.
+FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS base
 WORKDIR /app
 
 # ------------------------------------------------------------- dependências

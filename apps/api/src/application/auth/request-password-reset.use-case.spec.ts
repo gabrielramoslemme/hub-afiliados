@@ -95,6 +95,16 @@ describe('RequestPasswordResetUseCase', () => {
       });
     });
 
+    // Conta elegível e conta inexistente respondem no mesmo tempo: esperar o
+    // e-mail renderizar e sair entregaria, pelo relógio, quem tem cadastro.
+    it('answers without waiting for the email to go out', async () => {
+      userRepository.findByEmail.mockResolvedValue(approvedAffiliate());
+      mailer.send.mockReturnValue(new Promise(() => undefined));
+
+      await expect(useCase.execute(input)).resolves.toBeUndefined();
+      expect(mailer.send).toHaveBeenCalled();
+    });
+
     it('stores only the hash of the token, valid for two hours', async () => {
       const user = approvedAffiliate();
       userRepository.findByEmail.mockResolvedValue(user);

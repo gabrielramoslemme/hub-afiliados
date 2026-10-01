@@ -42,6 +42,7 @@ describe('ChangeAffiliateCouponUseCase', () => {
       coupon,
     });
     userRepository.findByPublicId.mockResolvedValue({ ...operator, affiliate: null });
+    couponRepository.findByCode.mockResolvedValue(coupon);
     couponRepository.change.mockImplementation(async (change) =>
       buildCoupon({
         ...coupon,
@@ -98,6 +99,51 @@ describe('ChangeAffiliateCouponUseCase', () => {
       status: undefined,
       actorUserId: operator.id,
     });
+  });
+
+  /*
+    Duas analistas mudando o mesmo cupom ao mesmo tempo: sem a seção exclusiva,
+    a Porto podia receber A e depois B, e o banco gravar B e depois A — o painel
+    mostraria um percentual que o checkout não aplica. A leitura do cupom, a
+    chamada à Porto e a escrita passam juntas, uma alteração por vez.
+  */
+  it('reads, changes at the provider and writes inside the exclusive section of the coupon', async () => {
+    const insideAt: string[] = [];
+    let inside = false;
+    couponRepository.runExclusive.mockImplementation(async (_couponId, work) => {
+      inside = true;
+      try {
+        return await work();
+      } finally {
+        inside = false;
+      }
+    });
+    couponRepository.findByCode.mockImplementation(async () => {
+      if (inside) insideAt.push('read');
+      return coupon;
+    });
+    couponGateway.change.mockImplementation(async () => {
+      if (inside) insideAt.push('provider');
+    });
+    const write = couponRepository.change.getMockImplementation();
+    couponRepository.change.mockImplementation(async (change) => {
+      if (inside) insideAt.push('write');
+      return write ? write(change) : null;
+    });
+
+    await useCase.execute(input({ discountPercent: 15 }));
+
+    expect(couponRepository.runExclusive).toHaveBeenCalledWith(7, expect.any(Function));
+    expect(insideAt).toEqual(['read', 'provider', 'write']);
+  });
+
+  it('reports a coupon gone by the time its exclusive section reads it, before reaching the provider', async () => {
+    couponRepository.findByCode.mockResolvedValue(null);
+
+    await expect(useCase.execute(input({ status: CouponStatusEnum.INACTIVE }))).rejects.toThrow(
+      CouponNotFoundError,
+    );
+    expect(couponGateway.change).not.toHaveBeenCalled();
   });
 
   it('refuses a change that carries nothing, before reaching the provider', async () => {

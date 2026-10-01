@@ -14,6 +14,11 @@ export interface UserEntity {
   type: UserTypeEnum;
   role: UserRoleEnum | null;
   lastLoginAt: Date | null;
+  /**
+   * Vai no token e é conferida a cada requisição: somar um aqui encerra todas as
+   * sessões abertas da conta, sem esperar o JWT vencer.
+   */
+  tokenVersion: number;
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;

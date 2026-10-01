@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { SessionUser } from '@/backoffice/features/auth/session';
+import type { AdminMeResponse } from '@porto/contracts';
 import { DASHBOARD_PATH } from '@/backoffice/shared/routes';
 import { PortoLogo } from '@/shared/components/porto-logo';
 import { roleLabel } from '../lib/role-label';
@@ -10,7 +10,7 @@ import { UserMenu } from './user-menu';
  * marca, navegação e conta — uma barra no topo sem nenhum dos três seria um
  * traço horizontal ocupando 64px de altura.
  */
-export function AdminTopbar({ user }: { user: SessionUser }) {
+export function AdminTopbar({ user }: { user: AdminMeResponse }) {
   return (
     <header className="sticky top-0 z-30 border-b border-ink-200 bg-white/85 backdrop-blur lg:hidden">
       <div className="flex h-16 items-center justify-between gap-4 px-6">
