@@ -1303,11 +1303,15 @@ Resources:
           # CachingDisabled: pagina de afiliado servida para outro afiliado seria
           # incidente, nao bug - ha CPF e chave PIX nessa arvore.
           CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
-          # AllViewer encaminha Host, cookies e query string. Os tres importam:
-          # o Host, para o Caddy rotear e para a Server Action nao abortar com
+          # AllViewerAndCloudFrontHeaders-2022-06: o que o AllViewer encaminha -
+          # Host, cookies e query string - mais os headers do CloudFront. O
+          # Host, para o Caddy rotear e para a Server Action nao abortar com
           # `Invalid Server Actions request`; os cookies, porque a sessao inteira
-          # e cookie httpOnly e o default do CloudFront os removeria.
-          OriginRequestPolicyId: 216adef6-5c7f-47e4-b989-5492eafa07d3
+          # e cookie httpOnly. E o CloudFront-Viewer-Address, que a API usa para
+          # contar tentativas por visitante: com esta politica o CloudFront o
+          # escreve por cima do que o navegador mandar. Sem ela, o header chega
+          # como o visitante quis, e o limite de tentativas vira opcional.
+          OriginRequestPolicyId: 33f36d7e-f396-46d9-90e0-52428a34d9dc
         CacheBehaviors:
           - PathPattern: /_next/static/*
             TargetOriginId: instance
