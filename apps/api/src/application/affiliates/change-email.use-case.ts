@@ -3,7 +3,9 @@ import { EmailAlreadyRegisteredError } from '@Domain/affiliates/affiliates.error
 import { UnknownAffiliateError, WrongPasswordError } from '@Domain/auth/auth.errors';
 import { PasswordHasher } from '@Domain/auth/password-hasher';
 import { Mailer } from '@Domain/notifications/mailer';
+import { Clock } from '@Domain/shared/clock';
 import { UserRepository } from '@Domain/users/user.repository';
+import { verifyPasswordAttempt } from '../auth/password-attempts';
 import { UseCase } from '../use-case';
 
 export interface ChangeEmailInput {
@@ -25,6 +27,7 @@ export class ChangeEmailUseCase implements UseCase<ChangeEmailInput, void> {
     private readonly userRepository: UserRepository,
     private readonly passwordHasher: PasswordHasher,
     private readonly mailer: Mailer,
+    private readonly clock: Clock,
   ) {}
 
   async execute(input: ChangeEmailInput): Promise<void> {
@@ -32,9 +35,15 @@ export class ChangeEmailUseCase implements UseCase<ChangeEmailInput, void> {
 
     if (!user?.affiliate) throw new UnknownAffiliateError();
 
-    const matches =
-      user.password !== null &&
-      (await this.passwordHasher.compare(input.currentPassword, user.password));
+    const matches = await verifyPasswordAttempt(
+      {
+        userRepository: this.userRepository,
+        passwordHasher: this.passwordHasher,
+        clock: this.clock,
+      },
+      user,
+      input.currentPassword,
+    );
     if (!matches) throw new WrongPasswordError();
 
     const email = input.email.trim().toLowerCase();

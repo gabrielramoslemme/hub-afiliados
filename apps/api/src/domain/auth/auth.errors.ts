@@ -83,6 +83,20 @@ export class WrongPasswordError extends DomainError {
   }
 }
 
+/**
+ * Senha errada vezes demais seguidas: a conta fica travada por alguns minutos,
+ * e nem a senha certa entra até lá. Só aparece para e-mail que tem conta — o
+ * limite por IP do portal é o que segura quem tenta descobrir isso em massa.
+ */
+export class TooManyAttemptsError extends DomainError {
+  readonly kind = DomainErrorKindEnum.TOO_MANY_ATTEMPTS;
+  readonly code = AuthErrorCodeEnum.TOO_MANY_ATTEMPTS;
+
+  constructor() {
+    super('Muitas tentativas com a senha errada. Tente de novo em alguns minutos.');
+  }
+}
+
 /** Token de afiliado cujo usuário sumiu, ou que nunca teve perfil de afiliado. */
 export class UnknownAffiliateError extends DomainError {
   readonly kind = DomainErrorKindEnum.UNAUTHORIZED;

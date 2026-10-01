@@ -11,6 +11,8 @@ export enum DomainErrorKindEnum {
   INVALID_INPUT = 'INVALID_INPUT',
   UNAUTHORIZED = 'UNAUTHORIZED',
   FORBIDDEN = 'FORBIDDEN',
+  /** Quem chamou insistiu demais e precisa esperar antes de tentar de novo. */
+  TOO_MANY_ATTEMPTS = 'TOO_MANY_ATTEMPTS',
   /** Um fornecedor de fora não respondeu. A falha não é de quem chamou. */
   UNAVAILABLE = 'UNAVAILABLE',
 }

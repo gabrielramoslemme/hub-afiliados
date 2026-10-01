@@ -41,6 +41,10 @@ Hoje `@Public()` marca exatamente dez rotas: `GET /v1/health`, `POST /v1/affilia
 
 **O claim `sub` é o `public_id`.** O token viaja para fora da API, e o id serial não sai daqui; quando o use case precisa do id interno — `approved_by_user_id` é FK —, ele resolve pelo `UserRepository.findByPublicId`.
 
+**Toda conferência de senha passa por `verifyPasswordAttempt`** (`src/application/auth/password-attempts.ts`): os dois logins, a troca de chave PIX e de e-mail, e a revelação dos documentos. A quinta senha errada seguida trava a conta por 15 minutos, e enquanto isso nem a senha certa é conferida — 429 `AUTH-008`. Não é só o login: uma rota autenticada que conferisse senha sem limite viraria o caminho para adivinhá-la a partir de uma sessão esquecida aberta. A contagem é um `UPDATE` só (`registerFailedPasswordAttempt`), porque ler, somar e gravar pela aplicação perderia as tentativas que chegam juntas — há e2e que manda cinco em paralelo. Redefinir a senha pelo link destrava. O limite por IP não mora aqui: a API só recebe chamadas do Next, e é ele que conta por visitante.
+
+**CPF, RG e chave PIX inteiros só saem de `POST /v1/affiliate/me/documents`**, com a senha atual no corpo e `Cache-Control: no-store`. O `GET /v1/affiliate/me` alimenta toda tela da área do afiliado e devolve só a versão mascarada; o e2e reprova o documento inteiro nessa resposta.
+
 O tempo de vida vem de `JWT_EXPIRES_IN_SECONDS` (oito horas), casado com o cookie de sessão do painel: token que morre antes do cookie vira 401 numa tela que se acha logada.
 
 ## Arquitetura
@@ -318,7 +322,7 @@ O `HttpExceptionFilter` global normaliza toda resposta de erro:
   }
   ```
 
-- **Traduzir `kind` para status é do filtro**, e é a tabela inteira: `NOT_FOUND` 404 · `CONFLICT` 409 · `INVALID_INPUT` 400 · `UNAUTHORIZED` 401 · `FORBIDDEN` 403 · `UNAVAILABLE` 503.
+- **Traduzir `kind` para status é do filtro**, e é a tabela inteira: `NOT_FOUND` 404 · `CONFLICT` 409 · `INVALID_INPUT` 400 · `UNAUTHORIZED` 401 · `FORBIDDEN` 403 · `TOO_MANY_ATTEMPTS` 429 · `UNAVAILABLE` 503.
 - `code` vem de um `*ErrorCodeEnum` de `@porto/contracts` (`AuthErrorCodeEnum`, `RegistrationErrorCodeEnum`, `CouponErrorCodeEnum`, `IncentiveErrorCodeEnum`) quando o cliente precisa distinguir o caso para escolher a mensagem; nas demais respostas é `null`.
 - **Guard e controller continuam podendo lançar exceção do Nest** — eles já são a camada de HTTP.
 - 5xx é logado com stack e responde `Erro interno`: a mensagem original pode carregar nome de coluna ou detalhe de schema. 4xx não é logado. **Não logue a exceção você mesmo** — o filtro já faz.

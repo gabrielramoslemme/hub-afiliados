@@ -10,6 +10,7 @@ import {
   PasswordNotSetError,
   RegistrationRejectedError,
   RegistrationUnderReviewError,
+  TooManyAttemptsError,
 } from '@Domain/auth/auth.errors';
 import { buildAffiliate } from '@Testing/factories/affiliate.factory';
 import { buildCoupon } from '@Testing/factories/coupon.factory';
@@ -143,5 +144,57 @@ describe('AffiliateLoginUseCase', () => {
 
     await expect(useCase.execute(credentials)).rejects.toThrow(RegistrationUnderReviewError);
     expect(userRepository.save).not.toHaveBeenCalled();
+  });
+
+  describe('lockout after repeated wrong passwords', () => {
+    const FIFTEEN_MINUTES_LATER = new Date('2026-08-25T12:15:00.000Z');
+
+    it('refuses a locked account before looking at the password, even the right one', async () => {
+      const account = signedUp(AffiliateStatusEnum.APPROVED);
+      userRepository.findByEmail.mockResolvedValue({
+        ...account,
+        passwordLockedUntil: new Date('2026-08-25T12:00:01.000Z'),
+      });
+
+      await expect(useCase.execute(credentials)).rejects.toThrow(TooManyAttemptsError);
+      expect(passwordHasher.compare).not.toHaveBeenCalled();
+      expect(accessTokenIssuer.issue).not.toHaveBeenCalled();
+    });
+
+    it('lets the right password in once the lock has run out', async () => {
+      const account = signedUp(AffiliateStatusEnum.APPROVED);
+      userRepository.findByEmail.mockResolvedValue({ ...account, passwordLockedUntil: NOW });
+
+      await expect(useCase.execute(credentials)).resolves.toMatchObject({
+        accessToken: 'signed.access.token',
+      });
+    });
+
+    it('counts a wrong password toward a fifteen-minute lock at the fifth one', async () => {
+      const account = signedUp(AffiliateStatusEnum.APPROVED);
+      userRepository.findByEmail.mockResolvedValue(account);
+      passwordHasher.compare.mockResolvedValue(false);
+
+      await expect(useCase.execute(credentials)).rejects.toThrow(InvalidCredentialsError);
+      expect(userRepository.registerFailedPasswordAttempt).toHaveBeenCalledWith({
+        userId: account.id,
+        maxAttempts: 5,
+        lockedUntil: FIFTEEN_MINUTES_LATER,
+      });
+    });
+
+    it('clears the count of wrong passwords when the right one comes', async () => {
+      const account = signedUp(AffiliateStatusEnum.APPROVED);
+      userRepository.findByEmail.mockResolvedValue({ ...account, failedPasswordAttempts: 3 });
+
+      await useCase.execute(credentials);
+
+      expect(userRepository.save).toHaveBeenCalledWith({
+        id: account.id,
+        failedPasswordAttempts: 0,
+        passwordLockedUntil: null,
+      });
+      expect(userRepository.registerFailedPasswordAttempt).not.toHaveBeenCalled();
+    });
   });
 });

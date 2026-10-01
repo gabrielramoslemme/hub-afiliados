@@ -3,7 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { EmailAlreadyRegisteredError } from '@Domain/affiliates/affiliates.errors';
 import { UserEntity, UserWithAffiliate } from '@Domain/users/user.entity';
-import { UpdateUserWithAuditInput, UserRepository } from '@Domain/users/user.repository';
+import {
+  RegisterFailedPasswordAttemptInput,
+  UpdateUserWithAuditInput,
+  UserRepository,
+} from '@Domain/users/user.repository';
 import { UserTypeormEntity } from '@Infra/database/typeorm/entities/user.typeorm-entity';
 import { recordAuditLog } from './record-audit-log';
 
@@ -84,5 +88,26 @@ export class UserTypeormRepository implements UserRepository {
     } catch (error) {
       throw translateEmailViolation(error);
     }
+  }
+
+  /*
+    As expressões do SET leem a linha de antes do UPDATE, então a soma e a
+    decisão de travar saem do mesmo valor, sob o lock da linha. Ler, somar e
+    gravar pela aplicação perderia as tentativas que chegam juntas.
+  */
+  async registerFailedPasswordAttempt(input: RegisterFailedPasswordAttemptInput): Promise<void> {
+    await this.repository.query(
+      `UPDATE "users"
+          SET "failed_password_attempts" = CASE
+                WHEN "failed_password_attempts" + 1 >= $2 THEN 0
+                ELSE "failed_password_attempts" + 1
+              END,
+              "password_locked_until" = CASE
+                WHEN "failed_password_attempts" + 1 >= $2 THEN $3
+                ELSE "password_locked_until"
+              END
+        WHERE "id" = $1`,
+      [input.userId, input.maxAttempts, input.lockedUntil],
+    );
   }
 }

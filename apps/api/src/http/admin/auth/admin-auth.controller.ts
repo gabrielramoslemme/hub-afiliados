@@ -4,6 +4,7 @@ import {
   ApiNoContentResponse,
   ApiOkResponse,
   ApiTags,
+  ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { AuthAudienceEnum } from '@porto/contracts';
@@ -32,6 +33,7 @@ export class AdminAuthController {
   @ApiUnauthorizedResponse({
     description: 'Credencial inválida, senha não definida ou conta inativa',
   })
+  @ApiTooManyRequestsResponse({ description: 'Senha errada vezes demais: conta travada' })
   login(@Body() body: AdminLoginRequestDto): Promise<AdminLoginResponseDto> {
     return this.adminLoginUseCase.execute(body);
   }

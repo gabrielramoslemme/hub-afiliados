@@ -10,6 +10,7 @@ import { ListAffiliateAuditLogsUseCase } from '@Application/affiliates/list-affi
 import { ListAffiliatesUseCase } from '@Application/affiliates/list-affiliates.use-case';
 import { ListAffiliatesReportUseCase } from '@Application/affiliates/list-affiliates-report.use-case';
 import { RejectAffiliateUseCase } from '@Application/affiliates/reject-affiliate.use-case';
+import { RevealAffiliateDocumentsUseCase } from '@Application/affiliates/reveal-affiliate-documents.use-case';
 import { AdminLoginUseCase } from '@Application/auth/admin-login.use-case';
 import { AffiliateLoginUseCase } from '@Application/auth/affiliate-login.use-case';
 import { RequestPasswordResetUseCase } from '@Application/auth/request-password-reset.use-case';
@@ -127,13 +128,15 @@ const USE_CASES = [
     CLOCK,
   ]),
   provideUseCase(GetAffiliateAccountUseCase, [USER_REPOSITORY]),
+  provideUseCase(RevealAffiliateDocumentsUseCase, [USER_REPOSITORY, PASSWORD_HASHER, CLOCK]),
   provideUseCase(ChangePixKeyUseCase, [
     USER_REPOSITORY,
     AFFILIATE_REPOSITORY,
     PASSWORD_HASHER,
     MAILER,
+    CLOCK,
   ]),
-  provideUseCase(ChangeEmailUseCase, [USER_REPOSITORY, PASSWORD_HASHER, MAILER]),
+  provideUseCase(ChangeEmailUseCase, [USER_REPOSITORY, PASSWORD_HASHER, MAILER, CLOCK]),
   provideUseCase(ChangeOccupationUseCase, [USER_REPOSITORY, AFFILIATE_REPOSITORY]),
   provideUseCase(GetAffiliateReferralsUseCase, [USER_REPOSITORY, SALE_REPOSITORY, CLOCK]),
   provideUseCase(GetAffiliateWalletUseCase, [USER_REPOSITORY, SALE_REPOSITORY, CLOCK]),

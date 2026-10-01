@@ -14,6 +14,10 @@ export interface UserEntity {
   type: UserTypeEnum;
   role: UserRoleEnum | null;
   lastLoginAt: Date | null;
+  /** Senhas erradas seguidas desde o último acerto ou a última trava. */
+  failedPasswordAttempts: number;
+  /** Até quando nenhuma senha é conferida, nem a certa. Nulo quando nunca travou. */
+  passwordLockedUntil: Date | null;
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;

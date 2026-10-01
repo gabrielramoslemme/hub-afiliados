@@ -72,6 +72,8 @@ describe('ResetPasswordUseCase', () => {
       password: '$2b$10$hashed',
       passwordSetAt: NOW,
       shouldChangePassword: false,
+      failedPasswordAttempts: 0,
+      passwordLockedUntil: null,
     });
   });
 

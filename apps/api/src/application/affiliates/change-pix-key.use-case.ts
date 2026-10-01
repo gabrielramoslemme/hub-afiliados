@@ -5,7 +5,9 @@ import { isValidPixKey, maskPixKey, normalizePixKey } from '@Domain/affiliates/p
 import { UnknownAffiliateError, WrongPasswordError } from '@Domain/auth/auth.errors';
 import { PasswordHasher } from '@Domain/auth/password-hasher';
 import { Mailer } from '@Domain/notifications/mailer';
+import { Clock } from '@Domain/shared/clock';
 import { UserRepository } from '@Domain/users/user.repository';
+import { verifyPasswordAttempt } from '../auth/password-attempts';
 import { UseCase } from '../use-case';
 
 export interface ChangePixKeyInput {
@@ -28,6 +30,7 @@ export class ChangePixKeyUseCase implements UseCase<ChangePixKeyInput, void> {
     private readonly affiliateRepository: AffiliateRepository,
     private readonly passwordHasher: PasswordHasher,
     private readonly mailer: Mailer,
+    private readonly clock: Clock,
   ) {}
 
   async execute(input: ChangePixKeyInput): Promise<void> {
@@ -40,9 +43,15 @@ export class ChangePixKeyUseCase implements UseCase<ChangePixKeyInput, void> {
     // Só a forma, que não depende de nada gravado: pode vir antes da senha.
     if (!isValidPixKey(input.pixKeyType, input.pixKey)) throw new InvalidPixKeyError();
 
-    const matches =
-      user.password !== null &&
-      (await this.passwordHasher.compare(input.currentPassword, user.password));
+    const matches = await verifyPasswordAttempt(
+      {
+        userRepository: this.userRepository,
+        passwordHasher: this.passwordHasher,
+        clock: this.clock,
+      },
+      user,
+      input.currentPassword,
+    );
     if (!matches) throw new WrongPasswordError();
 
     // Depois da senha, e não antes: comparar com o CPF do cadastro responde "é"

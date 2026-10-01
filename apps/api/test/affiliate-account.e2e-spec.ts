@@ -236,10 +236,23 @@ describe('Affiliate account (e2e)', () => {
 
       expect(response.body.code).toBe(AuthErrorCodeEnum.REGISTRATION_UNDER_REVIEW);
     });
+
+    // Em paralelo de propósito: um contador lido, somado e gravado pela
+    // aplicação perderia tentativas na corrida, e o travamento nunca chegaria.
+    it('locks the account after five wrong passwords sent at once, even for the right one', async () => {
+      const { approvalToken } = await approvedAffiliate();
+      await setPassword(approvalToken).expect(204);
+
+      await Promise.all(Array.from({ length: 5 }, () => signIn('SenhaErrada!2026').expect(401)));
+
+      const response = await signIn().expect(429);
+
+      expect(response.body.code).toBe(AuthErrorCodeEnum.TOO_MANY_ATTEMPTS);
+    });
   });
 
   describe('GET /v1/affiliate/me', () => {
-    it('answers the account with the coupon discount, whole documents and no internal id', async () => {
+    it('answers the account with the coupon discount, masked documents and no internal id', async () => {
       const { accessToken, couponCode } = await signedIn();
 
       const response = await api()
@@ -253,19 +266,52 @@ describe('Affiliate account (e2e)', () => {
         status: AffiliateStatusEnum.APPROVED,
         coupon: couponCode,
         couponDiscountPercent: 10,
-        cpf: '52998224725',
-        maskedCpf: '***.***.247-25',
-        rg: '12345678X',
-        maskedRg: '*****678X',
-        pixKey: MARINA.pixKey,
       });
       expect(response.body).not.toHaveProperty('id');
+      const body = JSON.stringify(response.body);
+      expect(body).not.toContain('52998224725');
+      expect(body).not.toContain('12345678X');
+      expect(body).not.toContain(MARINA.pixKey);
     });
 
     it('refuses a token of the panel', async () => {
       await api()
         .get('/v1/affiliate/me')
         .set('Authorization', `Bearer ${await signInOperator(e2e.app, e2e.dataSource)}`)
+        .expect(403);
+    });
+  });
+
+  describe('POST /v1/affiliate/me/documents', () => {
+    function revealDocuments(accessToken: string) {
+      return api().post('/v1/affiliate/me/documents').set('Authorization', `Bearer ${accessToken}`);
+    }
+
+    it('answers the whole documents once the current password confirms it, never cached', async () => {
+      const { accessToken } = await signedIn();
+
+      const response = await revealDocuments(accessToken)
+        .send({ currentPassword: PASSWORD })
+        .expect(200);
+
+      expect(response.body).toEqual({ cpf: '52998224725', rg: '12345678X', pixKey: MARINA.pixKey });
+      expect(response.headers['cache-control']).toBe('no-store');
+    });
+
+    it('refuses a wrong password without the documents', async () => {
+      const { accessToken } = await signedIn();
+
+      const response = await revealDocuments(accessToken)
+        .send({ currentPassword: 'SenhaErrada!2026' })
+        .expect(400);
+
+      expect(response.body.code).toBe(AuthErrorCodeEnum.WRONG_PASSWORD);
+      expect(JSON.stringify(response.body)).not.toContain('52998224725');
+    });
+
+    it('refuses a token of the panel', async () => {
+      await revealDocuments(await signInOperator(e2e.app, e2e.dataSource))
+        .send({ currentPassword: PASSWORD })
         .expect(403);
     });
   });

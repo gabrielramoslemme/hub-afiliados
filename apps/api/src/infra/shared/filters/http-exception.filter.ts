@@ -16,6 +16,7 @@ const STATUS_BY_KIND: Record<DomainErrorKindEnum, HttpStatus> = {
   [DomainErrorKindEnum.INVALID_INPUT]: HttpStatus.BAD_REQUEST,
   [DomainErrorKindEnum.UNAUTHORIZED]: HttpStatus.UNAUTHORIZED,
   [DomainErrorKindEnum.FORBIDDEN]: HttpStatus.FORBIDDEN,
+  [DomainErrorKindEnum.TOO_MANY_ATTEMPTS]: HttpStatus.TOO_MANY_REQUESTS,
   [DomainErrorKindEnum.UNAVAILABLE]: HttpStatus.SERVICE_UNAVAILABLE,
 };
 

@@ -3,6 +3,7 @@ import {
   AccountInactiveError,
   InvalidCredentialsError,
   PasswordNotSetError,
+  TooManyAttemptsError,
 } from '@Domain/auth/auth.errors';
 import { buildAdminUser, buildUser } from '@Testing/factories/user.factory';
 import { userRepositoryMock } from '@Testing/mocks/repositories/user.repository.mock';
@@ -129,5 +130,27 @@ describe('AdminLoginUseCase', () => {
 
     await expect(useCase.execute(credentials)).rejects.toThrow(InvalidCredentialsError);
     expect(userRepository.save).not.toHaveBeenCalled();
+  });
+
+  // O painel aprova cadastros e mexe em cupom: é o login que mais vale forçar.
+  it('refuses a locked operator before looking at the password', async () => {
+    const operator = buildAdminUser({ passwordLockedUntil: new Date('2026-08-25T12:10:00.000Z') });
+    userRepository.findByEmail.mockResolvedValue({ ...operator, affiliate: null });
+
+    await expect(useCase.execute(credentials)).rejects.toThrow(TooManyAttemptsError);
+    expect(passwordHasher.compare).not.toHaveBeenCalled();
+  });
+
+  it('counts a wrong password of an operator toward the lock', async () => {
+    const operator = buildAdminUser();
+    userRepository.findByEmail.mockResolvedValue({ ...operator, affiliate: null });
+    passwordHasher.compare.mockResolvedValue(false);
+
+    await expect(useCase.execute(credentials)).rejects.toThrow(InvalidCredentialsError);
+    expect(userRepository.registerFailedPasswordAttempt).toHaveBeenCalledWith({
+      userId: operator.id,
+      maxAttempts: 5,
+      lockedUntil: new Date('2026-08-25T12:15:00.000Z'),
+    });
   });
 });

@@ -53,6 +53,12 @@ export class UserTypeormEntity implements UserEntity {
   @Column({ name: 'last_login_at', type: 'timestamptz', nullable: true })
   lastLoginAt: Date | null;
 
+  @Column({ name: 'failed_password_attempts', type: 'integer', default: 0 })
+  failedPasswordAttempts: number;
+
+  @Column({ name: 'password_locked_until', type: 'timestamptz', nullable: true })
+  passwordLockedUntil: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

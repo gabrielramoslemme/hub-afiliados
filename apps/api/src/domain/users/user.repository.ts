@@ -14,6 +14,13 @@ export interface UpdateUserWithAuditInput {
   audit: AuditTarget;
 }
 
+export interface RegisterFailedPasswordAttemptInput {
+  userId: number;
+  /** A tentativa que alcança este número trava a conta e zera a contagem. */
+  maxAttempts: number;
+  lockedUntil: Date;
+}
+
 export interface UserRepository {
   findByEmail(email: string): Promise<UserWithAffiliate | null>;
   findByPublicId(publicId: string): Promise<UserWithAffiliate | null>;
@@ -27,4 +34,9 @@ export interface UserRepository {
    * Nulo quando o usuário não existe.
    */
   updateWithAudit(input: UpdateUserWithAuditInput): Promise<UserEntity | null>;
+  /**
+   * Soma uma senha errada e trava a conta quando a soma chega ao limite. A conta
+   * é feita no banco, numa escrita só: tentativas em paralelo não se perdem.
+   */
+  registerFailedPasswordAttempt(input: RegisterFailedPasswordAttemptInput): Promise<void>;
 }

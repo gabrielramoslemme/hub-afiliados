@@ -50,6 +50,10 @@ export class ResetPasswordUseCase implements UseCase<ResetPasswordInput, void> {
       password: await this.passwordHasher.hash(input.password),
       passwordSetAt: this.clock.now(),
       shouldChangePassword: false,
+      // Quem abriu o link provou ser dono do e-mail: a trava por senha errada,
+      // que existe contra quem não é, não tem mais o que segurar.
+      failedPasswordAttempts: 0,
+      passwordLockedUntil: null,
     });
 
     // Queimar depois da escrita: falhar entre as duas com o token já gasto

@@ -11,6 +11,7 @@ import { PasswordHasher } from '@Domain/auth/password-hasher';
 import { Clock } from '@Domain/shared/clock';
 import { UserRepository } from '@Domain/users/user.repository';
 import { UseCase } from '../use-case';
+import { verifyPasswordAttempt } from './password-attempts';
 
 export interface AffiliateLoginInput {
   email: string;
@@ -60,7 +61,15 @@ export class AffiliateLoginUseCase implements UseCase<AffiliateLoginInput, Affil
 
     if (!user.password) throw new PasswordNotSetError();
 
-    const matches = await this.passwordHasher.compare(input.password, user.password);
+    const matches = await verifyPasswordAttempt(
+      {
+        userRepository: this.userRepository,
+        passwordHasher: this.passwordHasher,
+        clock: this.clock,
+      },
+      user,
+      input.password,
+    );
     if (!matches) throw new InvalidCredentialsError();
 
     if (!user.isActive) throw new AccountInactiveError();

@@ -5,6 +5,7 @@ import {
   ApiNoContentResponse,
   ApiOkResponse,
   ApiTags,
+  ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { AuthAudienceEnum } from '@porto/contracts';
@@ -33,6 +34,7 @@ export class AffiliateAuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: AffiliateLoginResponseDto })
   @ApiUnauthorizedResponse({ description: 'Credencial inválida ou senha ainda não definida' })
+  @ApiTooManyRequestsResponse({ description: 'Senha errada vezes demais: conta travada' })
   @ApiForbiddenResponse({ description: 'Cadastro em análise ou reprovado' })
   login(@Body() body: AffiliateLoginRequestDto): Promise<AffiliateLoginResponseDto> {
     return this.affiliateLoginUseCase.execute(body);

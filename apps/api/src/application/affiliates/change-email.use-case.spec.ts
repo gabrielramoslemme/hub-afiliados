@@ -1,9 +1,14 @@
 import { AuditEntityEnum, MailTemplateEnum } from '@porto/contracts';
 import { EmailAlreadyRegisteredError } from '@Domain/affiliates/affiliates.errors';
-import { UnknownAffiliateError, WrongPasswordError } from '@Domain/auth/auth.errors';
+import {
+  TooManyAttemptsError,
+  UnknownAffiliateError,
+  WrongPasswordError,
+} from '@Domain/auth/auth.errors';
 import { buildAffiliate } from '@Testing/factories/affiliate.factory';
 import { buildUser } from '@Testing/factories/user.factory';
 import { userRepositoryMock } from '@Testing/mocks/repositories/user.repository.mock';
+import { clockMock } from '@Testing/mocks/services/clock.mock';
 import { mailerMock } from '@Testing/mocks/services/mailer.mock';
 import { passwordHasherMock } from '@Testing/mocks/services/password-hasher.mock';
 import { ChangeEmailInput, ChangeEmailUseCase } from './change-email.use-case';
@@ -30,11 +35,13 @@ describe('ChangeEmailUseCase', () => {
     };
   }
 
+  const NOW = new Date('2026-08-25T12:00:00.000Z');
+
   beforeEach(() => {
     userRepository = userRepositoryMock();
     passwordHasher = passwordHasherMock();
     mailer = mailerMock();
-    useCase = new ChangeEmailUseCase(userRepository, passwordHasher, mailer);
+    useCase = new ChangeEmailUseCase(userRepository, passwordHasher, mailer, clockMock(NOW));
 
     userRepository.findByPublicId.mockResolvedValue({ ...user, affiliate });
     userRepository.findByEmail.mockResolvedValue(null);
@@ -129,5 +136,26 @@ describe('ChangeEmailUseCase', () => {
 
     await expect(useCase.execute(input())).rejects.toThrow(UnknownAffiliateError);
     expect(userRepository.updateWithAudit).not.toHaveBeenCalled();
+  });
+
+  it('refuses a locked account before looking at the password', async () => {
+    userRepository.findByPublicId.mockResolvedValue({
+      ...user,
+      passwordLockedUntil: new Date('2026-08-25T12:05:00.000Z'),
+      affiliate,
+    });
+
+    await expect(useCase.execute(input())).rejects.toThrow(TooManyAttemptsError);
+    expect(passwordHasher.compare).not.toHaveBeenCalled();
+    expect(userRepository.updateWithAudit).not.toHaveBeenCalled();
+  });
+
+  it('counts a wrong password toward the lock', async () => {
+    passwordHasher.compare.mockResolvedValue(false);
+
+    await expect(useCase.execute(input())).rejects.toThrow(WrongPasswordError);
+    expect(userRepository.registerFailedPasswordAttempt).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: user.id }),
+    );
   });
 });
