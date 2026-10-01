@@ -94,6 +94,10 @@ export const PASSWORD_RULES: readonly { message: string; test: (password: string
   },
 ];
 
+/** As regras numa frase, para a dica do campo: a pessoa sabe o que vale antes de errar. */
+export const PASSWORD_POLICY_HINT =
+  'Ao menos 12 caracteres, com letra maiúscula, minúscula, número e caractere especial.';
+
 /** A primeira regra que a senha descumpre, ou nulo quando ela atende a todas. */
 export function passwordPolicyIssue(password: string): string | null {
   return PASSWORD_RULES.find((rule) => !rule.test(password))?.message ?? null;
