@@ -5,6 +5,7 @@ import {
   ChangeEmailDialog,
   ChangeOccupationDialog,
   ChangePixKeyDialog,
+  DocumentsRevealProvider,
   PageHeading,
   type ProfileField,
   profileRows,
@@ -47,32 +48,35 @@ export default async function ProfilePage() {
           <Badge tone={statusTone(account.status)}>{statusLabel(account.status)}</Badge>
         </div>
 
-        <dl className="mt-4 divide-y divide-ink-200 overflow-hidden rounded-panel border border-ink-200 bg-white">
-          {rows.map((row) => (
-            <div
-              key={row.field}
-              className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-6 py-4"
-            >
-              <dt className="text-[0.9375rem] text-ink-500">{row.label}</dt>
-              <dd
-                className="flex flex-wrap items-center gap-2 font-medium text-ink-900"
-                data-tabular
+        <DocumentsRevealProvider pixKeyType={account.pixKeyType}>
+          <dl className="mt-4 divide-y divide-ink-200 overflow-hidden rounded-panel border border-ink-200 bg-white">
+            {rows.map((row) => (
+              <div
+                key={row.field}
+                className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-6 py-4"
               >
-                {row.revealed ? (
-                  <RevealableValue label={row.label} masked={row.value} revealed={row.revealed} />
-                ) : (
-                  row.value
-                )}
-                {actions[row.field]}
-              </dd>
-            </div>
-          ))}
-        </dl>
+                <dt className="text-[0.9375rem] text-ink-500">{row.label}</dt>
+                <dd
+                  className="flex flex-wrap items-center gap-2 font-medium text-ink-900"
+                  data-tabular
+                >
+                  {row.revealable ? (
+                    <RevealableValue field={row.field} label={row.label} masked={row.value} />
+                  ) : (
+                    row.value
+                  )}
+                  {actions[row.field]}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </DocumentsRevealProvider>
 
         <p className="mt-6 flex items-start gap-2.5 text-[0.8125rem] leading-relaxed text-ink-500">
           <Lock className="mt-0.5 size-3.5 shrink-0 text-ink-400" aria-hidden />
-          CPF, RG e chave PIX aparecem mascarados até você tocar no olho. O e-mail, a ocupação e a
-          chave PIX você troca aqui mesmo; para corrigir qualquer outro dado, escreva para{' '}
+          CPF, RG e chave PIX aparecem mascarados; para ver o valor completo, toque no olho e
+          confirme com a sua senha. O e-mail, a ocupação e a chave PIX você troca aqui mesmo; para
+          corrigir qualquer outro dado, escreva para{' '}
           <a
             href={`mailto:${site.contactEmail}`}
             className="font-medium text-blue-600 hover:underline"
