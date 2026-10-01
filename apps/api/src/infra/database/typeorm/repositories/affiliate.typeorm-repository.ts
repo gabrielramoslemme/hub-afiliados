@@ -62,7 +62,20 @@ function criteriaFor(search: string): [string, Record<string, string>] {
     return ['affiliate.cpf LIKE :cpf', { cpf: `${digits}%` }];
   }
 
-  return ['(user.name ILIKE :term OR user.email ILIKE :term)', { term: `%${search}%` }];
+  return [
+    "(user.name ILIKE :term ESCAPE '\\' OR user.email ILIKE :term ESCAPE '\\')",
+    { term: `%${escapeLikePattern(search)}%` },
+  ];
+}
+
+/**
+ * O que a analista digita é texto: sem o escape, `%` listaria todo cadastro e
+ * `_` casaria qualquer letra. A barra também ganha escape, porque é ela quem
+ * escapa as outras duas — e o `ESCAPE` da consulta a declara, em vez de confiar
+ * no padrão do Postgres.
+ */
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
 /**

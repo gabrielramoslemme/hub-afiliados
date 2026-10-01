@@ -1,7 +1,5 @@
 import { type INestApplication, ValidationPipe } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
-import { EnvironmentVariables } from '@Infra/config/environment-variables';
 import { HttpExceptionFilter } from '@Infra/shared/filters/http-exception.filter';
 
 /**
@@ -11,13 +9,10 @@ import { HttpExceptionFilter } from '@Infra/shared/filters/http-exception.filter
  * com teste de validação passando contra um pipe que produção não usa.
  */
 export function configureApp(app: INestApplication): void {
-  const configService = app.get<ConfigService<EnvironmentVariables, true>>(ConfigService);
-
   app.use(helmet());
-  app.enableCors({
-    origin: [configService.get('PANEL_BASE_URL', { infer: true })],
-    credentials: true,
-  });
+  // Sem CORS, de propósito: o navegador nunca fala com a API, quem chama é o
+  // servidor do Next. Liberar uma origem só abriria caminho para uma página
+  // ler, com a sessão de quem a abriu, o que a API responde.
   app.setGlobalPrefix('v1');
   app.useGlobalPipes(
     new ValidationPipe({

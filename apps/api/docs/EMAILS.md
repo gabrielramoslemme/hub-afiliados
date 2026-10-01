@@ -1,7 +1,8 @@
 # E-mails transacionais
 
-Provider selecionado por `MAIL_PROVIDER`: `logger` em desenvolvimento e teste,
-`resend` em homologação e produção.
+Todo ambiente envia pelo Resend, desenvolvimento inclusive, e a API não sobe sem
+`RESEND_API_KEY`. Só o e2e não envia: `createE2eApp` troca o provider pelo
+`FakeMailProvider`, que guarda o e-mail renderizado para o teste ler.
 
 | Template | Gatilho | Variáveis |
 |---|---|---|
@@ -63,7 +64,7 @@ infra, separados de propósito:
 | Contrato | Implementação | Responsabilidade |
 |---|---|---|
 | `MailRenderer` | `ReactEmailRenderer` | `SendMailInput` → `{ subject, html, text }` |
-| `MailProvider` | `ResendProvider`, `LoggerMailProvider` | despachar o já renderizado |
+| `MailProvider` | `ResendProvider` (no e2e, `FakeMailProvider`) | despachar o já renderizado |
 
 O conteúdo é o mesmo em qualquer fornecedor, então trocar de fornecedor mexe só
 no adapter de envio, e trocar de motor de template mexe só no renderer.
@@ -75,7 +76,6 @@ manual pelo painel (backlog).
 ## Configuração
 
 ```
-MAIL_PROVIDER=resend
 RESEND_API_KEY=
 MAIL_FROM_EMAIL=nao-responda@afiliados.porto.example
 MAIL_FROM_NAME=Hub de Afiliados

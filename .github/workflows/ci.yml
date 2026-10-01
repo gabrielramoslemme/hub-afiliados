@@ -75,7 +75,6 @@ jobs:
       JWT_SECRET: ci-secret-with-at-least-32-characters-here
       JWT_EXPIRES_IN_SECONDS: 28800
       APP_BASE_URL: http://localhost:3000
-      PANEL_BASE_URL: http://localhost:3005
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0

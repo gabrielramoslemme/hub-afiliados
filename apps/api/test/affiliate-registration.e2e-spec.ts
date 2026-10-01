@@ -107,6 +107,25 @@ describe('Affiliate registration (e2e)', () => {
       expect(response.body.message).toEqual(['Informe o nome completo.']);
     });
 
+    /*
+      O nome vai no e-mail de confirmação: com um endereço dentro, a Porto
+      mandaria o link de phishing de quem se cadastrou para quem ele quisesse.
+    */
+    it('refuses a name carrying a url without sending any email', async () => {
+      const response = await signUp({
+        ...validBody,
+        fullName: 'Marina acesse porto-premio.example/pix',
+      }).expect(400);
+
+      expect(response.body.message).toEqual(['Use só letras, espaços, apóstrofo e hífen no nome.']);
+      expect(e2e.mail.sentTo(validBody.email)).toEqual([]);
+      expect(await e2e.dataSource.query('SELECT 1 FROM affiliates')).toEqual([]);
+    });
+
+    it('accepts a name with accents, apostrophe and hyphen', async () => {
+      await signUp({ ...validBody, fullName: "Ana-Clara D'Ávila" }).expect(201);
+    });
+
     it('answers an array with one message per invalid field', async () => {
       const response = await signUp({ ...validBody, email: 'nope', cpf: '1' }).expect(400);
 

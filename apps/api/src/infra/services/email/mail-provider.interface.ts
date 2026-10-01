@@ -10,7 +10,7 @@ export interface SendRenderedMailInput extends RenderedMail {
 
 /**
  * Transporte, e nada mais: recebe o conteúdo já renderizado e o entrega ao
- * fornecedor concreto, escolhido por `MAIL_PROVIDER` na subida.
+ * fornecedor concreto — hoje, o Resend.
  */
 export interface MailProvider {
   send(input: SendRenderedMailInput): Promise<void>;

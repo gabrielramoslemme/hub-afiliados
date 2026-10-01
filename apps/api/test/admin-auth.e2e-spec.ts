@@ -33,6 +33,20 @@ describe('Admin authentication (e2e)', () => {
   });
 
   describe('POST /v1/admin/auth/login', () => {
+    /*
+      O navegador nunca fala com a API: quem chama é o servidor do Next. Uma
+      origem liberada com credenciais só servia para uma página de lá ler, com
+      o cookie de quem a abriu, o que a API responde.
+    */
+    it('does not let a page on the panel origin call it from the browser', async () => {
+      const response = await api()
+        .options('/v1/admin/auth/login')
+        .set('Origin', 'http://localhost:3005')
+        .set('Access-Control-Request-Method', 'POST');
+
+      expect(response.headers['access-control-allow-origin']).toBeUndefined();
+    });
+
     it('signs an operator in and records the instant', async () => {
       await insertOperator(e2e.dataSource);
 
