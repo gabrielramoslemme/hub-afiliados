@@ -2,6 +2,7 @@ import {
   AffiliateStatusEnum,
   OccupationEnum,
   PixKeyTypeEnum,
+  RateLimitErrorCodeEnum,
   RegistrationErrorCodeEnum,
   SocialNetworkEnum,
 } from '@porto/contracts';
@@ -12,6 +13,8 @@ import { registerAffiliate } from './register-affiliate.action';
 jest.mock('@/shared/http/api-client', () => ({ publicApiFetch: jest.fn() }));
 
 const apiFetch = publicApiFetch as jest.MockedFunction<typeof publicApiFetch>;
+
+const TOO_MANY = 'Muitas tentativas. Tente de novo em 14 minutos.';
 
 /**
  * As regras de cada campo são do schema e têm teste em `registration-schema.spec.ts`.
@@ -120,5 +123,19 @@ describe('registerAffiliate', () => {
 
     expect(result.status).toBe('failed');
     expect(JSON.stringify(result)).not.toContain('ECONNREFUSED');
+  });
+
+  // A tela trava o envio e mostra a contagem: tentar de novo antes só
+  // renovaria o bloqueio.
+  it('tells the form how long to wait when the api refused for too many attempts', async () => {
+    apiFetch.mockRejectedValue(
+      new ApiError(429, RateLimitErrorCodeEnum.TOO_MANY_REQUESTS, TOO_MANY, 840),
+    );
+
+    await expect(registerAffiliate(validInput)).resolves.toEqual({
+      status: 'failed',
+      message: TOO_MANY,
+      retryAfterSeconds: 840,
+    });
   });
 });

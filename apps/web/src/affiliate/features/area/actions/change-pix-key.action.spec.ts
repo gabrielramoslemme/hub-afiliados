@@ -1,6 +1,11 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { AuthErrorCodeEnum, PixKeyTypeEnum, RegistrationErrorCodeEnum } from '@porto/contracts';
+import {
+  AuthErrorCodeEnum,
+  PixKeyTypeEnum,
+  RateLimitErrorCodeEnum,
+  RegistrationErrorCodeEnum,
+} from '@porto/contracts';
 import { affiliateApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
 import { changePixKey } from './change-pix-key.action';
@@ -14,6 +19,8 @@ jest.mock('next/navigation', () => ({
 }));
 
 const apiFetch = affiliateApiFetch as jest.MockedFunction<typeof affiliateApiFetch>;
+
+const TOO_MANY = 'Muitas tentativas. Tente de novo em 14 minutos.';
 const revalidate = revalidatePath as jest.MockedFunction<typeof revalidatePath>;
 
 const input = {
@@ -95,6 +102,20 @@ describe('changePixKey', () => {
     await expect(changePixKey(input)).resolves.toEqual({
       status: 'failed',
       message: 'Não foi possível alterar sua chave PIX agora. Tente novamente em instantes.',
+    });
+  });
+
+  // A tela trava o envio e mostra a contagem: tentar de novo antes só
+  // renovaria o bloqueio.
+  it('tells the form how long to wait when the api refused for too many attempts', async () => {
+    apiFetch.mockRejectedValue(
+      new ApiError(429, RateLimitErrorCodeEnum.TOO_MANY_REQUESTS, TOO_MANY, 840),
+    );
+
+    await expect(changePixKey(input)).resolves.toEqual({
+      status: 'failed',
+      message: TOO_MANY,
+      retryAfterSeconds: 840,
     });
   });
 });

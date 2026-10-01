@@ -12,12 +12,20 @@ export interface ApiErrorBody {
 export class ApiError extends Error {
   readonly statusCode: number;
   readonly code: ApiErrorCode | null;
+  /** O `Retry-After` da recusa por excesso de tentativas, em segundos. */
+  readonly retryAfterSeconds: number | null;
 
-  constructor(statusCode: number, code: ApiErrorCode | null, message: string) {
+  constructor(
+    statusCode: number,
+    code: ApiErrorCode | null,
+    message: string,
+    retryAfterSeconds: number | null = null,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.statusCode = statusCode;
     this.code = code;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 

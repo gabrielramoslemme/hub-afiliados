@@ -3,9 +3,12 @@
 import { resetPasswordSchema } from '@porto/contracts';
 import { publicApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
+import { rateLimitOf } from '@/shared/lib/retry-after';
 import { signInMessageFor } from '../lib/errors';
 
-export type SetPasswordResult = { ok: true } | { ok: false; message: string };
+export type SetPasswordResult =
+  | { ok: true }
+  | { ok: false; message: string; retryAfterSeconds?: number };
 
 const UNEXPECTED_FAILURE = 'Não foi possível criar sua senha agora. Tente novamente em instantes.';
 
@@ -27,6 +30,9 @@ export async function setPassword(input: unknown): Promise<SetPasswordResult> {
       body: JSON.stringify({ token: parsed.data.token, password: parsed.data.password }),
     });
   } catch (error) {
+    const limited = rateLimitOf(error);
+    if (limited) return { ok: false, ...limited };
+
     if (!(error instanceof ApiError)) return { ok: false, message: UNEXPECTED_FAILURE };
 
     return { ok: false, message: signInMessageFor(error.code, error.message) };

@@ -6,13 +6,21 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
-import { type ResetPasswordRequest, resetPasswordSchema } from '@porto/contracts';
+import {
+  PASSWORD_POLICY_HINT,
+  type ResetPasswordRequest,
+  resetPasswordSchema,
+} from '@porto/contracts';
 import { AFFILIATE_LOGIN_PATH } from '@/affiliate/shared/routes';
+import { RetryNotice } from '@/shared/components/retry-notice';
 import { Button } from '@/shared/components/ui/button';
 import { Field, fieldAria } from '@/shared/components/ui/field';
 import { PasswordInput } from '@/shared/components/ui/password-input';
+import { useRetryCountdown } from '@/shared/hooks/use-retry-countdown';
 
-export type PasswordFormResult = { ok: true } | { ok: false; message: string };
+export type PasswordFormResult =
+  | { ok: true }
+  | { ok: false; message: string; retryAfterSeconds?: number };
 
 interface PasswordFormProps {
   token: string;
@@ -41,6 +49,7 @@ export function PasswordForm({
 }: PasswordFormProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const retry = useRetryCountdown();
   const [formError, setFormError] = useState<string | null>(null);
 
   const {
@@ -59,7 +68,8 @@ export function PasswordForm({
       const result = await action(values);
 
       if (!result.ok) {
-        setFormError(result.message);
+        if (result.retryAfterSeconds) retry.start(result.retryAfterSeconds);
+        else setFormError(result.message);
         return;
       }
 
@@ -72,6 +82,8 @@ export function PasswordForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+      <RetryNotice remaining={retry.remaining} />
+
       <input type="hidden" {...register('token')} />
 
       {formError && (
@@ -90,13 +102,23 @@ export function PasswordForm({
       )}
 
       {/* A tela existe para este formulário: o cursor já começa nele. */}
-      <Field id="password" label="Nova senha" required error={errors.password?.message}>
+      <Field
+        id="password"
+        label="Nova senha"
+        required
+        hint={PASSWORD_POLICY_HINT}
+        error={errors.password?.message}
+      >
         <PasswordInput
           {...register('password')}
-          {...fieldAria('password', { error: errors.password?.message, required: true })}
+          {...fieldAria('password', {
+            hint: PASSWORD_POLICY_HINT,
+            error: errors.password?.message,
+            required: true,
+          })}
           autoFocus
           autoComplete="new-password"
-          placeholder="Ao menos 8 caracteres"
+          placeholder="Ao menos 12 caracteres"
         />
       </Field>
 
@@ -116,7 +138,12 @@ export function PasswordForm({
         />
       </Field>
 
-      <Button type="submit" size="lg" disabled={pending} className="mt-1 w-full">
+      <Button
+        type="submit"
+        size="lg"
+        disabled={pending || retry.remaining > 0}
+        className="mt-1 w-full"
+      >
         {pending ? (
           <>
             <Loader2 className="animate-spin" aria-hidden />

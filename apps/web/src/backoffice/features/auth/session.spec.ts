@@ -1,10 +1,6 @@
 import { cookies } from 'next/headers';
 import { UserRoleEnum } from '@porto/contracts';
-import {
-  SESSION_COOKIE,
-  SESSION_COOKIE_PATH,
-  SESSION_USER_COOKIE,
-} from '@/shared/lib/session-cookie';
+import { SESSION_COOKIE, SESSION_COOKIE_PATH } from '@/shared/lib/session-cookie';
 import { createSession, destroySession } from './session';
 
 // `session.ts` importa `server-only`, que lança fora do servidor. Aqui o alvo
@@ -38,30 +34,26 @@ describe('createSession', () => {
    * do operador viajaria em toda requisição da parte pública — e um XSS ali,
    * mesmo sem ler o cookie `httpOnly`, poderia gastá-lo chamando `/admin`.
    */
-  it('scopes both cookies to the panel, so the public pages never carry the operator token', async () => {
-    await createSession(login);
-
-    for (const call of mockJar.set.mock.calls) {
-      expect(call[2]).toMatchObject({ path: SESSION_COOKIE_PATH, httpOnly: true });
-    }
-
-    expect(SESSION_COOKIE_PATH).toBe('/admin');
-    expect(mockJar.set).toHaveBeenCalledTimes(2);
-  });
-
-  it('keeps the token and the profile in the two known cookies', async () => {
+  it('scopes the token to the panel, so the public pages never carry it', async () => {
     await createSession(login);
 
     expect(mockJar.set).toHaveBeenCalledWith(
       SESSION_COOKIE,
       'token-do-operador',
-      expect.objectContaining({ httpOnly: true }),
+      expect.objectContaining({ path: SESSION_COOKIE_PATH, httpOnly: true }),
     );
-    expect(mockJar.set).toHaveBeenCalledWith(
-      SESSION_USER_COOKIE,
-      JSON.stringify(login.user),
-      expect.objectContaining({ httpOnly: true }),
-    );
+    expect(SESSION_COOKIE_PATH).toBe('/admin');
+  });
+
+  /*
+    Nome e perfil num cookie que ninguém conferia eram forjáveis: bastava
+    escrevê-lo para o painel mostrar outro nome e outro perfil. O layout lê quem
+    está logado da API, a cada página.
+  */
+  it('writes only the token, never the profile', async () => {
+    await createSession(login);
+
+    expect(mockJar.set).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -90,13 +82,10 @@ describe('destroySession', () => {
    * deixaria a sessão viva no navegador com a tela mostrando login — o pior
    * formato de falha para quem clicou em "sair".
    */
-  it('deletes both cookies on the same path they were written to', async () => {
+  it('deletes the cookie on the same path it was written to', async () => {
     await destroySession();
 
-    expect(survivingDeletes()).toEqual({
-      [SESSION_COOKIE]: SESSION_COOKIE_PATH,
-      [SESSION_USER_COOKIE]: SESSION_COOKIE_PATH,
-    });
+    expect(survivingDeletes()).toEqual({ [SESSION_COOKIE]: SESSION_COOKIE_PATH });
   });
 
   /**
@@ -108,6 +97,6 @@ describe('destroySession', () => {
   it('deletes each cookie once, so no second path can overwrite the first', async () => {
     await destroySession();
 
-    expect(mockJar.delete).toHaveBeenCalledTimes(2);
+    expect(mockJar.delete).toHaveBeenCalledTimes(1);
   });
 });

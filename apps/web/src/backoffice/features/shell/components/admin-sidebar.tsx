@@ -4,7 +4,7 @@ import { BarChart3, GraduationCap, Megaphone, Users, Wallet } from 'lucide-react
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ComponentType } from 'react';
-import type { SessionUser } from '@/backoffice/features/auth/session';
+import type { AdminMeResponse } from '@porto/contracts';
 import {
   CAMPAIGNS_PATH,
   DASHBOARD_PATH,
@@ -46,7 +46,7 @@ const NAV: NavItem[] = [
  * Some abaixo de `lg`: o logotipo do topo leva ao dashboard, que é a home do
  * painel e de onde se chega às demais seções.
  */
-export function AdminSidebar({ user }: { user: SessionUser }) {
+export function AdminSidebar({ user }: { user: AdminMeResponse }) {
   const pathname = usePathname();
 
   return (

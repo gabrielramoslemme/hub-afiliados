@@ -2,8 +2,11 @@
 
 import { forgotPasswordSchema } from '@porto/contracts';
 import { publicApiFetch } from '@/shared/http/api-client';
+import { rateLimitOf } from '@/shared/lib/retry-after';
 
-export type ForgotPasswordResult = { ok: true } | { ok: false; message: string };
+export type ForgotPasswordResult =
+  | { ok: true }
+  | { ok: false; message: string; retryAfterSeconds?: number };
 
 const UNEXPECTED_FAILURE = 'Não foi possível enviar o link agora. Tente novamente em instantes.';
 
@@ -24,7 +27,12 @@ export async function requestPasswordReset(input: unknown): Promise<ForgotPasswo
       method: 'POST',
       body: JSON.stringify(parsed.data),
     });
-  } catch {
+  } catch (error) {
+    // O limite por visitante não fala da conta: repetir a espera não entrega
+    // quem tem cadastro, e "tente em instantes" faria a pessoa insistir.
+    const limited = rateLimitOf(error);
+    if (limited) return { ok: false, ...limited };
+
     return { ok: false, message: UNEXPECTED_FAILURE };
   }
 

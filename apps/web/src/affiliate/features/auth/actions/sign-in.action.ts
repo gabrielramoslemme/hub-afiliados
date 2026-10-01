@@ -5,12 +5,15 @@ import { type AffiliateLoginResponse, affiliateLoginSchema } from '@porto/contra
 import { AFFILIATE_AREA_PATH } from '@/affiliate/shared/routes';
 import { publicApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
+import { rateLimitOf } from '@/shared/lib/retry-after';
 import { signInMessageFor } from '../lib/errors';
 import { createSession } from '../session';
 
 const UNEXPECTED_FAILURE = 'Não foi possível entrar agora. Tente novamente em instantes.';
 
-export async function signIn(input: unknown): Promise<{ message: string } | never> {
+export async function signIn(
+  input: unknown,
+): Promise<{ message: string; retryAfterSeconds?: number } | never> {
   const parsed = affiliateLoginSchema.safeParse(input);
 
   if (!parsed.success) return { message: 'Informe e-mail e senha.' };
@@ -24,6 +27,9 @@ export async function signIn(input: unknown): Promise<{ message: string } | neve
 
     await createSession(login);
   } catch (error) {
+    const limited = rateLimitOf(error);
+    if (limited) return limited;
+
     if (!(error instanceof ApiError)) return { message: UNEXPECTED_FAILURE };
 
     return { message: signInMessageFor(error.code, error.message) };

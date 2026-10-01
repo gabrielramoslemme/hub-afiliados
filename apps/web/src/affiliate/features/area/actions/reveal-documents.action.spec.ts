@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { AuthErrorCodeEnum } from '@porto/contracts';
+import { AuthErrorCodeEnum, RateLimitErrorCodeEnum } from '@porto/contracts';
 import { affiliateApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
 import { revealDocuments } from './reveal-documents.action';
@@ -12,6 +12,8 @@ jest.mock('next/navigation', () => ({
 }));
 
 const apiFetch = affiliateApiFetch as jest.MockedFunction<typeof affiliateApiFetch>;
+
+const TOO_MANY = 'Muitas tentativas. Tente de novo em 14 minutos.';
 
 const documents = { cpf: '52998224725', rg: '12345678X', pixKey: '11987654321' };
 const input = { currentPassword: 'SenhaAtual!2026' };
@@ -49,21 +51,6 @@ describe('revealDocuments', () => {
     });
   });
 
-  it('tells a locked account to wait instead of trying again', async () => {
-    apiFetch.mockRejectedValue(
-      new ApiError(
-        429,
-        AuthErrorCodeEnum.TOO_MANY_ATTEMPTS,
-        'Muitas tentativas com a senha errada. Tente de novo em alguns minutos.',
-      ),
-    );
-
-    await expect(revealDocuments(input)).resolves.toEqual({
-      status: 'failed',
-      message: 'Muitas tentativas com a senha errada. Tente de novo em alguns minutos.',
-    });
-  });
-
   it('sends an expired session back to sign in', async () => {
     apiFetch.mockRejectedValue(new ApiError(401, null, 'Sessão expirada. Entre novamente.'));
 
@@ -77,6 +64,20 @@ describe('revealDocuments', () => {
     await expect(revealDocuments(input)).resolves.toEqual({
       status: 'failed',
       message: 'Não foi possível mostrar seus documentos agora. Tente novamente em instantes.',
+    });
+  });
+
+  // A tela trava o envio e mostra a contagem: tentar de novo antes só
+  // renovaria o bloqueio.
+  it('tells the form how long to wait when the api refused for too many attempts', async () => {
+    apiFetch.mockRejectedValue(
+      new ApiError(429, RateLimitErrorCodeEnum.TOO_MANY_REQUESTS, TOO_MANY, 840),
+    );
+
+    await expect(revealDocuments(input)).resolves.toEqual({
+      status: 'failed',
+      message: TOO_MANY,
+      retryAfterSeconds: 840,
     });
   });
 });

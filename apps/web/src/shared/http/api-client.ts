@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { env } from '@/shared/lib/env';
 import { AFFILIATE_SESSION_COOKIE, SESSION_COOKIE } from '@/shared/lib/session-cookie';
 import { ApiError, type ApiErrorBody, messageOf } from './api-error';
@@ -13,12 +13,23 @@ import { ApiError, type ApiErrorBody, messageOf } from './api-error';
  * São duas funções em vez de um parâmetro `auth` porque esquecer um booleano é
  * fácil; escolher o nome errado da função, não.
  */
+/*
+  A API conta as tentativas por visitante, pelo endereço que o CloudFront
+  escreveu. Quem chama a API é o Next, então o header precisa seguir adiante —
+  sem ele, todo visitante contaria como o próprio Next, e vinte logins de gente
+  diferente travariam o portal inteiro.
+*/
+const VISITOR_HEADER = 'cloudfront-viewer-address';
+
 async function request<T>(path: string, init: RequestInit, token: string | null): Promise<T> {
+  const visitor = (await headers()).get(VISITOR_HEADER);
+
   const response = await fetch(`${env.apiBaseUrl}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(visitor ? { [VISITOR_HEADER]: visitor } : {}),
       ...init.headers,
     },
   });
@@ -29,7 +40,14 @@ async function request<T>(path: string, init: RequestInit, token: string | null)
 
   if (!response.ok) {
     const error = body as ApiErrorBody;
-    throw new ApiError(error.statusCode ?? response.status, error.code ?? null, messageOf(error));
+    const retryAfter = Number(response.headers.get('retry-after'));
+
+    throw new ApiError(
+      error.statusCode ?? response.status,
+      error.code ?? null,
+      messageOf(error),
+      Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
+    );
   }
 
   return body as T;

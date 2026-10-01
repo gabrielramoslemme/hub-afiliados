@@ -5,14 +5,17 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { type AdminLoginRequest, adminLoginSchema } from '@porto/contracts';
+import { RetryNotice } from '@/shared/components/retry-notice';
 import { Button } from '@/shared/components/ui/button';
 import { Field, fieldAria } from '@/shared/components/ui/field';
 import { Input } from '@/shared/components/ui/input';
 import { PasswordInput } from '@/shared/components/ui/password-input';
+import { useRetryCountdown } from '@/shared/hooks/use-retry-countdown';
 import { signIn } from '../actions/sign-in.action';
 
 export function SignInForm({ target }: { target?: string }) {
   const [pending, startTransition] = useTransition();
+  const retry = useRetryCountdown();
   const [formError, setFormError] = useState<string | null>(null);
 
   const {
@@ -31,12 +34,15 @@ export function SignInForm({ target }: { target?: string }) {
       // Em caso de sucesso o action redireciona e nada volta daqui.
       const result = await signIn(values, target);
 
-      if (result?.message) setFormError(result.message);
+      if (result?.retryAfterSeconds) retry.start(result.retryAfterSeconds);
+      else if (result?.message) setFormError(result.message);
     });
   }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+      <RetryNotice remaining={retry.remaining} />
+
       {formError && (
         <div
           role="alert"
@@ -67,7 +73,7 @@ export function SignInForm({ target }: { target?: string }) {
         />
       </Field>
 
-      <Button type="submit" disabled={pending} className="mt-1 w-full">
+      <Button type="submit" disabled={pending || retry.remaining > 0} className="mt-1 w-full">
         {pending ? (
           <>
             <Loader2 className="animate-spin" aria-hidden />

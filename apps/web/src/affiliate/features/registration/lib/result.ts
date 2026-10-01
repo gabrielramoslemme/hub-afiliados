@@ -10,4 +10,4 @@ export type RegistrationFieldErrors = Partial<Record<RegistrationField, string>>
 export type RegistrationResult =
   | { status: 'success' }
   | { status: 'invalid'; fieldErrors: RegistrationFieldErrors }
-  | { status: 'failed'; message: string };
+  | { status: 'failed'; message: string; retryAfterSeconds?: number };

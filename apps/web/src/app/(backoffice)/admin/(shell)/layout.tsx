@@ -1,21 +1,16 @@
-import { redirect } from 'next/navigation';
 import type { PropsWithChildren } from 'react';
-import { readSessionUser } from '@/backoffice/features/auth/session';
+import { fetchOperator } from '@/backoffice/features/auth/data';
 import { AdminSidebar, AdminTopbar } from '@/backoffice/features/shell';
-import { SESSION_EXPIRED_PATH } from '@/backoffice/shared/routes';
 
 /**
- * O middleware já barra quem não tem cookie. Esta segunda checagem existe porque
- * o middleware só vê que o cookie está lá — quem lê o conteúdo é aqui, e cookie
- * corrompido tem que virar login, não tela quebrada.
- *
- * Pela sessão expirada, e não direto para o login: o cookie do token continua no
- * navegador, e o middleware devolveria a pessoa do login para cá, em laço.
+ * O middleware só vê que o cookie existe. Quem confere a sessão é este layout,
+ * perguntando à API quem está logado — inclusive nas telas que ainda não leem
+ * nada da API, como o dashboard. Sessão recusada vira login pela sessão
+ * expirada, e não direto: o cookie continua no navegador, e o middleware
+ * devolveria a pessoa do login para cá, em laço.
  */
 export default async function AdminShellLayout({ children }: PropsWithChildren) {
-  const user = await readSessionUser();
-
-  if (!user) redirect(SESSION_EXPIRED_PATH);
+  const user = await fetchOperator();
 
   return (
     <div className="flex min-h-svh bg-ink-50">

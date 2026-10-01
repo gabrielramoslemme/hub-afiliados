@@ -7,6 +7,7 @@ import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { type ChangeEmailRequest, changeEmailSchema } from '@porto/contracts';
+import { RetryNotice } from '@/shared/components/retry-notice';
 import { Button } from '@/shared/components/ui/button';
 import {
   Dialog,
@@ -20,6 +21,7 @@ import {
 import { Field, fieldAria } from '@/shared/components/ui/field';
 import { Input } from '@/shared/components/ui/input';
 import { PasswordInput } from '@/shared/components/ui/password-input';
+import { useRetryCountdown } from '@/shared/hooks/use-retry-countdown';
 import { changeEmail } from '../actions/change-email.action';
 
 interface ChangeEmailDialogProps {
@@ -36,6 +38,7 @@ export function ChangeEmailDialog({ email }: ChangeEmailDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const retry = useRetryCountdown();
 
   const defaultValues: ChangeEmailRequest = { email: '', currentPassword: '' };
 
@@ -62,7 +65,8 @@ export function ChangeEmailDialog({ email }: ChangeEmailDialogProps) {
       const result = await changeEmail(values);
 
       if (result.status === 'failed') {
-        toast.error(result.message);
+        if (result.retryAfterSeconds) retry.start(result.retryAfterSeconds);
+        else toast.error(result.message);
         return;
       }
 
@@ -140,6 +144,8 @@ export function ChangeEmailDialog({ email }: ChangeEmailDialogProps) {
             </Field>
           </div>
 
+          <RetryNotice remaining={retry.remaining} />
+
           <DialogFooter>
             <Button
               type="button"
@@ -149,7 +155,7 @@ export function ChangeEmailDialog({ email }: ChangeEmailDialogProps) {
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" disabled={pending || retry.remaining > 0}>
               {pending ? <Loader2 className="animate-spin" aria-hidden /> : <Check aria-hidden />}
               Salvar novo e-mail
             </Button>

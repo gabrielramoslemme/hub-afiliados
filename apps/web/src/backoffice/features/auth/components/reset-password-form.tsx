@@ -6,11 +6,17 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
-import { type ResetPasswordRequest, resetPasswordSchema } from '@porto/contracts';
+import {
+  PASSWORD_POLICY_HINT,
+  type ResetPasswordRequest,
+  resetPasswordSchema,
+} from '@porto/contracts';
 import { FORGOT_PASSWORD_PATH, LOGIN_PATH } from '@/backoffice/shared/routes';
+import { RetryNotice } from '@/shared/components/retry-notice';
 import { Button } from '@/shared/components/ui/button';
 import { Field, fieldAria } from '@/shared/components/ui/field';
 import { PasswordInput } from '@/shared/components/ui/password-input';
+import { useRetryCountdown } from '@/shared/hooks/use-retry-countdown';
 import { resetPassword } from '../actions/reset-password.action';
 
 /**
@@ -24,6 +30,7 @@ import { resetPassword } from '../actions/reset-password.action';
 export function ResetPasswordForm({ token }: { token: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const retry = useRetryCountdown();
   const [formError, setFormError] = useState<string | null>(null);
 
   const {
@@ -42,7 +49,8 @@ export function ResetPasswordForm({ token }: { token: string }) {
       const result = await resetPassword(values);
 
       if (!result.ok) {
-        setFormError(result.message);
+        if (result.retryAfterSeconds) retry.start(result.retryAfterSeconds);
+        else setFormError(result.message);
         return;
       }
 
@@ -54,6 +62,8 @@ export function ResetPasswordForm({ token }: { token: string }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+      <RetryNotice remaining={retry.remaining} />
+
       <input type="hidden" {...register('token')} />
 
       {formError && (
@@ -72,13 +82,23 @@ export function ResetPasswordForm({ token }: { token: string }) {
       )}
 
       {/* A tela existe para este formulário: o cursor já começa nele. */}
-      <Field id="password" label="Nova senha" required error={errors.password?.message}>
+      <Field
+        id="password"
+        label="Nova senha"
+        required
+        hint={PASSWORD_POLICY_HINT}
+        error={errors.password?.message}
+      >
         <PasswordInput
           {...register('password')}
-          {...fieldAria('password', { error: errors.password?.message, required: true })}
+          {...fieldAria('password', {
+            hint: PASSWORD_POLICY_HINT,
+            error: errors.password?.message,
+            required: true,
+          })}
           autoFocus
           autoComplete="new-password"
-          placeholder="Ao menos 8 caracteres"
+          placeholder="Ao menos 12 caracteres"
         />
       </Field>
 
@@ -98,7 +118,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
         />
       </Field>
 
-      <Button type="submit" disabled={pending} className="mt-1 w-full">
+      <Button type="submit" disabled={pending || retry.remaining > 0} className="mt-1 w-full">
         {pending ? (
           <>
             <Loader2 className="animate-spin" aria-hidden />

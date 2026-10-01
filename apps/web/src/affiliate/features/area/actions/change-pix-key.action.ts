@@ -12,13 +12,14 @@ import {
 import { AFFILIATE_AREA_PATH, AFFILIATE_SESSION_EXPIRED_PATH } from '@/affiliate/shared/routes';
 import { affiliateApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
+import { rateLimitOf } from '@/shared/lib/retry-after';
 
 export type ChangePixKeyFieldErrors = Partial<Record<keyof ChangePixKeyRequest, string>>;
 
 export type ChangePixKeyResult =
   | { status: 'success' }
   | { status: 'invalid'; fieldErrors: ChangePixKeyFieldErrors }
-  | { status: 'failed'; message: string };
+  | { status: 'failed'; message: string; retryAfterSeconds?: number };
 
 const UNEXPECTED_FAILURE =
   'Não foi possível alterar sua chave PIX agora. Tente novamente em instantes.';
@@ -67,6 +68,9 @@ export async function changePixKey(input: unknown): Promise<ChangePixKeyResult> 
       body: JSON.stringify(parsed.data),
     });
   } catch (error) {
+    const limited = rateLimitOf(error);
+    if (limited) return { status: 'failed', ...limited };
+
     if (!(error instanceof ApiError)) return { status: 'failed', message: UNEXPECTED_FAILURE };
 
     // Mesma regra da leitura em `data.ts`: sessão recusada vira login.

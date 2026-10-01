@@ -10,6 +10,7 @@ import {
   type RevealDocumentsRequest,
   revealDocumentsSchema,
 } from '@porto/contracts';
+import { RetryNotice } from '@/shared/components/retry-notice';
 import { Button } from '@/shared/components/ui/button';
 import {
   Dialog,
@@ -21,6 +22,7 @@ import {
 } from '@/shared/components/ui/dialog';
 import { Field, fieldAria } from '@/shared/components/ui/field';
 import { PasswordInput } from '@/shared/components/ui/password-input';
+import { useRetryCountdown } from '@/shared/hooks/use-retry-countdown';
 import { revealDocuments } from '../actions/reveal-documents.action';
 import { type RevealableField, revealedDocuments } from '../lib/profile-rows';
 
@@ -55,6 +57,7 @@ export function DocumentsRevealProvider({ pixKeyType, children }: DocumentsRevea
   const [revealed, setRevealed] = useState<Record<RevealableField, string> | null>(null);
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const retry = useRetryCountdown();
 
   const {
     register,
@@ -82,7 +85,8 @@ export function DocumentsRevealProvider({ pixKeyType, children }: DocumentsRevea
       const result = await revealDocuments(values);
 
       if (result.status === 'failed') {
-        toast.error(result.message);
+        if (result.retryAfterSeconds) retry.start(result.retryAfterSeconds);
+        else toast.error(result.message);
         return;
       }
 
@@ -130,6 +134,8 @@ export function DocumentsRevealProvider({ pixKeyType, children }: DocumentsRevea
               />
             </Field>
 
+            <RetryNotice remaining={retry.remaining} />
+
             <DialogFooter>
               <Button
                 type="button"
@@ -139,7 +145,7 @@ export function DocumentsRevealProvider({ pixKeyType, children }: DocumentsRevea
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={pending}>
+              <Button type="submit" disabled={pending || retry.remaining > 0}>
                 {pending ? <Loader2 className="animate-spin" aria-hidden /> : <Eye aria-hidden />}
                 Mostrar
               </Button>

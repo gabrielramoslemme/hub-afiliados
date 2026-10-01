@@ -75,6 +75,8 @@ São três funções e não um parâmetro `auth` de propósito: esquecer um bool
 
 **Id que entra no path da API passa por `isPublicId`** (`src/shared/lib/public-id.ts`) antes da chamada, e vai com `encodeURIComponent`. Server Action aceita qualquer argumento num POST montado à mão, e o `[publicId]` do painel vem da URL: sem a checagem, `../../affiliate/me/pix-key` faria o servidor do Next chamar outra rota da API com o token da sessão. Fora do formato, a action responde "não encontrado" e o `data.ts` lança o mesmo 404 da API — sem chamá-la.
 
+**O cliente HTTP repassa o `CloudFront-Viewer-Address` do visitante para a API**, que conta as tentativas por ele (`@nestjs/throttler`). Sem o repasse, todo visitante contaria como o próprio Next. Quando a API recusa por excesso de tentativas (429 `RATE-001`), o `ApiError` traz o `Retry-After` em `retryAfterSeconds`; a action devolve esse número (`rateLimitOf`, em `shared/lib/retry-after.ts`) e o formulário mostra a contagem com `RetryNotice` e `useRetryCountdown`, com o envio travado até ela zerar. Formulário novo que chama rota com limite segue o mesmo desenho.
+
 **Escrita é Server Action**, sempre em `actions/*.action.ts` com `'use server'`. O action revalida a entrada com o mesmo schema zod do formulário — é isso que impede um POST montado à mão de contornar a tela — e devolve resultado tipado, nunca lança para a UI.
 
 **Leitura é Server Component.** A fila do admin lê `searchParams`, então filtro, ordenação e página vivem na URL: recarregar, voltar e compartilhar o endereço funcionam de graça, e não há uma linha de JavaScript de dados no cliente. Não há TanStack Query neste app — se uma tela precisar de polling ou lista otimista, ele volta; enquanto não precisar, a URL resolve.
@@ -166,7 +168,7 @@ O vídeo toca num diálogo, e `lib/video-embed.ts` decide como: YouTube (pelo `y
 
 ## Sessão e acesso
 
-Cookie `httpOnly`, `sameSite=lax`, `secure` fora de dev, oito horas. Nomes em `src/shared/lib/session-cookie.ts` — módulo neutro porque o `middleware` roda no Edge e não pode importar nada `server-only`.
+Cookie `httpOnly`, `sameSite=lax`, `secure` fora de dev, oito horas. **Só o token vai em cookie.** Quem está logado, os layouts leem da API a cada página — `GET /admin/me` no painel, `GET /affiliate/me` na área do afiliado (com `cache` do React, uma chamada por requisição) —, e é isso que faz sessão encerrada, conta desativada ou perfil mudado aparecerem na navegação seguinte. O antigo cookie `*_session_user` era forjável e saiu. "Sair" chama o logout da API antes de apagar o cookie: o token deixa de valer no servidor, não só no navegador. Nomes em `src/shared/lib/session-cookie.ts` — módulo neutro porque o `middleware` roda no Edge e não pode importar nada `server-only`.
 
 **São duas sessões, com cookies de nomes diferentes:** `porto_session` para o operador e `porto_affiliate_session` para o afiliado. Não é zelo: o middleware só enxerga que o cookie *existe*, então um nome compartilhado faria "entrei como afiliado" valer como "entrei no painel de análise".
 
@@ -176,7 +178,9 @@ Cookie `httpOnly`, `sameSite=lax`, `secure` fora de dev, oito horas. Nomes em `s
 
 ## A área do afiliado fala com a API inteira
 
-**Painel, login do afiliado, a conta dele, a carteira e as indicações falam com a API.** Não há mais dublê. Entrar em qualquer um dos dois logins exige a API no ar (`npm run dev`), as migrations aplicadas e `npm run seed --workspace apps/api`, que cria os três operadores com a senha `MudarAgora!2026`. O afiliado nasce sem senha: ele recebe o link de `/definir-senha` no e-mail de aprovação, que vale 48 horas e só funciona uma vez. Quem deixa esse link vencer, ou esquece a senha depois, pede outro em `/esqueci-senha` — o link de recuperação vale 2 horas —, e o painel tem o par equivalente em `/admin/esqueci-senha`. O e-mail sai de verdade, pelo Resend, em todo ambiente: para testar o fluxo localmente, cadastre-se com um endereço seu.
+**Painel, login do afiliado, a conta dele, a carteira e as indicações falam com a API.** Não há mais dublê. Entrar em qualquer um dos dois logins exige a API no ar (`npm run dev`), as migrations aplicadas e `npm run seed --workspace apps/api`, que cria os três operadores com a senha `MudarAgora!2026`. O afiliado nasce sem senha: ele recebe o link de `/definir-senha` no e-mail de aprovação, que vale 48 horas e só funciona uma vez. Quem deixa esse link vencer, ou esquece a senha depois, pede outro em `/esqueci-senha` — o link de recuperação vale 2 horas —, e o painel tem o par equivalente em `/admin/esqueci-senha`. O e-mail sai de verdade, pelo Resend, em todo ambiente: para testar o fluxo localmente, cadastre-se com um endereço seu. A senha segue `PASSWORD_RULES` de `@porto/contracts` (12 caracteres ou mais, maiúscula, minúscula, número e especial), e o campo mostra a regra antes do erro.
+
+**CPF, RG e chave PIX inteiros não vêm na leitura do perfil.** O olho do perfil abre um diálogo de senha (`DocumentsRevealProvider`), e só a action `revealDocuments` traz o valor completo; mascarar de novo o descarta.
 
 **A carteira e as indicações nascem das vendas que a Porto notifica** pelo webhook de incentivos (INT-03). Sem venda, as duas telas mostram o estado vazio. Para ver dado local, mande uma notificação assinada para `POST /v1/webhooks/porto/incentives` — a receita está em `apps/api/docs/INT-03-incentivos.md`.
 

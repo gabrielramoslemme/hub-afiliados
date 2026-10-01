@@ -14,6 +14,7 @@ import {
   SocialNetworkEnum,
 } from '@porto/contracts';
 import { registration } from '@/affiliate/shared/content';
+import { RetryNotice } from '@/shared/components/retry-notice';
 import { Button } from '@/shared/components/ui/button';
 import { Field, fieldAria } from '@/shared/components/ui/field';
 import { Input } from '@/shared/components/ui/input';
@@ -24,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
+import { useRetryCountdown } from '@/shared/hooks/use-retry-countdown';
 import { cn } from '@/shared/lib/cn';
 import { occupationName, pixKeyTypeName, socialNetworkName } from '@/shared/lib/format';
 import {
@@ -45,6 +47,7 @@ const RG_HINT = 'Só o número, sem o órgão emissor.';
 export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } = {}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const retry = useRetryCountdown();
   const [formError, setFormError] = useState<string | null>(null);
   const alertRef = useRef<HTMLDivElement>(null);
 
@@ -99,7 +102,8 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
       }
 
       if (result.status === 'failed') {
-        setFormError(result.message);
+        if (result.retryAfterSeconds) retry.start(result.retryAfterSeconds);
+        else setFormError(result.message);
         return;
       }
 
@@ -124,6 +128,8 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+      <RetryNotice remaining={retry.remaining} />
+
       {formError && (
         <div
           ref={alertRef}
@@ -408,7 +414,12 @@ export function RegistrationForm({ autoFocus = false }: { autoFocus?: boolean } 
         )}
       </div>
 
-      <Button type="submit" size="lg" disabled={pending} className="group mt-2 w-full">
+      <Button
+        type="submit"
+        size="lg"
+        disabled={pending || retry.remaining > 0}
+        className="group mt-2 w-full"
+      >
         {pending ? (
           <>
             <Loader2 className="animate-spin" aria-hidden />

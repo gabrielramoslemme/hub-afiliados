@@ -10,13 +10,14 @@ import {
 import { AFFILIATE_SESSION_EXPIRED_PATH } from '@/affiliate/shared/routes';
 import { affiliateApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
+import { rateLimitOf } from '@/shared/lib/retry-after';
 
 export type RevealDocumentsFieldErrors = Partial<Record<keyof RevealDocumentsRequest, string>>;
 
 export type RevealDocumentsResult =
   | { status: 'success'; documents: AffiliateDocumentsResponse }
   | { status: 'invalid'; fieldErrors: RevealDocumentsFieldErrors }
-  | { status: 'failed'; message: string };
+  | { status: 'failed'; message: string; retryAfterSeconds?: number };
 
 const UNEXPECTED_FAILURE =
   'Não foi possível mostrar seus documentos agora. Tente novamente em instantes.';
@@ -41,6 +42,9 @@ export async function revealDocuments(input: unknown): Promise<RevealDocumentsRe
 
     return { status: 'success', documents };
   } catch (error) {
+    const limited = rateLimitOf(error);
+    if (limited) return { status: 'failed', ...limited };
+
     if (!(error instanceof ApiError)) return { status: 'failed', message: UNEXPECTED_FAILURE };
 
     if (error.statusCode === 401 || error.statusCode === 403) {
