@@ -80,4 +80,44 @@ describe('Throttling (e2e)', () => {
 
     expect(Number(response.headers['retry-after'])).toBeGreaterThan(59 * 60);
   });
+
+  // Em memória, um deploy ou um contêiner que cai zeravam a contagem e soltavam
+  // quem estava bloqueado. A segunda aplicação é outro processo, com o mesmo banco.
+  it('keeps counting a visitor across a restart of the api', async () => {
+    await exhaustSignIn('203.0.113.7');
+    await e2e.app.close();
+
+    e2e = await createE2eApp();
+
+    await signIn('203.0.113.7').expect(429);
+  });
+
+  // Um contador lido, somado e gravado pela aplicação perderia as tentativas
+  // que chegam juntas, e o limite valeria mais do que diz.
+  it('counts attempts that arrive together without losing any', async () => {
+    const statuses = await Promise.all(
+      Array.from({ length: 15 }, () => signIn('203.0.113.7').then((response) => response.status)),
+    );
+
+    expect(statuses.filter((status) => status === 401)).toHaveLength(10);
+    expect(statuses.filter((status) => status === 429)).toHaveLength(5);
+  });
+
+  // Só o limite curto vai para o banco; o folgado, que vale em toda
+  // requisição, fica em memória e não custa uma escrita por chamada.
+  it('writes nothing to the database for a route without a sensitive limit', async () => {
+    for (let call = 0; call < 3; call += 1) {
+      await request(e2e.app.getHttpServer()).get('/v1/affiliate/me').expect(401);
+      await request(e2e.app.getHttpServer())
+        .post('/v1/admin/auth/login')
+        .send({ email: 'ninguem@porto.example', password: 'SenhaErrada!2026' });
+    }
+
+    // Uma linha só: a do login, que tem limite curto. O `/affiliate/me`, que só
+    // tem o limite folgado, não deixou nada.
+    const [{ count }] = await e2e.dataSource.query(
+      'SELECT count(*)::int AS count FROM throttle_counters',
+    );
+    expect(count).toBe(1);
+  });
 });

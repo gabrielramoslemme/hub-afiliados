@@ -3,7 +3,7 @@ import { ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler';
 type ThrottlerStorageRecord = Awaited<ReturnType<ThrottlerStorage['increment']>>;
 
 /**
- * O armazenamento do limite, zerável entre testes. O e2e inteiro conecta do
+ * A parte em memória do limite, zerável entre testes. O e2e inteiro conecta do
  * mesmo 127.0.0.1, e sem zerar a conta de um teste passaria para o seguinte.
  * Troca a instância em vez de esvaziar o mapa: o serviço guarda timers que
  * apontam para as chaves, e apagá-las por baixo quebraria o timer.

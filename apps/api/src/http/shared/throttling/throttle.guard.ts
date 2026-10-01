@@ -1,6 +1,6 @@
 import { ExecutionContext, HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { ThrottlerGuard, ThrottlerLimitDetail } from '@nestjs/throttler';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { RateLimitErrorCodeEnum } from '@porto/contracts';
 import { clientAddress } from './client-address';
 
@@ -15,7 +15,7 @@ export function retryMessage(seconds: number): string {
 /**
  * O `ThrottlerGuard` com duas trocas: a chave é o visitante que o CloudFront
  * viu, e a recusa sai no formato de erro da API, com `code`, para a tela
- * reconhecer o caso. O `Retry-After` o guard original já escreve.
+ * reconhecer o caso, e com o `Retry-After` de onde a tela tira a espera.
  */
 @Injectable()
 export class ThrottleGuard extends ThrottlerGuard {
@@ -24,9 +24,16 @@ export class ThrottleGuard extends ThrottlerGuard {
   }
 
   protected throwThrottlingException(
-    _context: ExecutionContext,
+    context: ExecutionContext,
     detail: ThrottlerLimitDetail,
   ): Promise<void> {
+    // Com limite nomeado, a biblioteca escreve `Retry-After-<nome>`. A tela lê o
+    // `Retry-After` padrão, então ele sai daqui, para qualquer limite.
+    context
+      .switchToHttp()
+      .getResponse<Response>()
+      .setHeader('Retry-After', String(detail.timeToBlockExpire));
+
     throw new HttpException(
       {
         code: RateLimitErrorCodeEnum.TOO_MANY_REQUESTS,

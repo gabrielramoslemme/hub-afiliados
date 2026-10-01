@@ -1,16 +1,48 @@
-import { hours, minutes, Throttle } from '@nestjs/throttler';
+import { applyDecorators, ExecutionContext, SetMetadata } from '@nestjs/common';
+import { hours, minutes, Throttle, ThrottlerOptions } from '@nestjs/throttler';
+
+/** O limite curto. A contagem dele mora no Postgres e sobrevive a deploy. */
+export const SENSITIVE_THROTTLER = 'sensitive';
+
+const SENSITIVE_ROUTE = 'throttle:sensitive-route';
+
+interface SensitiveLimit {
+  limit: number;
+  ttl: number;
+}
 
 /*
-  O limite de todas as rotas, folgado: existe para conter abuso em volume, não
-  para incomodar quem navega. As rotas que conferem senha, mandam e-mail ou
-  criam conta têm o próprio, bem mais curto, e quem passa dele espera o bloqueio
-  inteiro — não basta a janela andar.
+  Quem passa do limite curto espera o bloqueio inteiro, e não só a janela andar:
+  o bloqueio dura o mesmo que a janela.
 */
-export const DEFAULT_THROTTLE = { ttl: minutes(1), limit: 300 };
+function sensitive({ limit, ttl }: SensitiveLimit): MethodDecorator & ClassDecorator {
+  return applyDecorators(
+    SetMetadata(SENSITIVE_ROUTE, true),
+    Throttle({ [SENSITIVE_THROTTLER]: { limit, ttl, blockDuration: ttl } }),
+  );
+}
+
+/*
+  Os dois limites, na ordem em que o guard os confere. O folgado vale em toda
+  rota e fica em memória: existe para conter abuso em volume, e perder a conta
+  num deploy não custa nada. O curto só vale onde um dos decorators abaixo o
+  pôs — sem o `skipIf`, os valores de módulo dele valeriam em toda rota, e cada
+  requisição viraria uma escrita no banco.
+*/
+export const THROTTLERS: ThrottlerOptions[] = [
+  { name: 'default', ttl: minutes(1), limit: 300 },
+  {
+    name: SENSITIVE_THROTTLER,
+    ttl: minutes(15),
+    limit: 10,
+    skipIf: (context: ExecutionContext) =>
+      !Reflect.getMetadata(SENSITIVE_ROUTE, context.getHandler()),
+  },
+];
 
 /** Login e toda conferência de senha com a sessão aberta: dez erros e espera. */
 export function PasswordAttemptThrottle(): MethodDecorator & ClassDecorator {
-  return Throttle({ default: { limit: 10, ttl: minutes(15), blockDuration: minutes(15) } });
+  return sensitive({ limit: 10, ttl: minutes(15) });
 }
 
 /**
@@ -18,12 +50,12 @@ export function PasswordAttemptThrottle(): MethodDecorator & ClassDecorator {
  * por hora; aqui o limite é de quem pede, para ninguém varrer e-mails em massa.
  */
 export function RecoveryThrottle(): MethodDecorator & ClassDecorator {
-  return Throttle({ default: { limit: 10, ttl: minutes(15), blockDuration: minutes(15) } });
+  return sensitive({ limit: 10, ttl: minutes(15) });
 }
 
 /** O link do e-mail vira senha; adivinhar token de 32 bytes não é o risco, o volume é. */
 export function LinkRedemptionThrottle(): MethodDecorator & ClassDecorator {
-  return Throttle({ default: { limit: 10, ttl: minutes(15), blockDuration: minutes(15) } });
+  return sensitive({ limit: 10, ttl: minutes(15) });
 }
 
 /**
@@ -32,5 +64,5 @@ export function LinkRedemptionThrottle(): MethodDecorator & ClassDecorator {
  * afiliados virarem alvo em massa.
  */
 export function SignUpThrottle(): MethodDecorator & ClassDecorator {
-  return Throttle({ default: { limit: 5, ttl: hours(1), blockDuration: hours(1) } });
+  return sensitive({ limit: 5, ttl: hours(1) });
 }
