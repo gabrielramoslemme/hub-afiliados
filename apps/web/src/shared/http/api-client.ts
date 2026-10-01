@@ -1,9 +1,11 @@
 import 'server-only';
 
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { env } from '@/shared/lib/env';
+import { createRateLimiter } from '@/shared/lib/rate-limit';
 import { AFFILIATE_SESSION_COOKIE, SESSION_COOKIE } from '@/shared/lib/session-cookie';
 import { ApiError, type ApiErrorBody, messageOf } from './api-error';
+import { clientIp } from './client-ip';
 
 /**
  * O navegador nunca fala com a API: o token de sessão vive em cookie `httpOnly`
@@ -35,8 +37,29 @@ async function request<T>(path: string, init: RequestInit, token: string | null)
   return body as T;
 }
 
-/** Rota pública: cadastro e login. Nenhum token viaja. */
-export function publicApiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+/*
+  Vinte chamadas por rota a cada quinze minutos, por visitante: folga para quem
+  erra a senha ou o formulário, e pouco para quem testa e-mails e CPFs em massa
+  ou dispara cadastros para encher a caixa de outra pessoa. A conta é por rota
+  para um login insistente não travar o cadastro de quem divide a mesma rede.
+*/
+const publicRouteLimiter = createRateLimiter({ limit: 20, windowMs: 15 * 60 * 1000 });
+
+/**
+ * Rota pública: cadastro, logins e senha. Nenhum token viaja, e por isso é aqui
+ * que o volume por visitante é contido, antes de a chamada sair do Next.
+ */
+export async function publicApiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const visitor = clientIp(await headers());
+
+  if (visitor && !publicRouteLimiter.consume(`${path} ${visitor}`, Date.now())) {
+    throw new ApiError(
+      429,
+      null,
+      'Muitas tentativas a partir desta conexão. Aguarde alguns minutos e tente de novo.',
+    );
+  }
+
   return request<T>(path, init, null);
 }
 

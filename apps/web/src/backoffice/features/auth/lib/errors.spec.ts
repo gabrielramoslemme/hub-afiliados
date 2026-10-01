@@ -9,6 +9,7 @@ describe('signInMessageFor', () => {
     AuthErrorCodeEnum.ACCOUNT_INACTIVE,
     AuthErrorCodeEnum.PASSWORD_NOT_SET,
     AuthErrorCodeEnum.INVALID_TOKEN,
+    AuthErrorCodeEnum.TOO_MANY_ATTEMPTS,
   ])('explains %s in the words of the panel, not the api', (code) => {
     expect(signInMessageFor(code, FROM_API)).not.toBe(FROM_API);
   });

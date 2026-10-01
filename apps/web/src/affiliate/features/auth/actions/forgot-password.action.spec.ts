@@ -58,4 +58,20 @@ describe('requestPasswordReset', () => {
       message: 'Não foi possível enviar o link agora. Tente novamente em instantes.',
     });
   });
+
+  // O limite por visitante do Next não diz nada sobre a conta: repetir a
+  // mensagem dele não entrega quem tem cadastro, e "tente em instantes" faria
+  // a pessoa insistir no que só esperar resolve.
+  it('tells a visitor over the limit to wait', async () => {
+    apiFetch.mockRejectedValue(
+      new ApiError(429, null, 'Muitas tentativas a partir desta conexão. Aguarde alguns minutos.'),
+    );
+
+    const result = await requestPasswordReset({ email: 'marina@email.com' });
+
+    expect(result).toEqual({
+      ok: false,
+      message: 'Muitas tentativas a partir desta conexão. Aguarde alguns minutos.',
+    });
+  });
 });

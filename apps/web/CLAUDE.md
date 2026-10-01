@@ -67,11 +67,15 @@ import { fetchWallet } from '@/affiliate/features/area/data';  // leitura de ser
 
 | Função | Quando | Onde |
 |---|---|---|
-| `publicApiFetch` | rota pública: cadastro, os dois logins | `src/shared/http/api-client.ts` |
+| `publicApiFetch` | rota pública: cadastro, logins e senha; limitada por visitante | `src/shared/http/api-client.ts` |
 | `authedApiFetch` | canal `/admin`; lê o cookie do operador | idem |
 | `affiliateApiFetch` | canal `/affiliate/me`; lê o cookie do afiliado | idem |
 
 São três funções e não um parâmetro `auth` de propósito: esquecer um booleano é fácil, escolher o nome errado da função não é. E as duas autenticadas leem **cookies diferentes** — trocar de audiência por engano abriria o canal errado com o token errado. As duas convertem o corpo de erro padrão da API em `ApiError`, com `statusCode` e `code`. **A tela escolhe a mensagem pelo `code`, nunca pelo texto** — a tradução mora em `registration/lib/errors.ts` e em `auth/lib/errors.ts`.
+
+**A rota pública é limitada por visitante no `publicApiFetch`:** 20 chamadas por rota a cada 15 minutos, contadas em memória (`shared/lib/rate-limit.ts`), e a 21ª volta 429 sem sair do Next. O visitante vem de `clientIp` (`shared/http/client-ip.ts`): o `Incap-Client-IP` da Imperva ou o `CloudFront-Viewer-Address`, que exige a política de origem `AllViewerAndCloudFrontHeaders` na stack. **Nunca o `X-Forwarded-For`** — o Caddy o reescreve com o IP do CloudFront, e o que o navegador manda nele é inventável. Sem nenhum dos dois headers, em desenvolvimento, a chamada passa sem contar: uma chave única para todo mundo travaria o portal inteiro. Enquanto a Imperva puder ser contornada pelo domínio do CloudFront, o `Incap-Client-IP` também é inventável; a trava por conta da API é o que segura isso.
+
+**O perfil não recebe CPF, RG nem chave PIX inteiros.** O olho do perfil abre um diálogo de senha (`DocumentsRevealProvider`), e só a action `revealDocuments` traz o valor completo; mascarar de novo o descarta.
 
 **Escrita é Server Action**, sempre em `actions/*.action.ts` com `'use server'`. O action revalida a entrada com o mesmo schema zod do formulário — é isso que impede um POST montado à mão de contornar a tela — e devolve resultado tipado, nunca lança para a UI.
 

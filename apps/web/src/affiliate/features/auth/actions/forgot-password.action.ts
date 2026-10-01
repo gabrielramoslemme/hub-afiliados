@@ -2,6 +2,7 @@
 
 import { forgotPasswordSchema } from '@porto/contracts';
 import { publicApiFetch } from '@/shared/http/api-client';
+import { ApiError } from '@/shared/http/api-error';
 
 export type ForgotPasswordResult = { ok: true } | { ok: false; message: string };
 
@@ -24,7 +25,12 @@ export async function requestPasswordReset(input: unknown): Promise<ForgotPasswo
       method: 'POST',
       body: JSON.stringify(parsed.data),
     });
-  } catch {
+  } catch (error) {
+    // O limite por visitante do Next não fala da conta, e pode ser repetido.
+    if (error instanceof ApiError && error.statusCode === 429) {
+      return { ok: false, message: error.message };
+    }
+
     return { ok: false, message: UNEXPECTED_FAILURE };
   }
 
