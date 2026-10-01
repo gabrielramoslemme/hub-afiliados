@@ -1,12 +1,16 @@
 import type { INestApplication, ModuleMetadata } from '@nestjs/common';
 import { Test, type TestingModuleBuilder } from '@nestjs/testing';
+import { ThrottlerStorage } from '@nestjs/throttler';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/configure-app';
 import { COUPON_GATEWAY } from '../src/domain/coupons/coupon-gateway';
+import { MAILER } from '../src/domain/notifications/mailer';
+import type { MailService } from '../src/infra/services/email/mail.service';
 import { MAIL_PROVIDER } from '../src/infra/services/email/mail-provider.interface';
 import { FakeCouponGateway } from '../src/testing/fakes/fake-coupon.gateway';
 import { FakeMailProvider } from '../src/testing/fakes/fake-mail.provider';
+import { ResettableThrottlerStorage } from '../src/testing/fakes/resettable-throttler.storage';
 
 type Imports = NonNullable<ModuleMetadata['imports']>;
 
@@ -23,13 +27,16 @@ export function createE2eTestingModule(extraImports: Imports = []): TestingModul
     .overrideProvider(COUPON_GATEWAY)
     .useValue(new FakeCouponGateway())
     .overrideProvider(MAIL_PROVIDER)
-    .useValue(new FakeMailProvider());
+    .useValue(new FakeMailProvider())
+    .overrideProvider(ThrottlerStorage)
+    .useValue(new ResettableThrottlerStorage());
 }
 
 export interface E2eApp {
   app: INestApplication;
   dataSource: DataSource;
   mail: FakeMailProvider;
+  throttlerStorage: ResettableThrottlerStorage;
 }
 
 /** A aplicação configurada como o `main.ts` configura, pronta para o `supertest`. */
@@ -51,6 +58,7 @@ export async function createE2eApp(): Promise<E2eApp> {
     app,
     dataSource: app.get(DataSource),
     mail: app.get<FakeMailProvider>(MAIL_PROVIDER),
+    throttlerStorage: app.get<ResettableThrottlerStorage>(ThrottlerStorage),
   };
 }
 
@@ -71,7 +79,18 @@ const TABLES = [
   'users',
 ];
 
-export async function resetDatabase({ dataSource, mail }: E2eApp): Promise<void> {
+/**
+ * A recuperação de senha responde antes de o e-mail sair. O teste que lê o link
+ * espera os envios em curso, como o desligamento da API espera.
+ */
+export function mailSettled(e2e: E2eApp): Promise<void> {
+  return e2e.app.get<MailService>(MAILER).drain();
+}
+
+export async function resetDatabase({ dataSource, mail, throttlerStorage }: E2eApp): Promise<void> {
   await dataSource.query(`TRUNCATE ${TABLES.join(', ')} RESTART IDENTITY CASCADE`);
   mail.clear();
+  // A suíte inteira conecta do mesmo 127.0.0.1: sem zerar, a conta do limite
+  // passaria de um teste para o seguinte.
+  throttlerStorage.reset();
 }

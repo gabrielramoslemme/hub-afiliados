@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { AdminLoginResponse, UserRoleEnum } from '@porto/contracts';
 
-class AdminLoginUserDto {
+export class AdminLoginUserDto {
   @ApiProperty({ format: 'uuid' })
   publicId: string;
 

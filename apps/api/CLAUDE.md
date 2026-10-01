@@ -41,6 +41,31 @@ Hoje `@Public()` marca exatamente dez rotas: `GET /v1/health`, `POST /v1/affilia
 
 **O claim `sub` é o `public_id`.** O token viaja para fora da API, e o id serial não sai daqui; quando o use case precisa do id interno — `approved_by_user_id` é FK —, ele resolve pelo `UserRepository.findByPublicId`.
 
+### Sessão: o JWT não basta
+
+**A assinatura diz que o token é nosso; o banco diz se a sessão ainda vale.** O `AuthenticatedGuard` passa os claims pelo `ValidateSessionUseCase`, que recusa com 401 a conta que sumiu, a desativada e o token cuja versão (`ver`) não é mais a `users.token_version`. Perfil e nome que seguem para o guard do canal saem do banco, não do token: rebaixar alguém vale na requisição seguinte. Custa uma consulta por requisição autenticada.
+
+**Somar um na `token_version` encerra toda sessão aberta da conta** (`UserRepository.revokeSessions`). Fazem isso o `POST /v1/{affiliate,admin}/auth/logout` e a redefinição de senha pelo link — esta última atende o critério do card 3.4, que antes ficava de fora porque o guard não consultava o banco. Token sem `ver`, emitido antes desta mudança, é recusado.
+
+O painel lê quem está logado em `GET /v1/admin/me`, a cada página, e não de um cookie escrito no login.
+
+### Senha e enumeração
+
+- **Login responde igual, no mesmo tempo, para e-mail desconhecido, conta sem senha e senha errada.** O `PasswordHasher.compare` recebe `null` quando não há hash e gasta uma comparação bcrypt de verdade antes de responder `false`. Não há mais `PASSWORD_NOT_SET` no login (o código `AUTH-004` fica aposentado).
+- **"Esqueci minha senha" responde sem esperar o e-mail sair** — renderizar e entregar leva centenas de milissegundos, e o relógio contaria quem tem cadastro. O `MailService` guarda os envios em curso: o desligamento (`enableShutdownHooks`) espera por eles, e o e2e que lê o link chama `mailSettled(e2e)`.
+- **O link de definir/redefinir senha é resgatado numa transação só** (`PasswordResetTokenRepository.redeem`): o `UPDATE` condicionado a `used_at IS NULL` decide qual de dois pedidos simultâneos grava a senha.
+- **A política de senha é `PASSWORD_RULES` de `@porto/contracts`**: 12 caracteres ou mais, até 72 bytes (o que o bcrypt lê), maiúscula, minúscula, número e caractere especial. O DTO a aplica com `@IsPasswordPolicy()`, a tela com o mesmo schema. Sem expiração periódica, por decisão (NIST SP 800-63B).
+
+### Limite de tentativas
+
+`@nestjs/throttler`, com o `ThrottleGuard` global antes do `AuthenticatedGuard`. **A chave é o visitante que o CloudFront viu** (`CloudFront-Viewer-Address`, sem a porta) e cai no IP da conexão fora da AWS — **nunca o `X-Forwarded-For`**, que o Caddy reescreve com o IP do CloudFront. O header só é confiável porque a política de origem da stack manda o CloudFront escrevê-lo por cima do que o navegador mandar: sem ela, ele é do visitante. O Next repassa o mesmo header quando chama a API em nome de quem está na tela.
+
+A conta é por rota e por visitante, em memória (um contêiner só). Todo o resto tem 300 por minuto; as rotas sensíveis usam os decorators de `src/http/shared/throttling/throttle-limits.ts`: `PasswordAttemptThrottle` (logins, trocas de PIX e e-mail, revelar documentos), `RecoveryThrottle`, `LinkRedemptionThrottle` e `SignUpThrottle` (cinco cadastros por hora). Passou do limite, espera o bloqueio inteiro: 429 `RATE-001`, com `Retry-After` em segundos — é com ele que a tela mostra a espera. Health e webhook ficam fora (`@SkipThrottle()`). No e2e, o `ResettableThrottlerStorage` é zerado no `resetDatabase`, porque a suíte inteira conecta do mesmo 127.0.0.1.
+
+### Documentos do afiliado
+
+**CPF, RG e chave PIX inteiros só saem de `POST /v1/affiliate/me/documents`**, com a senha atual no corpo, `Cache-Control: no-store` e o limite de tentativas do login. O `GET /v1/affiliate/me` alimenta toda tela da área do afiliado e devolve só a versão mascarada; o e2e reprova o documento inteiro nessa resposta.
+
 O tempo de vida vem de `JWT_EXPIRES_IN_SECONDS` (oito horas), casado com o cookie de sessão do painel: token que morre antes do cookie vira 401 numa tela que se acha logada.
 
 ## Arquitetura
@@ -319,8 +344,8 @@ O `HttpExceptionFilter` global normaliza toda resposta de erro:
   }
   ```
 
-- **Traduzir `kind` para status é do filtro**, e é a tabela inteira: `NOT_FOUND` 404 · `CONFLICT` 409 · `INVALID_INPUT` 400 · `UNAUTHORIZED` 401 · `FORBIDDEN` 403 · `UNAVAILABLE` 503.
-- `code` vem de um `*ErrorCodeEnum` de `@porto/contracts` (`AuthErrorCodeEnum`, `RegistrationErrorCodeEnum`, `CouponErrorCodeEnum`, `IncentiveErrorCodeEnum`) quando o cliente precisa distinguir o caso para escolher a mensagem; nas demais respostas é `null`.
+- **Traduzir `kind` para status é do filtro**, e é a tabela inteira: `NOT_FOUND` 404 · `CONFLICT` 409 · `INVALID_INPUT` 400 · `UNAUTHORIZED` 401 · `FORBIDDEN` 403 · `UNAVAILABLE` 503. O 429 não passa por aqui: é o `ThrottleGuard` que o lança, já com `code` `RATE-001`.
+- `code` vem de um `*ErrorCodeEnum` de `@porto/contracts` (`AuthErrorCodeEnum`, `RegistrationErrorCodeEnum`, `CouponErrorCodeEnum`, `IncentiveErrorCodeEnum`, `RateLimitErrorCodeEnum`) quando o cliente precisa distinguir o caso para escolher a mensagem; nas demais respostas é `null`.
 - **Guard e controller continuam podendo lançar exceção do Nest** — eles já são a camada de HTTP.
 - 5xx é logado com stack e responde `Erro interno`: a mensagem original pode carregar nome de coluna ou detalhe de schema. 4xx não é logado. **Não logue a exceção você mesmo** — o filtro já faz.
 - O `ValidationPipe` global usa `whitelist`, `forbidNonWhitelisted`, `transform` e `stopAtFirstError`: campo fora do DTO devolve 400 sozinho, com uma mensagem por campo. Ele é montado em `configureApp` (`src/configure-app.ts`), junto com o filtro — nunca direto no `main.ts`, senão o e2e volta a testar uma configuração que produção não usa.

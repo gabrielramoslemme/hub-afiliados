@@ -33,6 +33,7 @@ function adminClaims(role: UserRoleEnum = UserRoleEnum.PORTO_ANALYST): AccessTok
     aud: AuthAudienceEnum.ADMIN,
     role,
     name: 'Analista Porto',
+    ver: 0,
   };
 }
 

@@ -1,10 +1,6 @@
 import { AuthAudienceEnum, UserRoleEnum, UserTypeEnum } from '@porto/contracts';
 import { AccessTokenIssuer } from '@Domain/auth/access-token';
-import {
-  AccountInactiveError,
-  InvalidCredentialsError,
-  PasswordNotSetError,
-} from '@Domain/auth/auth.errors';
+import { AccountInactiveError, InvalidCredentialsError } from '@Domain/auth/auth.errors';
 import { PasswordHasher } from '@Domain/auth/password-hasher';
 import { Clock } from '@Domain/shared/clock';
 import { UserRepository } from '@Domain/users/user.repository';
@@ -35,16 +31,14 @@ export class AdminLoginUseCase implements UseCase<AdminLoginInput, AdminLoginOut
   ) {}
 
   async execute(input: AdminLoginInput): Promise<AdminLoginOutput> {
-    const user = await this.userRepository.findByEmail(input.email);
+    const found = await this.userRepository.findByEmail(input.email);
+    const user = found?.type === UserTypeEnum.ADMIN && found.role ? found : null;
 
-    if (!user || user.type !== UserTypeEnum.ADMIN || !user.role) {
-      throw new InvalidCredentialsError();
-    }
-
-    if (!user.password) throw new PasswordNotSetError();
-
-    const matches = await this.passwordHasher.compare(input.password, user.password);
-    if (!matches) throw new InvalidCredentialsError();
+    // Toda tentativa compara uma senha, com ou sem conta: a resposta e o tempo
+    // dela são os mesmos para e-mail desconhecido, conta sem senha e senha
+    // errada. Distinguir os três entregaria a lista de quem opera o painel.
+    const matches = await this.passwordHasher.compare(input.password, user?.password ?? null);
+    if (!user?.role || !user.password || !matches) throw new InvalidCredentialsError();
 
     // A conta inativa só se revela depois de a senha conferir: antes disso,
     // a resposta contaria a quem tentou que aquele e-mail existe.
@@ -57,6 +51,7 @@ export class AdminLoginUseCase implements UseCase<AdminLoginInput, AdminLoginOut
       aud: AuthAudienceEnum.ADMIN,
       role: user.role,
       name: user.name,
+      ver: user.tokenVersion,
     });
 
     return {

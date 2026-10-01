@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { ValidateSessionUseCase } from '@Application/auth/validate-session.use-case';
 import { ACCESS_TOKEN_VERIFIER, AccessTokenVerifier } from '@Domain/auth/access-token';
 import { AuthenticatedRequest } from '../authenticated-request';
 import { IS_PUBLIC } from '../decorators/public.decorator';
@@ -17,7 +18,8 @@ function bearerOf(header?: string): string {
 }
 
 /**
- * Guard global: sem `@Public()` explícito, requisição sem token válido é 401.
+ * Guard global: sem `@Public()` explícito, requisição sem token válido é 401 —
+ * e token válido de sessão encerrada também.
  * A pergunta que ele responde — "este token é válido" — vale para a API
  * inteira; qual canal o token abre é do guard do canal, que lê o `auth` daqui
  * em vez de verificar a assinatura de novo.
@@ -27,6 +29,7 @@ export class AuthenticatedGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     @Inject(ACCESS_TOKEN_VERIFIER) private readonly accessTokenVerifier: AccessTokenVerifier,
+    private readonly validateSessionUseCase: ValidateSessionUseCase,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -42,7 +45,9 @@ export class AuthenticatedGuard implements CanActivate {
 
     if (!claims) throw new UnauthorizedException('Sessão expirada. Entre novamente.');
 
-    request.auth = claims;
+    // A assinatura diz que o token é nosso; o banco diz se a sessão ainda vale.
+    // O perfil que segue para o guard do canal é o gravado agora.
+    request.auth = await this.validateSessionUseCase.execute(claims);
 
     return true;
   }

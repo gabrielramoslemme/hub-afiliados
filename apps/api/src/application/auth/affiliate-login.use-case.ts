@@ -3,7 +3,6 @@ import { AccessTokenIssuer } from '@Domain/auth/access-token';
 import {
   AccountInactiveError,
   InvalidCredentialsError,
-  PasswordNotSetError,
   RegistrationRejectedError,
   RegistrationUnderReviewError,
 } from '@Domain/auth/auth.errors';
@@ -52,16 +51,14 @@ export class AffiliateLoginUseCase implements UseCase<AffiliateLoginInput, Affil
   ) {}
 
   async execute(input: AffiliateLoginInput): Promise<AffiliateLoginOutput> {
-    const user = await this.userRepository.findByEmail(input.email);
+    const found = await this.userRepository.findByEmail(input.email);
+    const user = found?.type === UserTypeEnum.AFFILIATE && found.affiliate ? found : null;
 
-    if (!user || user.type !== UserTypeEnum.AFFILIATE || !user.affiliate) {
-      throw new InvalidCredentialsError();
-    }
-
-    if (!user.password) throw new PasswordNotSetError();
-
-    const matches = await this.passwordHasher.compare(input.password, user.password);
-    if (!matches) throw new InvalidCredentialsError();
+    // Toda tentativa compara uma senha, com ou sem conta: a resposta e o tempo
+    // dela são os mesmos para e-mail desconhecido, conta sem senha e senha
+    // errada. Distinguir os três entregaria quem tem cadastro.
+    const matches = await this.passwordHasher.compare(input.password, user?.password ?? null);
+    if (!user?.affiliate || !user.password || !matches) throw new InvalidCredentialsError();
 
     if (!user.isActive) throw new AccountInactiveError();
 
@@ -74,6 +71,7 @@ export class AffiliateLoginUseCase implements UseCase<AffiliateLoginInput, Affil
       aud: AuthAudienceEnum.AFFILIATE,
       role: user.role,
       name: user.name,
+      ver: user.tokenVersion,
     });
 
     return {

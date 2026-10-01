@@ -7,7 +7,6 @@ import {
 import {
   AccountInactiveError,
   InvalidCredentialsError,
-  PasswordNotSetError,
   RegistrationRejectedError,
   RegistrationUnderReviewError,
 } from '@Domain/auth/auth.errors';
@@ -68,6 +67,7 @@ describe('AffiliateLoginUseCase', () => {
       aud: AuthAudienceEnum.AFFILIATE,
       role: UserRoleEnum.AFFILIATE,
       name: 'Marina Ferraz',
+      ver: 0,
     });
     expect(result).toEqual({
       accessToken: 'signed.access.token',
@@ -112,11 +112,14 @@ describe('AffiliateLoginUseCase', () => {
     await expect(useCase.execute(credentials)).rejects.toThrow(InvalidCredentialsError);
   });
 
-  it('reports an affiliate that has not created a password yet', async () => {
+  // "Ainda não criou a senha" contaria a quem tenta que o e-mail tem conta
+  // aprovada, sem acertar senha nenhuma.
+  it('answers the credential error to an affiliate that has not created a password yet', async () => {
     const account = signedUp(AffiliateStatusEnum.APPROVED);
     userRepository.findByEmail.mockResolvedValue({ ...account, password: null });
 
-    await expect(useCase.execute(credentials)).rejects.toThrow(PasswordNotSetError);
+    await expect(useCase.execute(credentials)).rejects.toThrow(InvalidCredentialsError);
+    expect(passwordHasher.compare).toHaveBeenCalledWith(credentials.password, null);
   });
 
   it('answers the credential error for an operator trying the affiliate portal', async () => {
@@ -125,8 +128,11 @@ describe('AffiliateLoginUseCase', () => {
     await expect(useCase.execute(credentials)).rejects.toThrow(InvalidCredentialsError);
   });
 
-  it('rejects an unknown email', async () => {
+  // O mesmo bcrypt de uma senha errada: responder antes contaria, pelo tempo,
+  // que aquele e-mail não tem conta.
+  it('rejects an unknown email after spending the same comparison', async () => {
     await expect(useCase.execute(credentials)).rejects.toThrow(InvalidCredentialsError);
+    expect(passwordHasher.compare).toHaveBeenCalledWith(credentials.password, null);
   });
 
   it('records the login instant', async () => {

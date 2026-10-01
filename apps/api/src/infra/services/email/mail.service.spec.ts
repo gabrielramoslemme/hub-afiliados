@@ -79,4 +79,22 @@ describe('MailService', () => {
     expect(logged).toContain(MailTemplateEnum.REGISTRATION_APPROVED);
     expect(logged.toLowerCase()).not.toContain('marina@example.com');
   });
+
+  // Quem pede recuperação não espera o e-mail sair, e o desligamento da API
+  // precisa esperar o que ainda está saindo.
+  it('lets whoever needs it wait for the emails still going out', async () => {
+    let finishRendering: (mail: RenderedMail) => void = () => undefined;
+    const mailRenderer: MailRenderer = {
+      render: jest.fn(() => new Promise<RenderedMail>((resolve) => (finishRendering = resolve))),
+    };
+    const mailProvider: MailProvider = { send: jest.fn().mockResolvedValue(undefined) };
+    const service = new MailService(mailRenderer, mailProvider);
+
+    void service.send(input);
+    const drained = service.drain();
+    finishRendering(rendered);
+    await drained;
+
+    expect(mailProvider.send).toHaveBeenCalled();
+  });
 });

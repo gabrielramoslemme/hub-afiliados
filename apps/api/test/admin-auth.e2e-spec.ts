@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { AuthErrorCodeEnum } from '@porto/contracts';
-import { createE2eApp, type E2eApp, resetDatabase } from './e2e-app';
+import { createE2eApp, type E2eApp, mailSettled, resetDatabase } from './e2e-app';
 import { insertOperator, lastLinkTo, OPERATOR, tokenOf } from './e2e-fixtures';
 
 describe('Admin authentication (e2e)', () => {
@@ -87,6 +87,7 @@ describe('Admin authentication (e2e)', () => {
       await insertOperator(e2e.dataSource);
 
       await forgotPassword().expect(204);
+      await mailSettled(e2e);
 
       expect(lastLinkTo(e2e.mail, OPERATOR.email).pathname).toBe('/admin/redefinir-senha');
     });
@@ -96,6 +97,7 @@ describe('Admin authentication (e2e)', () => {
 
       await forgotPassword().expect(204);
       await forgotPassword().expect(204);
+      await mailSettled(e2e);
 
       expect(e2e.mail.sentTo(OPERATOR.email)).toHaveLength(1);
     });
@@ -104,6 +106,7 @@ describe('Admin authentication (e2e)', () => {
   describe('POST /v1/admin/auth/reset-password', () => {
     async function recoveryToken(): Promise<string> {
       await forgotPassword().expect(204);
+      await mailSettled(e2e);
 
       return tokenOf(lastLinkTo(e2e.mail, OPERATOR.email));
     }

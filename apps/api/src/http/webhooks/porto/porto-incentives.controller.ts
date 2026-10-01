@@ -17,6 +17,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { IncentiveErrorCodeEnum } from '@porto/contracts';
 import { ApplyIncentiveEventUseCase } from '@Application/sales/apply-incentive-event.use-case';
 import { RecordInvalidIncentiveNotificationUseCase } from '@Application/sales/record-invalid-incentive-notification.use-case';
@@ -39,6 +40,9 @@ import { IncentiveNotificationResponseDto } from './dtos/incentive-notification.
 @ApiUnauthorizedResponse({ description: 'Assinatura ausente, inválida ou fora da janela' })
 @Public()
 @UseGuards(WebhookSignatureGuard)
+// Quem chama é a Porto, autenticada pela assinatura, e um 429 viraria venda
+// perdida: ela não reenvia sozinha.
+@SkipThrottle()
 @Controller('webhooks/porto/incentives')
 export class PortoIncentivesController {
   constructor(

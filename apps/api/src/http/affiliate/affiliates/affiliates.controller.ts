@@ -7,6 +7,7 @@ import {
 } from '@nestjs/swagger';
 import { CreateAffiliateUseCase } from '@Application/affiliates/create-affiliate.use-case';
 import { Public } from '@Http/shared/decorators/public.decorator';
+import { SignUpThrottle } from '@Http/shared/throttling/throttle-limits';
 import { CreateAffiliateRequestDto } from './dtos/create-affiliate.request.dto';
 import { CreateAffiliateResponseDto } from './dtos/create-affiliate.response.dto';
 
@@ -17,6 +18,7 @@ export class AffiliatesController {
 
   @Post()
   @Public()
+  @SignUpThrottle()
   @HttpCode(HttpStatus.CREATED)
   @ApiCreatedResponse({ type: CreateAffiliateResponseDto })
   @ApiBadRequestResponse({ description: 'Entrada inválida ou regra de cadastro violada' })

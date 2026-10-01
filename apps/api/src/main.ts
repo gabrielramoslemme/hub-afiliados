@@ -12,6 +12,9 @@ async function bootstrap(): Promise<void> {
   const configService = app.get<ConfigService<EnvironmentVariables, true>>(ConfigService);
 
   configureApp(app);
+  // O `docker stop` manda SIGTERM: sem os ganchos, o processo morre com e-mails
+  // de recuperação ainda saindo, e o link nunca chega.
+  app.enableShutdownHooks();
   configureApiDocs(app);
 
   await app.listen(configService.get('PORT', { infer: true }));

@@ -29,11 +29,16 @@ export class JwtAccessTokenService implements AccessTokenIssuer, AccessTokenVeri
       // `sub` e `aud` não há quem nem onde, e o guard não tem o que autorizar.
       if (!payload.sub || !payload.aud) return null;
 
+      // Token sem versão foi emitido antes de as sessões poderem ser encerradas:
+      // não há como saber se ainda vale, e entrar de novo custa pouco.
+      if (typeof payload.ver !== 'number') return null;
+
       return {
         sub: payload.sub,
         aud: payload.aud,
         role: payload.role ?? null,
         name: payload.name ?? '',
+        ver: payload.ver,
       };
     } catch {
       // Assinatura inválida e token expirado são a mesma resposta para quem

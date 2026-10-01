@@ -6,4 +6,5 @@ export const userRepositoryMock = (): jest.Mocked<UserRepository> => ({
   findById: jest.fn().mockResolvedValue(null),
   save: jest.fn(),
   updateWithAudit: jest.fn(),
+  revokeSessions: jest.fn().mockResolvedValue(undefined),
 });

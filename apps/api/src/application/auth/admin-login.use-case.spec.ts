@@ -1,9 +1,5 @@
 import { AuthAudienceEnum, UserRoleEnum, UserTypeEnum } from '@porto/contracts';
-import {
-  AccountInactiveError,
-  InvalidCredentialsError,
-  PasswordNotSetError,
-} from '@Domain/auth/auth.errors';
+import { AccountInactiveError, InvalidCredentialsError } from '@Domain/auth/auth.errors';
 import { buildAdminUser, buildUser } from '@Testing/factories/user.factory';
 import { userRepositoryMock } from '@Testing/mocks/repositories/user.repository.mock';
 import { accessTokenIssuerMock } from '@Testing/mocks/services/access-token-issuer.mock';
@@ -40,6 +36,7 @@ describe('AdminLoginUseCase', () => {
       aud: AuthAudienceEnum.ADMIN,
       role: UserRoleEnum.PORTO_ANALYST,
       name: 'Analista Porto',
+      ver: 0,
     });
     expect(result).toEqual({
       accessToken: 'signed.access.token',
@@ -65,8 +62,9 @@ describe('AdminLoginUseCase', () => {
     });
   });
 
-  it('rejects an unknown email', async () => {
+  it('rejects an unknown email after spending the same comparison', async () => {
     await expect(useCase.execute(credentials)).rejects.toThrow(InvalidCredentialsError);
+    expect(passwordHasher.compare).toHaveBeenCalledWith(credentials.password, null);
   });
 
   it('answers the same error for an affiliate trying the panel', async () => {
@@ -83,13 +81,14 @@ describe('AdminLoginUseCase', () => {
     await expect(useCase.execute(credentials)).rejects.toThrow(InvalidCredentialsError);
   });
 
-  it('reports an operator without a password', async () => {
+  it('answers the credential error to an operator without a password', async () => {
     userRepository.findByEmail.mockResolvedValue({
       ...buildAdminUser({ password: null }),
       affiliate: null,
     });
 
-    await expect(useCase.execute(credentials)).rejects.toThrow(PasswordNotSetError);
+    await expect(useCase.execute(credentials)).rejects.toThrow(InvalidCredentialsError);
+    expect(passwordHasher.compare).toHaveBeenCalledWith(credentials.password, null);
   });
 
   it('reports an inactive operator whose password checks out', async () => {

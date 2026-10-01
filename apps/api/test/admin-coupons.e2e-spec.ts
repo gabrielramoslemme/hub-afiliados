@@ -48,11 +48,19 @@ describe('Admin coupons (e2e)', () => {
     });
 
     it('refuses a token of the affiliate channel', async () => {
+      // Uma conta de verdade: o guard global confere a sessão no banco, e um
+      // `sub` inventado pararia ali, com 401, antes do guard do canal.
+      await register(e2e.app, MARINA);
+      const [{ public_id: sub }] = await e2e.dataSource.query(
+        'SELECT public_id FROM users WHERE email = $1',
+        [MARINA.email],
+      );
       const affiliateToken = await e2e.app.get<AccessTokenIssuer>(ACCESS_TOKEN_ISSUER).issue({
-        sub: '00000000-0000-4000-8000-000000000000',
+        sub,
         aud: AuthAudienceEnum.AFFILIATE,
         role: UserRoleEnum.AFFILIATE,
         name: 'Marina Ferraz',
+        ver: 0,
       });
 
       await availability('MARINA25', affiliateToken).expect(403);
