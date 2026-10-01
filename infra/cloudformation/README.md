@@ -20,8 +20,9 @@ Imperva Cloud WAF          TLS para o navegador, certificado da Porto
 CloudFront                 mesmo certificado, importado no ACM us-east-1
    │                       nome ESTÁVEL — é o origin que a Imperva registra
    │                       cache só em /_next/static/*, resto passa direto
-   ▼  :80, em claro
-EC2 (subnet pública, Elastic IP)   security group: uma porta, só CloudFront
+   ▼  :80, por VPC origin — rede interna da AWS, até o IP privado
+EC2 (subnet privada, sem IP público)   security group: uma porta, só CloudFront
+   │                       sai para ECR, SSM, Resend e Porto pelo NAT Gateway
    │  caddy   :80    auto_https off — não há certificado nesta máquina
    │    ├─ Host dev.<domínio>      → /v1/* em api:3000, o resto em web:3005
    │    └─ Host api-dev.<domínio>  → api:3000, só /v1/*
@@ -30,13 +31,12 @@ EC2 (subnet pública, Elastic IP)   security group: uma porta, só CloudFront
    └────────────────────► RDS Postgres 16 (subnets privadas, 2 AZs)
 ```
 
-**Não há ALB, NAT Gateway, ASG, Multi-AZ nem alarmes.** Cada um foi recusado por
-um motivo, não por esquecimento:
+**Não há ALB, ASG, Multi-AZ nem alarmes.** Cada um foi recusado por um motivo,
+não por esquecimento:
 
 | Ausente | Por quê |
 |---|---|
 | ALB (~US$ 18/mês) | O CloudFront já é o ponto de entrada, e o roteamento por host é do Caddy. O ALB não faria nada que já não esteja feito. |
-| NAT Gateway (~US$ 33/mês) | A instância fica em subnet pública com Elastic IP e alcança ECR, SSM, Secrets Manager e Resend pelo internet gateway. O que a protege é o security group. |
 | Multi-AZ, ASG | É ambiente de desenvolvimento. Cair e voltar é aceitável; pagar o dobro por isso não. |
 | Alarmes e SNS | Higiene de produção. Em dev quem percebe que quebrou é quem está usando. O log group fica, com 14 dias de retenção. |
 
@@ -47,25 +47,31 @@ Duas razões, e a segunda é a que decidiu:
 1. **Termina o TLS** com o certificado que a segurança da informação da Porto
    emite, importado no ACM em `us-east-1`.
 2. **Dá um nome estável para a Imperva apontar.** Sem ele, o *origin* registrado
-   lá seria o Elastic IP — e recriar a stack viraria um pedido de mudança no
+   lá seria um IP da instância — e recriar a stack viraria um pedido de mudança no
    time do Diego, no tempo deles. Com o CloudFront, o `dxxxx.cloudfront.net`
    nunca muda, mesmo que a instância seja destruída e refeita.
 
 O que ele **não** faz é servir o app como site estático: o `middleware.ts` de
 `/admin` e as sete Server Actions exigem runtime Node. O origin é a EC2.
 
-## A instância tem uma porta aberta, e só o CloudFront a alcança
+## A instância não tem IP público, e só o CloudFront a alcança
+
+A instância mora numa subnet privada, **sem endereço público** — nos dois
+ambientes. O CloudFront chega nela por **VPC origin**: entra na VPC por uma ENI
+que ele mesmo gerencia e fala com o IP privado, sem passar pela internet. A
+saída da instância (ECR, SSM, Secrets Manager, Resend, gateway da Porto) vai
+pelo NAT Gateway da subnet pública, cujo Elastic IP é o output `EgressIp`.
 
 O security group aceita **apenas a 80**, e apenas das faixas da prefix list
 gerenciada `com.amazonaws.global.cloudfront.origin-facing`. Não há 443 porque
-não há certificado na máquina, e não há ACME porque não há o que emitir. Quem
-souber o Elastic IP não consegue nada com ele.
+não há certificado na máquina, e não há ACME porque não há o que emitir. Sem IP
+público a regra é a segunda barreira, não a primeira.
 
-> **A perna CloudFront → origin vai em claro.** É o preço de não ter certificado
-> na instância. O que a limita é o security group. **Aceitável em dev, não em
-> produção**: lá, um nome de origin próprio com certificado válido e
-> `OriginProtocolPolicy: https-only` fecham isso. Está marcado no template, no
-> ponto exato.
+> **A perna CloudFront → origin continua em HTTP**, mas dentro da rede da AWS e
+> só até o IP privado. Até este template o dev era diferente: instância em
+> subnet pública com Elastic IP, e o CloudFront falando HTTP com ela **pela
+> internet**, com o security group como única barreira. Isso acabou — ver
+> [*Migrar o dev para VPC origin*](#migrar-o-dev-para-vpc-origin).
 
 ## A API é pública, e mesmo assim não é o navegador da web que fala com ela
 
@@ -198,9 +204,9 @@ Se a conta já tiver o provider OIDC do GitHub, acrescente
 
 **2. Entregar o `CloudFrontDomainName` para a Porto.** Só quando for plugar o
 domínio — no primeiro modo não há o que pedir a ninguém. É esse output, e só ele,
-que sai da nossa mão: é o alvo dos dois CNAMEs e o origin da RDM da Imperva. O
-Elastic IP **não** vai para eles — virou detalhe interno, e é isso que o
-CloudFront comprou. **A stack não cria registro de DNS**: a zona fica no
+que sai da nossa mão: é o alvo dos dois CNAMEs e o origin da RDM da Imperva. A
+instância nem tem endereço público para dar a eles — e é isso que o CloudFront
+comprou. **A stack não cria registro de DNS**: a zona fica no
 servidor on premise deles, e é gente de lá que aponta o nome. A tabela de *O que
 depende da Porto* diz o que pedir, a quem, e em que ordem.
 
@@ -212,7 +218,8 @@ dig +short api-dev.hubafiliados.com.br @1.1.1.1  # idem
 ```
 
 Com a Imperva na frente o CNAME é dela, e o CloudFront aparece só como origin
-na RDM — nesse caso o que se confirma é que a resposta **não** é o Elastic IP.
+na RDM — nesse caso o que se confirma é que a resposta é um IP da Imperva, e não
+do CloudFront.
 
 **3. Gravar as credenciais da Porto e injetar a chave do Resend.** As
 credenciais **antes do primeiro deploy**: a API sempre fala com o gateway
@@ -268,7 +275,7 @@ coisas que não têm flag equivalente.
 
 | Console | Conferir | Se der ruim |
 |---|---|---|
-| Seletor de região | Dev: **N. Virginia (us-east-1)**. Prod: **Canada (Central) (ca-central-1)** | Em dev o origin é montado como `ec2-<ip>.compute-1.amazonaws.com`, que é o sufixo de us-east-1: fora dela o CloudFront não acha a instância. Prod usa VPC origin e não depende disso. O certificado do ACM fica em us-east-1 nos dois casos |
+| Seletor de região | Dev: **N. Virginia (us-east-1)**. Prod: **Canada (Central) (ca-central-1)** | O prefix list do CloudFront muda de id por região (linha abaixo), e o VPC origin não funciona em uma zona de cada região — `use1-az3`, `cac1-az3`. O certificado do ACM fica em us-east-1 nos dois casos |
 | **IAM → Identity providers** | Existe `token.actions.githubusercontent.com`? Se sim, abra e confirme que *Audiences* contém `sts.amazonaws.com` | Existindo, use `CreateGitHubOidcProvider=false`: criar o segundo falha com `EntityAlreadyExists` e o rollback leva a stack inteira. Audience diferente faz o assume-role ser recusado sem dizer por quê |
 | Prefix list do CloudFront | O id de `com.amazonaws.global.cloudfront.origin-facing` **nesta** região | Prefix list gerenciada tem id diferente por região, e o console da VPC esconde as da AWS. O comando está na descrição do parâmetro `CloudFrontPrefixListId`. Errando, o security group não cria e a stack para em segundos com `InvalidPrefixListID.NotFound` — antes do RDS e do CloudFront |
 
@@ -291,8 +298,9 @@ coisas que não têm flag equivalente.
      nos updates seguintes.**
    - Marque **"I acknowledge that AWS CloudFormation might create IAM resources
      with custom names"** — é o `CAPABILITY_NAMED_IAM`.
-6. **Submit**, e acompanhe a aba *Events*. Conte **20 a 30 minutos**: o RDS come
-   ~10, o CloudFront ~10 a 15, e a instância sinaliza em até `PT15M`.
+6. **Submit**, e acompanhe a aba *Events*. Conte **30 a 40 minutos**: o RDS come
+   ~10, a instância sinaliza em até `PT15M`, e só depois dela nascem o VPC
+   origin e a distribuição, ~10 a 15 cada.
 
 Se falhar, a razão está na primeira linha `CREATE_FAILED` de baixo para cima em
 *Events*. Instância estourando o sinal → **Systems Manager → Session Manager →
@@ -418,9 +426,84 @@ pedir o curinga de uma vez, e por isso resolver internamente quantos hostnames
 queremos antes de abrir o primeiro chamado.
 
 O que sai da nossa mão é **um valor só**: o output `CloudFrontDomainName`. É o
-origin que a Imperva registra e o alvo dos dois CNAMEs. O Elastic IP não vai
-para eles — virou detalhe interno, e é justamente isso que o CloudFront comprou:
+origin que a Imperva registra e o alvo dos dois CNAMEs. A instância não tem
+endereço público para entrar nessa conversa, e é justamente isso que o CloudFront comprou:
 recriar a stack não obriga ninguém da Porto a mexer em nada.
+
+## Migrar o dev para VPC origin
+
+A `porto-hub-dev` criada antes deste template tem a instância na subnet pública,
+com Elastic IP, e o CloudFront falando HTTP com ela pela internet. O update a
+leva para o desenho de prod: subnet privada (`AppSubnetA`), VPC origin e NAT.
+
+**O que muda para quem opera o dev:**
+
+- **A instância é substituída** — muda a subnet. A nova nasce vazia, e do
+  momento em que a distribuição passa para o VPC origin até o deploy seguinte o
+  CloudFront devolve 502/504. Conte **30 a 40 minutos** de ambiente fora: o VPC
+  origin leva 10 a 15, a distribuição mais 5 a 10, e o deploy só pode rodar
+  depois do `UPDATE_COMPLETE` — o `cd.yml` lê o `InstanceId` dos outputs.
+- **O Elastic IP da instância é liberado**, e o output `ElasticIpAddress` some.
+  A saída passa a ser o NAT, com IP novo no output `EgressIp`: se alguém tiver
+  liberado o IP antigo numa allowlist (a Sensedia de HML, por exemplo), avise
+  antes.
+- **+~US$ 33/mês** do NAT Gateway — ver *Custo aproximado*.
+- Session Manager, `npm run db:tunnel`, `db:password` e o Swagger pelo túnel
+  continuam iguais; o id da instância muda, e eles o leem dos outputs.
+  `DbAccessCidr` não é tocado.
+
+**1. Conferir a zona.** VPC origin não funciona na `use1-az3`, e a instância
+nova vai para a mesma zona da `PrivateSubnetA`, onde está o banco:
+
+```bash
+aws ec2 describe-subnets --region us-east-1 \
+  --filters Name=tag:Name,Values=porto-hub-dev-private-a \
+  --query 'Subnets[0].AvailabilityZoneId' --output text
+```
+
+Se sair `use1-az3`, **pare**: o `PrimaryAvailabilityZone` também move a
+`PrivateSubnetA`, que o RDS está usando. O caminho é dar à `AppSubnetA` uma
+zona própria no template, aceitando o tráfego cross-AZ com o banco. Se o
+update for executado mesmo assim, ele falha no `VpcOrigin` e o rollback devolve
+a instância antiga.
+
+**2. Merge antes do update.** Este template também torna as tags do ECR
+imutáveis, e a CI anterior publicava `latest` a cada build — o primeiro push
+depois do update falharia. O merge na `development` faz deploy ainda na stack
+antiga, e funciona: o `install-release.sh` novo só deixou de escrever o
+`API_MOCKING`.
+
+**3. Update por change set.** O parâmetro `ApiMocking` saiu do template, então
+ele sai da lista de `UsePreviousValue` — senão o change set é recusado:
+
+```bash
+params="$(aws cloudformation describe-stacks --stack-name porto-hub-dev --region us-east-1 \
+  --query 'Stacks[0].Parameters[].ParameterKey' --output text \
+  | tr '\t' '\n' | grep -vx ApiMocking | sed 's/.*/ParameterKey=&,UsePreviousValue=true/')"
+
+# shellcheck disable=SC2086 — a lista é para ser quebrada em palavras
+aws cloudformation create-change-set --stack-name porto-hub-dev --change-set-name vpc-origin \
+  --template-body file://infra/cloudformation/porto-hub-stack.yaml \
+  --parameters $params --capabilities CAPABILITY_NAMED_IAM --region us-east-1
+
+aws cloudformation describe-change-set --stack-name porto-hub-dev --change-set-name vpc-origin \
+  --region us-east-1 --query 'Changes[].ResourceChange.[LogicalResourceId,Action,Replacement]' --output table
+```
+
+O esperado:
+
+| Ação | Recursos |
+|---|---|
+| `Add` | `AppSubnetA`, `AppSubnetARouteTableAssociation`, `NatElasticIp`, `NatGateway`, `PrivateRouteTable`, `PrivateRoute`, `VpcOrigin` |
+| `Remove` | `ElasticIp`, `ElasticIpAssociation`, `OriginAddressReady` |
+| `Modify` | `Instance` (**`Replacement: True`**), `Distribution`, `PublicSubnetA`, `PrivateRoutesReady`, `ConfigParameter`, `GitHubOidcRole`, `ApiRepository`, `WebRepository` |
+
+**`Replacement: True` em qualquer coisa além da `Instance`, pare** — sobretudo
+no `Database`.
+
+**4. Deploy logo depois do `UPDATE_COMPLETE`.** *Actions → CD → Run workflow*
+na `development`, com o `imageTag` da release no ar (o SHA do último deploy).
+Depois, `WebUrl` no navegador e o ponta a ponta de *Verificação*.
 
 ## Produção
 
@@ -431,9 +514,9 @@ docs (`specs/21-ambiente-de-producao.md`).
 | | dev | prod |
 |---|---|---|
 | Região | `us-east-1` | **`ca-central-1`** (Montreal) |
-| Instância | subnet pública, Elastic IP | **subnet privada, sem IP público** |
-| CloudFront → instância | HTTP pela internet, SG só aceita o CloudFront | **VPC origin**: rede interna da AWS, até o IP privado |
-| Saída para a internet | internet gateway, pelo Elastic IP | **NAT Gateway**; o IP de saída é o output `EgressIp` |
+| Instância | subnet privada (`AppSubnetA`), sem IP público | subnet privada (`PrivateSubnetA`), sem IP público |
+| CloudFront → instância | VPC origin: rede interna da AWS, até o IP privado | idem |
+| Saída para a internet | NAT Gateway; o IP de saída é o output `EgressIp` | idem |
 | VPC | `10.0.0.0/16` | `10.1.0.0/16` |
 | RDS | single-AZ, backup 1 dia | **Multi-AZ**, backup 14 dias, `DeletionProtection`, disco até 100 GB |
 | Acesso direto ao banco | `DbAccessCidr` opcional | `DbAccessCidr` opcional, com **subnets próprias do banco**, senhas de **64** caracteres, TLS obrigatório no parameter group e **log de cada conexão** no CloudWatch |
@@ -935,12 +1018,19 @@ curl -sS -H 'Host: dev.hubafiliados.com.br' http://127.0.0.1/ -o /dev/null -w '%
 |---|---|
 | EC2 `t3.small` | 16,64 |
 | EBS 20 GB gp3 | 1,60 |
-| IPv4 público | 3,65 |
+| NAT Gateway (sem contar dados) | 32,85 |
+| Elastic IP do NAT | 3,65 |
 | RDS `db.t4g.micro` + 20 GB gp3 | 13,98 |
 | Secrets Manager (3 segredos) | 1,20 |
 | CloudFront (tráfego de dev) | ~0,50 |
 | ECR, S3, CloudWatch | ~0,70 |
-| **Total** | **~US$ 38** |
+| **Total** | **~US$ 71** |
+
+O NAT Gateway é metade da conta, e é o preço de o dev ter a mesma rede de prod:
+até este template a instância ficava em subnet pública com Elastic IP, o total
+era ~US$ 38, e o CloudFront falava HTTP com ela pela internet. Além da hora, o
+NAT cobra US$ 0,045 por GB processado — no volume de dev (imagens do ECR a cada
+deploy, logs, chamadas à Porto e ao Resend) são centavos a poucos dólares.
 
 O CloudFront cobra por requisição e por GB de saída; no volume de um ambiente de
 desenvolvimento fica em trocados, e conta com o nível gratuito da AWS no primeiro
