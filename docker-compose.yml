@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # Digest fixo, o mesmo do serviço do e2e no ci.yml. Atualizar é
+    # `docker buildx imagetools inspect postgres:16-alpine` e trocar nos dois.
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     container_name: porto-hub-afiliados-db
     environment:
       POSTGRES_USER: porto

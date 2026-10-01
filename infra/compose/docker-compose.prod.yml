@@ -7,7 +7,10 @@ services:
   # Termina o TLS e é o único serviço exposto à internet. Fica na `egress` para
   # alcançar o Let's Encrypt, e na `internal` para chegar na web.
   caddy:
-    image: caddy:2-alpine
+    # Digest e não só a tag: com `2-alpine` sozinho, cada `compose pull` do
+    # deploy podia trazer um Caddy diferente sem commit nenhum. Atualizar é
+    # `docker buildx imagetools inspect caddy:2-alpine` e trocar o digest.
+    image: caddy:2-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
     restart: unless-stopped
     # Só a 80: o TLS termina no CloudFront, com o certificado da Porto, e o
     # security group não abre a 443 nesta máquina.
