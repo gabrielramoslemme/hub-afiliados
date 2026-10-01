@@ -816,7 +816,7 @@ aplicação e deixar o master fora de circulação.
 | Senha do master | output `ReadDbPasswordCommand` — só para o que exige DDL |
 | Senha inicial do painel | output `ReadSeedPasswordCommand` |
 | Logs | CloudWatch, grupo `/porto-hub/dev`, streams `api`, `web` e `caddy` |
-| Rollback | *Actions → CD → Run workflow* **na branch do ambiente** (`development`; em prod, `main` com `stackName=porto-hub-prod` e `environment=production`), com o `imageTag` anterior (o ECR guarda as 10 últimas). De outra branch a role recusa o token |
+| Rollback | *Actions → CD → Run workflow* **na branch do ambiente** (`development`; em prod, `main` com `stackName=porto-hub-prod` e `environment=production`), com o `imageTag` anterior (o ECR guarda as 10 últimas, e a tag é **imutável**: o SHA aponta sempre para a mesma imagem, e não existe `latest`). De outra branch a role recusa o token |
 | Certificados | copiados para `s3://<bucket-de-deploy>/caddy-data.tgz` a cada release e restaurados em instância nova |
 
 O seed roda a cada deploy e é idempotente (`ON CONFLICT DO NOTHING`): não

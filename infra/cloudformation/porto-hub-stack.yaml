@@ -852,10 +852,15 @@ Resources:
           Value: !Sub 'porto-hub-${EnvironmentName}-db'
 
   # =========================================================== Registro e deploy
+  # Tags imutaveis: o deploy e por SHA, e uma tag que pudesse ser regravada
+  # deixaria o rollback para "a tag anterior" apontar para outra imagem. Quem
+  # tem a role de deploy tambem nao consegue trocar, por baixo, a imagem de uma
+  # release ja aprovada. Por isso a CI nao publica mais `latest`.
   ApiRepository:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: !Sub 'porto-hub-${EnvironmentName}/api'
+      ImageTagMutability: IMMUTABLE
       ImageScanningConfiguration:
         ScanOnPush: true
       EmptyOnDelete: true
@@ -869,6 +874,7 @@ Resources:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: !Sub 'porto-hub-${EnvironmentName}/web'
+      ImageTagMutability: IMMUTABLE
       ImageScanningConfiguration:
         ScanOnPush: true
       EmptyOnDelete: true

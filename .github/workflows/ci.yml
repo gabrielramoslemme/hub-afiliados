@@ -173,6 +173,26 @@ jobs:
       - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
         if: env.PUBLISH == 'true'
 
+      # As tags no ECR sao imutaveis. Re-executar um workflow cujo `images` ja
+      # publicou este SHA falharia no push com ImageTagAlreadyExistsException;
+      # a imagem que esta la saiu deste mesmo commit, entao pular e o certo.
+      - name: Conferir o que ja foi publicado
+        id: published
+        if: env.PUBLISH == 'true'
+        env:
+          API_REPO: ${{ steps.stack.outputs.ApiRepositoryUri }}
+          WEB_REPO: ${{ steps.stack.outputs.WebRepositoryUri }}
+        run: |
+          set -euo pipefail
+          published() {
+            # O nome do repositorio e o URI sem o host do registro.
+            count="$(aws ecr batch-get-image --repository-name "${1#*/}" \
+              --image-ids imageTag="$GITHUB_SHA" --query 'length(images)' --output text)"
+            if [ "$count" -gt 0 ]; then echo true; else echo false; fi
+          }
+          echo "api=$(published "$API_REPO")" >> "$GITHUB_OUTPUT"
+          echo "web=$(published "$WEB_REPO")" >> "$GITHUB_OUTPUT"
+
       # `linux/amd64` explicito para casar com a AMI x86_64 da stack. O `bcrypt`
       # e modulo nativo: imagem de arquitetura errada sobe e so quebra no
       # primeiro login, em runtime.
@@ -181,24 +201,26 @@ jobs:
       # imagem. E o que faz o segundo push do dia reaproveitar o `npm ci` em vez
       # de baixar o mundo de novo.
       - name: API
+        if: env.PUBLISH != 'true' || steps.published.outputs.api != 'true'
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: apps/api/Dockerfile
           platforms: linux/amd64
           push: ${{ env.PUBLISH == 'true' }}
-          tags: ${{ env.PUBLISH == 'true' && format('{0}:{1},{0}:latest', steps.stack.outputs.ApiRepositoryUri, github.sha) || 'porto-hub/api:ci' }}
+          tags: ${{ env.PUBLISH == 'true' && format('{0}:{1}', steps.stack.outputs.ApiRepositoryUri, github.sha) || 'porto-hub/api:ci' }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
 
       - name: Web
+        if: env.PUBLISH != 'true' || steps.published.outputs.web != 'true'
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: apps/web/Dockerfile
           platforms: linux/amd64
           push: ${{ env.PUBLISH == 'true' }}
-          tags: ${{ env.PUBLISH == 'true' && format('{0}:{1},{0}:latest', steps.stack.outputs.WebRepositoryUri, github.sha) || 'porto-hub/web:ci' }}
+          tags: ${{ env.PUBLISH == 'true' && format('{0}:{1}', steps.stack.outputs.WebRepositoryUri, github.sha) || 'porto-hub/web:ci' }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
 
