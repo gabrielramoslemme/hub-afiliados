@@ -79,6 +79,8 @@ export enum AuthErrorCodeEnum {
   INVALID_TOKEN = 'AUTH-006',
   /** Senha atual errada na confirmação de uma troca sensível, como a da chave PIX ou do e-mail. */
   WRONG_PASSWORD = 'AUTH-007',
+  /** Senha errada vezes demais seguidas: a conta fica travada por alguns minutos. */
+  TOO_MANY_ATTEMPTS = 'AUTH-008',
 }
 
 /** O que uma linha do extrato do afiliado é: entrada de incentivo ou pagamento. */
