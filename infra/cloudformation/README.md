@@ -223,9 +223,14 @@ A chave do Resend nasce `REPLACE_ME`, e só precisa de valor para usar
 `MailProvider=resend`:
 
 ```bash
-echo -n 're_sua_chave' > resend_key.txt
+# `read -s` em vez de `echo 're_…'`: a chave não entra no histórico do shell, e o
+# umask 077 do subshell cria o arquivo legível só por você.
+# O prompt vem do printf porque `read -p` no zsh é outra coisa (coprocesso).
+( umask 077; printf 'Chave do Resend: '; read -rs k; printf '%s' "$k" > resend_key.txt )
 # O comando exato sai no output SetResendKeyCommand; ele lê de arquivo, nunca de
-# argv, porque segredo em argv fica visível em `ps` e no histórico do shell.
+# argv, porque segredo em argv fica visível em `ps` e no histórico do shell. O
+# JSON intermediário, com o segredo inteiro, nasce com umask 077 e é apagado
+# mesmo se o put falhar.
 ```
 
 Enquanto o domínio não estiver verificado no Resend, suba com
@@ -338,9 +343,10 @@ testes. As credenciais moram no segredo `PortoSecret`, que nasce com
 argv:
 
 ```bash
-cat > porto_secret.json <<'JSON'
-{"client_id":"<client_id>","client_secret":"<client_secret>","webhook_secret":"<segredo>"}
-JSON
+# Pelo editor, e não por heredoc colado no terminal: o heredoc vai inteiro para o
+# histórico do shell. O umask 077 cria o arquivo legível só por você.
+( umask 077; touch porto_secret.json ) && "${EDITOR:-vi}" porto_secret.json
+# {"client_id":"<client_id>","client_secret":"<client_secret>","webhook_secret":"<segredo>"}
 # O comando exato sai no output SetPortoSecretCommand; ele apaga o arquivo no fim.
 ```
 

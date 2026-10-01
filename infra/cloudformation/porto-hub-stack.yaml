@@ -1699,9 +1699,14 @@ Outputs:
 
   # O valor vem de ARQUIVO, nunca de argv: segredo em argv fica visivel em `ps`
   # e no historico do shell - exatamente o que tira-lo do template evitou.
+  #
+  # O secret.json e o segredo INTEIRO, JWT_SECRET junto. Por isso nasce com
+  # umask 077, dentro de um subshell para nao mudar o umask de quem cola, e e
+  # apagado mesmo quando o put falha - so o resend_key.txt fica, para a nova
+  # tentativa. `rc`, e nao `status`: no zsh `status` e somente leitura.
   SetResendKeyCommand:
     Description: Injeta o RESEND_API_KEY lendo de ./resend_key.txt, preservando os demais campos
-    Value: !Sub 'aws secretsmanager get-secret-value --secret-id ${AppSecret} --region ${AWS::Region} --query SecretString --output text | python3 -c ''import json,sys;s=json.load(sys.stdin);s["resend_api_key"]=open("resend_key.txt").read().strip();sys.stdout.write(json.dumps(s))'' > secret.json && aws secretsmanager put-secret-value --secret-id ${AppSecret} --region ${AWS::Region} --secret-string file://secret.json && rm -f secret.json resend_key.txt'
+    Value: !Sub '(umask 077 && aws secretsmanager get-secret-value --secret-id ${AppSecret} --region ${AWS::Region} --query SecretString --output text | python3 -c ''import json,sys;s=json.load(sys.stdin);s["resend_api_key"]=open("resend_key.txt").read().strip();sys.stdout.write(json.dumps(s))'' > secret.json && aws secretsmanager put-secret-value --secret-id ${AppSecret} --region ${AWS::Region} --secret-string file://secret.json; rc=$?; rm -f secret.json; [ $rc -eq 0 ] && rm -f resend_key.txt; exit $rc)'
 
   # Mesmo cuidado do SetResendKeyCommand: o valor vem de arquivo, nunca de argv.
   # O arquivo e o JSON inteiro do segredo, com as tres chaves.

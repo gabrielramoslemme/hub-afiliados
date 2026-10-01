@@ -92,6 +92,17 @@ AVISO
   exit 1
 }
 
+# Lê um campo do JSON de segredo que chega pela entrada padrão. O segredo nunca
+# vai para a linha de comando: argv de qualquer processo aparece inteiro em
+# `ps` e em /proc/<pid>/cmdline para todo usuário do host, durante toda a vida
+# do processo. `printf` é builtin do bash, e por isso o pipe não expõe nada.
+# Com o segundo argumento, o campo é opcional e cai nele quando falta.
+secret_field() {
+  python3 -c 'import json,sys
+s = json.load(sys.stdin)
+print(s[sys.argv[1]] if len(sys.argv) < 3 else s.get(sys.argv[1], sys.argv[2]))' "$@"
+}
+
 write_secret_files() {
   set +x
 
@@ -102,25 +113,27 @@ write_secret_files() {
   app_secret="$(aws secretsmanager get-secret-value --secret-id "${APP_SECRET_ARN}" \
     --region "${AWS_REGION}" --query SecretString --output text)"
 
-  database_url="$(python3 -c 'import json,sys,urllib.parse as u
-s = json.loads(sys.argv[1])
+  # O JSON vem pela entrada padrão; só o host e o nome do banco, que não são
+  # segredo, vão como argumento.
+  database_url="$(printf '%s' "${db_secret}" | python3 -c 'import json,sys,urllib.parse as u
+s = json.load(sys.stdin)
 # A senha é gerada sem pontuação, mas passar pelo quote mantém o script correto
 # se alguém trocar a senha à mão por uma com "@" ou "/".
 print("postgres://%s:%s@%s:5432/%s" % (
     u.quote(s["username"], safe=""), u.quote(s["password"], safe=""),
-    sys.argv[2], sys.argv[3]))' "${db_secret}" "${DB_HOST}" "${DB_NAME}")"
+    sys.argv[1], sys.argv[2]))' "${DB_HOST}" "${DB_NAME}")"
 
-  jwt_secret="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["jwt_secret"])' "${app_secret}")"
-  resend_key="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["resend_api_key"])' "${app_secret}")"
+  jwt_secret="$(printf '%s' "${app_secret}" | secret_field jwt_secret)"
+  resend_key="$(printf '%s' "${app_secret}" | secret_field resend_api_key)"
 
   # O segredo nasce com REPLACE_ME e é preenchido à mão depois do create. Falhar
   # aqui, antes de tocar em container, é melhor que subir uma API que só descobre
   # a credencial falsa na primeira aprovação de cupom.
   porto_secret="$(aws secretsmanager get-secret-value --secret-id "${PORTO_SECRET_ARN}" \
     --region "${AWS_REGION}" --query SecretString --output text)"
-  PORTO_CLIENT_ID="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["client_id"])' "${porto_secret}")"
-  PORTO_CLIENT_SECRET="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["client_secret"])' "${porto_secret}")"
-  PORTO_WEBHOOK_SECRET="$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("webhook_secret",""))' "${porto_secret}")"
+  PORTO_CLIENT_ID="$(printf '%s' "${porto_secret}" | secret_field client_id)"
+  PORTO_CLIENT_SECRET="$(printf '%s' "${porto_secret}" | secret_field client_secret)"
+  PORTO_WEBHOOK_SECRET="$(printf '%s' "${porto_secret}" | secret_field webhook_secret '')"
   if [ "${PORTO_CLIENT_ID}" = REPLACE_ME ] || [ "${PORTO_CLIENT_SECRET}" = REPLACE_ME ]; then
     echo "FALHA: as credenciais da Porto ainda são REPLACE_ME no ${PORTO_SECRET_ARN}." >&2
     echo "Grave-as com o comando do output SetPortoSecretCommand e rode o deploy de novo." >&2
