@@ -231,7 +231,16 @@ export type ApproveAffiliateFormValues = z.input<typeof approveAffiliateSchema>;
  * `cpf-cnpj-validator`. Reimplementar o cálculo criaria uma segunda fonte da
  * mesma regra; o `INVALID_CPF` da resposta vira erro no campo do CPF.
  */
-const FULL_NAME_PATTERN = /^\S+(\s+\S+)+$/;
+/*
+  Só letra (com o acento composto ou separado), espaço, apóstrofo — o reto e o
+  tipográfico, que o teclado do celular troca sozinho — e hífen. O nome vai no
+  e-mail que a Porto manda e aparece no painel: com dígito, ponto, barra ou dois
+  pontos ele carregaria um endereço, e o e-mail viraria phishing assinado por
+  ela. Espaço é só o espaço: quebra de linha forjaria uma linha a mais no e-mail.
+*/
+export const FULL_NAME_CHARACTERS_PATTERN = /^[\p{L}\p{M}'’ -]+$/u;
+/** Nome e sobrenome, cada palavra começando por letra. */
+export const FULL_NAME_PATTERN = /^\p{L}[\p{L}\p{M}'’-]*( +\p{L}[\p{L}\p{M}'’-]*)+$/u;
 const PIX_PHONE_PATTERN = /^\d{10,13}$/;
 const CPF_LENGTH = 11;
 /*
@@ -297,6 +306,7 @@ export const createAffiliateSchema = z
       .trim()
       .min(1, 'Informe o nome completo.')
       .max(255, 'O nome deve ter no máximo 255 caracteres.')
+      .regex(FULL_NAME_CHARACTERS_PATTERN, 'Use só letras, espaços, apóstrofo e hífen no nome.')
       .regex(FULL_NAME_PATTERN, 'Informe o nome e o sobrenome.'),
     email: z
       .string()

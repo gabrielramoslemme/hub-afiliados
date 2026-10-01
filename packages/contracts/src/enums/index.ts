@@ -181,6 +181,11 @@ export enum CouponErrorCodeEnum {
    * quem corrige é quem configura o ambiente, não a analista.
    */
   PROVIDER_ACCESS_DENIED = 'CPN-004',
+  /**
+   * Outra alteração do mesmo cupom demorou demais para terminar — a analista
+   * confere o cupom e tenta de novo.
+   */
+  CHANGE_IN_PROGRESS = 'CPN-005',
 }
 
 /**
