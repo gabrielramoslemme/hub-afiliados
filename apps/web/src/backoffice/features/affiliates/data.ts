@@ -11,6 +11,7 @@ import type {
 import { SESSION_EXPIRED_PATH } from '@/backoffice/shared/routes';
 import { authedApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
+import { isPublicId } from '@/shared/lib/public-id';
 import { affiliatesSheetFileName, buildAffiliatesSheet } from './lib/affiliates-sheet';
 import { writeAffiliatesWorkbook } from './lib/affiliates-workbook';
 import { PAGE_SIZE, type QueueParams } from './lib/queue-params';
@@ -56,15 +57,23 @@ export function fetchAffiliates(params: QueueParams): Promise<PaginatedResult<Af
   );
 }
 
+/**
+ * O id vem da URL do painel e entra no path da API. Fora do formato, a resposta
+ * é a mesma de um id que não existe — e a API nem é chamada.
+ */
+function affiliatePath(publicId: string, rest = ''): string {
+  if (!isPublicId(publicId)) throw new ApiError(404, null, 'Afiliado não encontrado.');
+
+  return `/admin/affiliates/${encodeURIComponent(publicId)}${rest}`;
+}
+
 export function fetchAffiliate(publicId: string): Promise<AffiliateDetail> {
-  return readOrSignIn(() =>
-    authedApiFetch<AffiliateDetail>(`/admin/affiliates/${publicId}`, FRESH),
-  );
+  return readOrSignIn(() => authedApiFetch<AffiliateDetail>(affiliatePath(publicId), FRESH));
 }
 
 export function fetchAuditLogs(publicId: string): Promise<AffiliateAuditLogItem[]> {
   return readOrSignIn(() =>
-    authedApiFetch<AffiliateAuditLogItem[]>(`/admin/affiliates/${publicId}/audit-logs`, FRESH),
+    authedApiFetch<AffiliateAuditLogItem[]>(affiliatePath(publicId, '/audit-logs'), FRESH),
   );
 }
 

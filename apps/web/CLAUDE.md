@@ -73,6 +73,8 @@ import { fetchWallet } from '@/affiliate/features/area/data';  // leitura de ser
 
 São três funções e não um parâmetro `auth` de propósito: esquecer um booleano é fácil, escolher o nome errado da função não é. E as duas autenticadas leem **cookies diferentes** — trocar de audiência por engano abriria o canal errado com o token errado. As duas convertem o corpo de erro padrão da API em `ApiError`, com `statusCode` e `code`. **A tela escolhe a mensagem pelo `code`, nunca pelo texto** — a tradução mora em `registration/lib/errors.ts` e em `auth/lib/errors.ts`.
 
+**Id que entra no path da API passa por `isPublicId`** (`src/shared/lib/public-id.ts`) antes da chamada, e vai com `encodeURIComponent`. Server Action aceita qualquer argumento num POST montado à mão, e o `[publicId]` do painel vem da URL: sem a checagem, `../../affiliate/me/pix-key` faria o servidor do Next chamar outra rota da API com o token da sessão. Fora do formato, a action responde "não encontrado" e o `data.ts` lança o mesmo 404 da API — sem chamá-la.
+
 **Escrita é Server Action**, sempre em `actions/*.action.ts` com `'use server'`. O action revalida a entrada com o mesmo schema zod do formulário — é isso que impede um POST montado à mão de contornar a tela — e devolve resultado tipado, nunca lança para a UI.
 
 **Leitura é Server Component.** A fila do admin lê `searchParams`, então filtro, ordenação e página vivem na URL: recarregar, voltar e compartilhar o endereço funcionam de graça, e não há uma linha de JavaScript de dados no cliente. Não há TanStack Query neste app — se uma tela precisar de polling ou lista otimista, ele volta; enquanto não precisar, a URL resolve.
@@ -160,7 +162,7 @@ A aba Materiais do afiliado (`/minha-conta/materiais`) e a tela que a alimenta n
 
 **A ordem é arrastando, nunca digitando.** A posição saiu dos dois formulários: item novo entra no fim, e `SortableList` (dnd-kit, com alça, teclado e anúncios em pt-BR) manda a lista inteira para `PUT .../order`. Inteira, porque é assim que a API recusa com 409 a ordem de uma tela aberta antes de outro operador criar ou apagar um item. O `DndContext` leva `id` de `useId`: sem ele, com duas listas na tela, o contador interno do dnd-kit diverge entre servidor e cliente e a hidratação reclama.
 
-O vídeo toca num diálogo, e `lib/video-embed.ts` decide como: YouTube (pelo `youtube-nocookie.com`) e Vimeo em `<iframe>`, arquivo `.mp4`/`.webm` no `<video>`, qualquer outro endereço como link em nova aba. A mesma leitura do endereço dá a capa do card: a miniatura do YouTube pelo id, o primeiro quadro do arquivo pelo próprio `<video>`, e a do Vimeo pela consulta oEmbed, que `fetchVideoThumbnails` faz no servidor com cache de um dia — falhou, o card fica com a capa neutra. **Player ou CDN de capa novo exige entrada no CSP** (`frame-src` e `img-src`, em `next.config.mjs`) — sem ela o diálogo abre vazio ou a capa some, e só o console acusa a política. "Marcar como assistido" é a palavra do afiliado: o player é de outro domínio e o Hub não sabe o que ele tocou.
+O vídeo toca num diálogo, e `lib/video-embed.ts` decide como: YouTube (pelo `youtube-nocookie.com`) e Vimeo em `<iframe>`, arquivo `.mp4`/`.webm` no `<video>`, qualquer outro endereço como link em nova aba. A mesma leitura do endereço dá a capa do card: a miniatura do YouTube pelo id, o primeiro quadro do arquivo pelo próprio `<video>`, e a do Vimeo pela consulta oEmbed, que `fetchVideoThumbnails` faz no servidor com cache de um dia — falhou, o card fica com a capa neutra. **Player ou CDN de capa novo exige entrada no CSP** (`frame-src` e `img-src`, em `security-headers.mjs`) — sem ela o diálogo abre vazio ou a capa some, e só o console acusa a política. "Marcar como assistido" é a palavra do afiliado: o player é de outro domínio e o Hub não sabe o que ele tocou.
 
 ## Sessão e acesso
 
@@ -174,7 +176,7 @@ Cookie `httpOnly`, `sameSite=lax`, `secure` fora de dev, oito horas. Nomes em `s
 
 ## A área do afiliado fala com a API inteira
 
-**Painel, login do afiliado, a conta dele, a carteira e as indicações falam com a API.** Não há mais dublê. Entrar em qualquer um dos dois logins exige a API no ar (`npm run dev`), as migrations aplicadas e `npm run seed --workspace apps/api`, que cria os três operadores com a senha `MudarAgora!2026`. O afiliado nasce sem senha: ele recebe o link de `/definir-senha` no e-mail de aprovação, que vale 48 horas e só funciona uma vez. Quem deixa esse link vencer, ou esquece a senha depois, pede outro em `/esqueci-senha` — o link de recuperação vale 2 horas —, e o painel tem o par equivalente em `/admin/esqueci-senha`. Com `MAIL_PROVIDER=logger`, que é o padrão em desenvolvimento, o link sai no log da API em vez de por e-mail.
+**Painel, login do afiliado, a conta dele, a carteira e as indicações falam com a API.** Não há mais dublê. Entrar em qualquer um dos dois logins exige a API no ar (`npm run dev`), as migrations aplicadas e `npm run seed --workspace apps/api`, que cria os três operadores com a senha `MudarAgora!2026`. O afiliado nasce sem senha: ele recebe o link de `/definir-senha` no e-mail de aprovação, que vale 48 horas e só funciona uma vez. Quem deixa esse link vencer, ou esquece a senha depois, pede outro em `/esqueci-senha` — o link de recuperação vale 2 horas —, e o painel tem o par equivalente em `/admin/esqueci-senha`. O e-mail sai de verdade, pelo Resend, em todo ambiente: para testar o fluxo localmente, cadastre-se com um endereço seu.
 
 **A carteira e as indicações nascem das vendas que a Porto notifica** pelo webhook de incentivos (INT-03). Sem venda, as duas telas mostram o estado vazio. Para ver dado local, mande uma notificação assinada para `POST /v1/webhooks/porto/incentives` — a receita está em `apps/api/docs/INT-03-incentivos.md`.
 
@@ -213,6 +215,10 @@ jest.mock('@/shared/http/api-client', () => ({ publicApiFetch: jest.fn() }));
 ```
 
 É também o limite certo da unidade: o teste do action verifica a tradução de erro e o que foi enviado, não o `fetch`.
+
+## Cabeçalhos de segurança
+
+`security-headers.mjs`, na raiz do app, monta os cabeçalhos de toda resposta, e o `next.config.mjs` só os aplica: CSP, `Strict-Transport-Security` (dois anos, com subdomínios, **só em produção** — em `localhost` prenderia o navegador ao https), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` (o endereço do painel carrega o `public_id`) e `Permissions-Policy` negando câmera, microfone, localização, pagamento e periféricos. Tela cheia fica de fora: os players da trilha precisam dela. É `.mjs`, e não `.ts`, porque o `next.config.mjs` o importa; o `security-headers.spec.ts` ao lado trava cada valor.
 
 ## Atenção: pacote do workspace precisa entrar em `transpilePackages`
 

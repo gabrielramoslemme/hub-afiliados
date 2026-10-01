@@ -5,10 +5,12 @@ import { changeCouponSchema } from '@porto/contracts';
 import { QUEUE_PATH } from '@/backoffice/shared/routes';
 import { authedApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
+import { isPublicId } from '@/shared/lib/public-id';
 
 export type ChangeCouponResult = { ok: true } | { ok: false; message: string };
 
 const UNEXPECTED_FAILURE = 'Não foi possível alterar o cupom. Tente novamente.';
+const AFFILIATE_GONE = 'Afiliado não encontrado. Atualize a página e tente de novo.';
 
 /**
  * Manda só o que mudou: o INT-01 trata campo ausente como "não mexe", e o
@@ -16,6 +18,8 @@ const UNEXPECTED_FAILURE = 'Não foi possível alterar o cupom. Tente novamente.
  * é ele que impede um PATCH vazio, montado à mão, de virar volta de rede.
  */
 export async function changeCoupon(publicId: string, input: unknown): Promise<ChangeCouponResult> {
+  if (!isPublicId(publicId)) return { ok: false, message: AFFILIATE_GONE };
+
   const parsed = changeCouponSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -26,7 +30,7 @@ export async function changeCoupon(publicId: string, input: unknown): Promise<Ch
   }
 
   try {
-    await authedApiFetch(`/admin/affiliates/${publicId}/coupon`, {
+    await authedApiFetch(`/admin/affiliates/${encodeURIComponent(publicId)}/coupon`, {
       method: 'PATCH',
       body: JSON.stringify(parsed.data),
     });

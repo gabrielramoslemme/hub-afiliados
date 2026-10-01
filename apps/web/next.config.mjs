@@ -1,46 +1,4 @@
-/**
- * O painel e a parte pública dividem origem, então o CSP vale para as duas —
- * `headers()` cobre toda rota, inclusive a landing, que o `middleware` não
- * casa.
- *
- * **Ele não impede XSS.** O App Router injeta o payload do RSC em `<script>`
- * inline, e sem nonce isso exige `'unsafe-inline'`. Fechar essa porta pediria
- * nonce por requisição, gerado no `middleware` — e nonce torna toda página
- * dinâmica, o que custaria a renderização estática da landing. A troca não
- * compensa enquanto o CSP for a segunda linha de defesa, não a primeira.
- *
- * O que ele impede, e que é o motivo de existir: script de outra origem,
- * exfiltração por `fetch` ou formulário para fora (`connect-src`,
- * `form-action`), sequestro de URL relativa por `<base>` e clickjacking.
- * `connect-src 'self'` também escreve no navegador a regra que a aplicação já
- * segue — o navegador não fala com a API.
- */
-const isDev = process.env.NODE_ENV !== 'production';
-
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  "base-uri 'self'",
-  "object-src 'none'",
-  // Nada embute este app. Se a Porto for embutir a landing um dia, o valor
-  // vira a origem dela — não `*`.
-  "frame-ancestors 'none'",
-  "form-action 'self'",
-  // `unsafe-eval` é o React Refresh; ele não existe no build de produção.
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
-  "style-src 'self' 'unsafe-inline'",
-  // As capas dos vídeos da trilha: o CDN de miniaturas do YouTube e o do Vimeo.
-  "img-src 'self' data: blob: https://i.ytimg.com https://i.vimeocdn.com",
-  // Os vídeos da trilha de formação: os players do YouTube (o domínio sem
-  // cookie) e do Vimeo, e o arquivo direto em qualquer host https que o
-  // operador cadastrar — a API só aceita endereço https.
-  'frame-src https://www.youtube-nocookie.com https://player.vimeo.com',
-  "media-src 'self' https:",
-  // `next/font` serve a Open Sans da própria origem.
-  "font-src 'self'",
-  // `ws:` é o socket do Fast Refresh.
-  `connect-src 'self'${isDev ? ' ws:' : ''}`,
-  ...(isDev ? [] : ['upgrade-insecure-requests']),
-].join('; ');
+import { securityHeaders } from './security-headers.mjs';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -77,7 +35,7 @@ const nextConfig = {
     return [
       {
         source: '/:path*',
-        headers: [{ key: 'Content-Security-Policy', value: contentSecurityPolicy }],
+        headers: securityHeaders({ production: process.env.NODE_ENV === 'production' }),
       },
     ];
   },

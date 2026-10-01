@@ -2,7 +2,7 @@ import { OccupationEnum } from '@porto/contracts';
 import { SESSION_EXPIRED_PATH } from '@/backoffice/shared/routes';
 import { authedApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
-import { fetchAffiliate, fetchAffiliates } from './data';
+import { fetchAffiliate, fetchAffiliates, fetchAuditLogs } from './data';
 import type { QueueParams } from './lib/queue-params';
 
 jest.mock('@/shared/http/api-client', () => ({ authedApiFetch: jest.fn() }));
@@ -24,6 +24,8 @@ const params: QueueParams = {
   sortOrder: 'desc',
 };
 
+const PUBLIC_ID = '10000000-0000-4000-8000-000000000001';
+
 const fetchMock = authedApiFetch as jest.MockedFunction<typeof authedApiFetch>;
 
 describe('leitura da fila com a sessão vencida', () => {
@@ -38,13 +40,15 @@ describe('leitura da fila com a sessão vencida', () => {
   it('does the same for a token of the wrong channel', async () => {
     fetchMock.mockRejectedValue(new ApiError(403, null, 'Acesso restrito ao painel da Porto.'));
 
-    await expect(fetchAffiliate('any-id')).rejects.toThrow(`NEXT_REDIRECT:${SESSION_EXPIRED_PATH}`);
+    await expect(fetchAffiliate(PUBLIC_ID)).rejects.toThrow(
+      `NEXT_REDIRECT:${SESSION_EXPIRED_PATH}`,
+    );
   });
 
   it('lets a not found through, because that is the screen’s job to show', async () => {
     fetchMock.mockRejectedValue(new ApiError(404, null, 'Afiliado não encontrado.'));
 
-    await expect(fetchAffiliate('any-id')).rejects.toThrow('Afiliado não encontrado.');
+    await expect(fetchAffiliate(PUBLIC_ID)).rejects.toThrow('Afiliado não encontrado.');
   });
 
   it('does not redirect when the read works', async () => {
@@ -63,5 +67,22 @@ describe('fetchAffiliates', () => {
     await fetchAffiliates({ ...params, occupation: OccupationEnum.INFLUENCER });
 
     expect(String(fetchMock.mock.calls[0][0])).toContain('occupation=INFLUENCER');
+  });
+});
+
+/*
+  O id vem da URL do painel e entra no path da API: `..%2F..%2Faffiliate%2Fme`
+  levaria o servidor do Next a ler outra rota com o token do operador. Fora do
+  formato, é o mesmo "não encontrado" de um id que não existe.
+*/
+describe.each([
+  ['fetchAffiliate', fetchAffiliate],
+  ['fetchAuditLogs', fetchAuditLogs],
+])('%s with an id that is not a uuid', (_name, read) => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('answers not found without calling the api', async () => {
+    await expect(read('../../affiliate/me/pix-key')).rejects.toMatchObject({ statusCode: 404 });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

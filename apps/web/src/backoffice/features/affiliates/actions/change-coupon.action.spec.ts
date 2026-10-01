@@ -75,3 +75,21 @@ describe('changeCoupon', () => {
     });
   });
 });
+
+/*
+  O id entra no path, e Server Action aceita qualquer argumento num POST montado
+  à mão: sem a checagem, ele levaria o servidor do Next a chamar outra rota da
+  API com o token do operador.
+*/
+describe('changeCoupon with an id that is not a uuid', () => {
+  it.each(['../../affiliate/me/pix-key', `${PUBLIC_ID}/../../coupons`])(
+    'refuses %p without calling the api',
+    async (publicId) => {
+      await expect(changeCoupon(publicId, { status: CouponStatusEnum.INACTIVE })).resolves.toEqual({
+        ok: false,
+        message: 'Afiliado não encontrado. Atualize a página e tente de novo.',
+      });
+      expect(apiFetch).not.toHaveBeenCalled();
+    },
+  );
+});

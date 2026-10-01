@@ -9,6 +9,7 @@ import {
 import { QUEUE_PATH } from '@/backoffice/shared/routes';
 import { authedApiFetch } from '@/shared/http/api-client';
 import { ApiError } from '@/shared/http/api-error';
+import { isPublicId } from '@/shared/lib/public-id';
 
 export type DecisionResult = { ok: true } | { ok: false; message: string };
 
@@ -16,11 +17,15 @@ export type DecisionResult = { ok: true } | { ok: false; message: string };
 export type CouponAvailability = { available: boolean; reason: string | null };
 
 const UNEXPECTED_FAILURE = 'Não foi possível registrar a decisão. Tente novamente.';
+const AFFILIATE_GONE = 'Afiliado não encontrado. Atualize a página e tente de novo.';
 const AVAILABLE: CouponAvailability = { available: true, reason: null };
 
 async function decide(publicId: string, path: string, body?: string): Promise<DecisionResult> {
   try {
-    await authedApiFetch(`/admin/affiliates/${publicId}/${path}`, { method: 'POST', body });
+    await authedApiFetch(`/admin/affiliates/${encodeURIComponent(publicId)}/${path}`, {
+      method: 'POST',
+      body,
+    });
   } catch (error) {
     return {
       ok: false,
@@ -37,6 +42,8 @@ async function decide(publicId: string, path: string, body?: string): Promise<De
 }
 
 export async function approveAffiliate(publicId: string, input: unknown): Promise<DecisionResult> {
+  if (!isPublicId(publicId)) return { ok: false, message: AFFILIATE_GONE };
+
   const parsed = approveAffiliateSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -71,6 +78,8 @@ export async function checkCouponAvailability(code: string): Promise<CouponAvail
 }
 
 export async function rejectAffiliate(publicId: string, input: unknown): Promise<DecisionResult> {
+  if (!isPublicId(publicId)) return { ok: false, message: AFFILIATE_GONE };
+
   const parsed = rejectAffiliateSchema.safeParse(input);
 
   if (!parsed.success) {
