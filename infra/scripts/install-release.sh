@@ -23,8 +23,9 @@ MIGRATION_APPLIED=false
 #
 #   /porto-hub/<env>/aws-config  Parameter Store. Escrito pela stack: endereços,
 #                                imagens e ARNs das senhas que a AWS gera.
-#   /porto-hub/<env>/api-env     Secrets Manager. Escrito à mão, pelo set-env.sh:
-#                                tudo o que uma pessoa define, chave = variável.
+#   /porto-hub/<env>/api-env     Parameter Store, SecureString. Escrito à mão, no
+#                                console: tudo o que uma pessoa define, uma linha
+#                                CHAVE=valor por variável.
 #
 # O bootstrap.env ainda aponta para `/porto-hub/<env>/config`, o nome antigo: o
 # UserData não roda de novo, e corrigi-lo no template pararia a instância sem
@@ -106,33 +107,45 @@ STACK_OWNED_KEYS="NODE_ENV PORT DATABASE_URL DATABASE_SSL APP_BASE_URL"
 # env.validation.ts da API tem o padrão de cada uma.
 REQUIRED_API_ENV_KEYS="JWT_SECRET PORTO_CLIENT_ID PORTO_CLIENT_SECRET PORTO_OAUTH_URL PORTO_API_BASE_URL MAIL_FROM_EMAIL"
 
-# Transforma o JSON do api-env, que chega pela entrada padrão, em linhas do
-# env_file. O segredo nunca vai para a linha de comando: argv de qualquer
-# processo aparece inteiro em `ps` e em /proc/<pid>/cmdline para todo usuário do
-# host. `printf` é builtin do bash, e por isso o pipe não expõe nada.
+# Transforma o api-env, que chega pela entrada padrão, em linhas do env_file. O
+# valor nunca vai para a linha de comando: argv de qualquer processo aparece
+# inteiro em `ps` e em /proc/<pid>/cmdline para todo usuário do host. `printf` é
+# builtin do bash, e por isso o pipe não expõe nada.
 #
-# Aspas simples porque o compose não interpola nada dentro delas: um `$` numa
-# senha chegaria inteiro à API. Por isso mesmo aspas simples, barra invertida
-# (que escapa a aspa) e quebra de linha são recusadas — o set-env.sh já recusa
-# os três na gravação.
+# O parâmetro é digitado à mão no console, então a leitura é tolerante no que
+# não muda o sentido — linha em branco, comentário com `#`, espaço em volta da
+# chave e do valor — e estrita no resto. Os problemas citam a linha, nunca o
+# conteúdo dela: a mensagem vai para o log do SSM.
+#
+# Aspas simples na saída porque o compose não interpola nada dentro delas: um
+# `$` numa senha chegaria inteiro à API. Por isso mesmo aspas (simples ou
+# duplas), barra invertida e espaço no meio do valor são recusados.
 api_env_lines() {
-  python3 -c 'import json, re, sys
-env = json.load(sys.stdin)
+  python3 -c 'import re, sys
 reserved = set(sys.argv[1].split())
 required = sys.argv[2].split()
-problems = []
+env, problems = {}, []
+for number, line in enumerate(sys.stdin.read().splitlines(), 1):
+    line = line.strip()
+    if not line or line.startswith("#"):
+        continue
+    key, sep, value = line.partition("=")
+    key, value = key.strip(), value.strip()
+    if not sep or not re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
+        problems.append("linha %d não é CHAVE=valor" % number)
+    elif key in reserved:
+        problems.append("%s é escrita pelo deploy a partir da stack" % key)
+    elif key in env:
+        problems.append("%s aparece mais de uma vez" % key)
+    elif re.search(r"[\x27\"\\\s]", value):
+        problems.append("%s tem aspas, barra invertida ou espaço no valor" % key)
+    elif key == "JWT_SECRET" and len(value) < 32:
+        problems.append("JWT_SECRET precisa de pelo menos 32 caracteres: openssl rand -hex 32")
+    else:
+        env[key] = value
 for key in required:
     if not env.get(key):
         problems.append("%s ausente ou vazia" % key)
-for key, value in env.items():
-    if not re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
-        problems.append("%s não é nome de variável" % key)
-    elif key in reserved:
-        problems.append("%s é escrita pelo deploy a partir da stack" % key)
-    elif not isinstance(value, str):
-        problems.append("%s não é texto" % key)
-    elif any(c in value for c in "\n\x27\\"):
-        problems.append("%s tem quebra de linha, aspas simples ou barra invertida" % key)
 if problems:
     sys.exit("\n".join(problems))
 for key in sorted(env):
@@ -157,16 +170,16 @@ print("postgres://%s:%s@%s:5432/%s" % (
     u.quote(s["username"], safe=""), u.quote(s["password"], safe=""),
     sys.argv[1], sys.argv[2]))' "${DB_HOST}" "${DB_NAME}")"
 
-  if ! api_env="$(aws secretsmanager get-secret-value --secret-id "${API_ENV_SECRET_ID}" \
-    --region "${AWS_REGION}" --query SecretString --output text)"; then
-    echo "FALHA: não consegui ler o ${API_ENV_SECRET_ID}. Crie-o com infra/scripts/set-env.sh." >&2
+  if ! api_env="$(aws ssm get-parameter --name "${API_ENV_PARAM}" --with-decryption \
+    --region "${AWS_REGION}" --query Parameter.Value --output text)"; then
+    echo "FALHA: não consegui ler o ${API_ENV_PARAM}. Crie-o no Parameter Store, como SecureString." >&2
     exit 1
   fi
   # Falhar aqui, antes de tocar em container, é melhor que subir uma API que só
   # descobre a credencial faltando na primeira aprovação de cupom.
   if ! api_env_lines_out="$(printf '%s' "${api_env}" \
     | api_env_lines "${STACK_OWNED_KEYS}" "${REQUIRED_API_ENV_KEYS}")"; then
-    echo "FALHA: o ${API_ENV_SECRET_ID} não está pronto (acima). Corrija com infra/scripts/set-env.sh e rode o deploy de novo." >&2
+    echo "FALHA: o ${API_ENV_PARAM} não está pronto (acima). Corrija no Parameter Store e rode o deploy de novo." >&2
     exit 1
   fi
 

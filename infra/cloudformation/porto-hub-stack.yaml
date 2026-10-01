@@ -604,10 +604,11 @@ Resources:
   # pela CLI ou pelos eventos da stack.
   #
   # Tudo o que uma pessoa define - JWT_SECRET, credenciais da Porto, chave do
-  # Resend, remetente - mora no segredo /porto-hub/<env>/api-env, que esta
-  # stack NAO cria: ele nasce e e mantido pelo infra/scripts/set-env.sh. Fora
-  # do template, nenhum update de stack tem como regravar o que foi digitado, e
-  # apagar a stack nao leva os valores junto.
+  # Resend, remetente - mora no parametro SecureString /porto-hub/<env>/api-env,
+  # que esta stack NAO cria: ele e criado e editado a mao, no console do
+  # Parameter Store. Fora do template, nenhum update de stack tem como regravar
+  # o que foi digitado, e apagar a stack nao leva os valores junto. (E o
+  # CloudFormation nem cria SecureString.)
   #
   # Nenhum dos tres tem `Name` fixo, e isso e deliberado. O DeleteSecret do
   # CloudFormation agenda a exclusao com janela de recuperacao, nao apaga na
@@ -868,7 +869,7 @@ Resources:
   # O que a stack sabe e mais ninguem define: enderecos, nomes e ARNs que saem
   # dos proprios recursos. So o CloudFormation escreve aqui, e ele regrava o
   # parametro inteiro a cada update que mude o Value - por isso NADA digitado a
-  # mao entra neste parametro. O que uma pessoa define vai para o segredo
+  # mao entra neste parametro. O que uma pessoa define vai para o
   # /porto-hub/<env>/api-env, que a stack nao gerencia.
   #
   # Mora aqui, e nao no UserData. UserData e imutavel na pratica: mudar um
@@ -913,7 +914,7 @@ Resources:
           DB_MASTER_SECRET_ARN=${DbSecret}
           DB_RW_SECRET_ARN=${DbRwSecret}
           SEED_SECRET_ARN=${SeedSecretArn}
-          API_ENV_SECRET_ID=/porto-hub/${EnvironmentName}/api-env
+          API_ENV_PARAM=/porto-hub/${EnvironmentName}/api-env
           DOMAIN_NAME=${EffectiveDomainName}
           API_DOMAIN_NAME=${ApiDomainName}
         - EffectiveDomainName: !If
@@ -948,10 +949,6 @@ Resources:
                   - !Ref DbSecret
                   - !Ref DbRwSecret
                   - !If [IsDev, !Ref SeedSecret, !Ref 'AWS::NoValue']
-                  # O api-env nao e recurso da stack, entao vai por nome. O
-                  # `-??????` casa o sufixo aleatorio que a AWS poe no ARN, e
-                  # vale ate para o segredo criado depois da stack.
-                  - !Sub 'arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/porto-hub/${EnvironmentName}/api-env-??????'
               - Effect: Allow
                 Action: ecr:GetAuthorizationToken
                 Resource: '*'
@@ -982,7 +979,14 @@ Resources:
                 # a ler `Distribution.DomainName`, e a referencia aqui fecharia o
                 # ciclo AwsConfigParameter -> Distribution -> ElasticIpAssociation
                 # -> Instance -> InstanceProfile -> InstanceRole.
-                Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/porto-hub/${EnvironmentName}/aws-config'
+                #
+                # O api-env vai por nome porque nao e recurso da stack: e criado
+                # a mao, depois dela. E SecureString na chave padrao aws/ssm, e
+                # com ela o ssm:GetParameter basta - kms:Decrypt so seria preciso
+                # com chave gerenciada pelo cliente.
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/porto-hub/${EnvironmentName}/aws-config'
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/porto-hub/${EnvironmentName}/api-env'
               - Effect: Allow
                 Action:
                   - logs:CreateLogStream
@@ -1625,10 +1629,10 @@ Outputs:
     Description: Parametro com a configuracao gerenciada pela stack, lida a cada deploy
     Value: !Ref AwsConfigParameter
 
-  # Nome, e nao ARN: o segredo nao e desta stack, e o set-env.sh o cria na
-  # primeira chave gravada.
-  ApiEnvSecretName:
-    Description: Segredo com tudo o que se define a mao - grave com infra/scripts/set-env.sh
+  # O parametro nao e desta stack: e criado a mao, no console do Parameter
+  # Store, como SecureString. O output so diz o nome exato que o deploy procura.
+  ApiEnvParameterName:
+    Description: SecureString com tudo o que se define a mao, uma linha CHAVE=valor por variavel
     Value: !Sub '/porto-hub/${EnvironmentName}/api-env'
 
   # O nome do segredo e gerado pelo CloudFormation, entao nao ha string fixa que
