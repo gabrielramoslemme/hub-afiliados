@@ -177,7 +177,6 @@ NODE_ENV=production
 PORT=3005
 HOSTNAME=0.0.0.0
 API_BASE_URL=http://api:3000/v1
-API_MOCKING=${API_MOCKING}
 # Alimenta o \`allowedOrigins\` das Server Actions no next.config.mjs. Atrás do
 # CloudFront, sem ele todo POST volta 500 — e são nove actions.
 PUBLIC_DOMAIN_NAME=${DOMAIN_NAME}

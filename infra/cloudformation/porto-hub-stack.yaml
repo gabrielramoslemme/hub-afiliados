@@ -136,15 +136,6 @@ Parameters:
     Default: nao-responda@influencersportoservico.com.br
     Description: Remetente. Com MailProvider=resend, o dominio precisa estar verificado la.
 
-  ApiMocking:
-    Type: String
-    Default: enabled
-    AllowedValues: [enabled, disabled]
-    Description: >
-      `enabled` dubla em memoria apenas /affiliate/me/wallet, que ainda nao
-      existe na API; todo o resto vai para a API de verdade. Passe a `disabled`
-      quando a rota da carteira nascer, ou a tela de saldo quebra.
-
   GitHubRepo:
     Type: String
     Default: mesainc/affiliate-hub-web
@@ -987,7 +978,6 @@ Resources:
           API_DOMAIN_NAME=${ApiDomainName}
           MAIL_PROVIDER=${MailProvider}
           MAIL_FROM_EMAIL=${MailFromEmail}
-          API_MOCKING=${ApiMocking}
         - EffectiveDomainName: !If
             - HasDomain
             - !Ref DomainName

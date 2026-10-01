@@ -664,8 +664,8 @@ por isso que os dois são parâmetro, e não literal no YAML.
 
 ## Mudar configuração
 
-`DomainName`, `ApiDomainName`, `MailProvider`, `MailFromEmail` e `ApiMocking`
-são parâmetros da stack, mas **não vivem no UserData** — vivem no parâmetro
+`DomainName`, `ApiDomainName`, `MailProvider` e `MailFromEmail` são
+parâmetros da stack, mas **não vivem no UserData** — vivem no parâmetro
 `/porto-hub/dev/config` do Parameter Store, que o `install-release.sh` lê a cada
 deploy. Trocar um valor é:
 
