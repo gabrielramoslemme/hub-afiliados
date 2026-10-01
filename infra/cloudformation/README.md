@@ -164,6 +164,14 @@ restrição de origem, e quem souber dela entra.
 | `dev.…` | vazio | cobre `dev.` | Ambiente de verdade. **É o modo esperado hoje** |
 | `dev.…` | `api-dev.…` | cobre os dois | Quando a API precisar de host próprio |
 
+**O primeiro modo aceita TLS 1.0.** Com o certificado padrão do
+`*.cloudfront.net` (`CloudFrontDefaultCertificate: true`) o CloudFront fixa a
+política mínima em `TLSv1`, e recusa `MinimumProtocolVersion` declarado — não há
+como subir esse piso sem certificado próprio. É aceitável só como janela de
+bootstrap, para validar o ambiente antes de a Porto emitir o certificado; o
+segundo e o terceiro modos usam `TLSv1.2_2021`. Nada de dado real enquanto o
+ambiente estiver nele.
+
 O segundo modo basta porque a API já sai em `/v1/*` no host da web — inclusive
 o webhook de incentivos da Porto. O host próprio só separa o nome dela do da
 web; a API que responde nele é a mesma.

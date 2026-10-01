@@ -1272,7 +1272,9 @@ Resources:
         # O objeto inteiro sob o !If, e nao campo a campo: com
         # CloudFrontDefaultCertificate o CloudFront recusa MinimumProtocolVersion
         # declarado, e o certificado padrao serve so o dominio cloudfront.net -
-        # e por isso que ele anda junto com a ausencia de alias.
+        # e por isso que ele anda junto com a ausencia de alias. Consequencia:
+        # sem dominio a borda aceita TLS 1.0. Vale so para a janela de
+        # bootstrap; o README diz isso na tabela dos modos de dominio.
         ViewerCertificate: !If
           - HasDomain
           - AcmCertificateArn: !Ref CertificateArn
