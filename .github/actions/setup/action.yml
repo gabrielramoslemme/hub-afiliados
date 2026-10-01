@@ -4,7 +4,7 @@ description: Node da versao do .nvmrc, dependencias instaladas e cache do turbo 
 runs:
   using: composite
   steps:
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
       with:
         node-version-file: .nvmrc
         cache: npm
@@ -13,7 +13,7 @@ runs:
     # execucoes, pacote que nao mudou nao roda de novo — e isso substitui o
     # filtro de "affected" escrito a mao, sem o risco de pular o que deveria
     # rodar: quem decide e o hash das entradas, nao um range de git.
-    - uses: actions/cache@v4
+    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: .turbo
         # `github.job` no meio da chave: sem ele, dois jobs paralelos gravam a
