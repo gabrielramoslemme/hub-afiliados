@@ -1,11 +1,10 @@
 import * as Joi from 'joi';
 
 /*
-  Fora de `test` a API sempre fala com a Porto e com o Resend, e sem credencial
-  cada aprovação voltaria 503 ou sairia sem e-mail. Em `test` o e2e troca o
-  gateway e o envio por falsos antes de subir, então as credenciais não teriam
-  uso ali. Sai numa constante porque as três dividem a mesma condição — e porque
-  assim a exceção do lint vive num lugar só.
+  Fora de `test` a API sempre fala com a Porto, e sem credencial cada aprovação
+  voltaria 503. Em `test` o e2e troca o gateway por um falso antes de subir,
+  então as credenciais não teriam uso ali. Sai numa constante porque as duas
+  dividem a mesma condição — e porque assim a exceção do lint vive num lugar só.
 */
 const REQUIRED_OUTSIDE_TEST = {
   is: 'test',
@@ -46,9 +45,10 @@ export const envValidationSchema = Joi.object({
   JWT_SECRET: Joi.string().min(32).required(),
   JWT_EXPIRES_IN_SECONDS: Joi.number().default(28800),
   APP_BASE_URL: Joi.string().uri().required(),
-  // O Resend é o único jeito de mandar e-mail, em todo ambiente. Em `test` o
-  // e2e troca o envio pelo `FakeMailProvider`, e a chave não teria uso.
-  RESEND_API_KEY: Joi.string().when('NODE_ENV', REQUIRED_OUTSIDE_TEST),
+  // O Resend é o único jeito de mandar e-mail, mas a chave é opcional enquanto
+  // a conta não existe: sem ela a API sobe e cada envio falha no log. Exigir
+  // travaria o deploy inteiro por causa do e-mail.
+  RESEND_API_KEY: Joi.string().allow('').default(''),
   MAIL_FROM_EMAIL: Joi.string()
     .email({ tlds: { allow: false } })
     .default('nao-responda@afiliados.porto.example'),

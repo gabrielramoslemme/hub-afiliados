@@ -224,10 +224,11 @@ dig +short api-dev.hubafiliados.com.br @1.1.1.1  # idem
 Com a Imperva na frente o CNAME é dela, e o CloudFront aparece só como origin
 na RDM — nesse caso o que se confirma é que a resposta **não** é o Elastic IP.
 
-**3. Gravar as credenciais da Porto e injetar a chave do Resend**, as duas
-**antes do primeiro deploy**: a API sempre fala com o gateway Sensedia e sempre
-envia e-mail pelo Resend, e o deploy falha enquanto o `PortoSecret` ou a
-`resend_api_key` tiverem `REPLACE_ME`. O passo a passo da Porto está em
+**3. Gravar as credenciais da Porto e injetar a chave do Resend.** As da Porto
+vêm **antes do primeiro deploy**: a API sempre fala com o gateway Sensedia, e o
+deploy falha enquanto o `PortoSecret` tiver `REPLACE_ME`. A do Resend pode
+esperar: com `REPLACE_ME` o deploy só avisa, a API sobe e nenhum e-mail sai — a
+aprovação passa sem o link de definir senha chegar a ninguém. O passo a passo da Porto está em
 *Credenciais da Porto*, mais abaixo. A chave do Resend:
 
 ```bash

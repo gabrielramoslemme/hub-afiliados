@@ -1,7 +1,7 @@
 # E-mails transacionais
 
-Todo ambiente envia pelo Resend, desenvolvimento inclusive, e a API não sobe sem
-`RESEND_API_KEY`. Só o e2e não envia: `createE2eApp` troca o provider pelo
+Todo ambiente envia pelo Resend, desenvolvimento inclusive. Sem
+`RESEND_API_KEY` a API sobe, mas nenhum e-mail sai: cada envio falha no log. Só o e2e não envia: `createE2eApp` troca o provider pelo
 `FakeMailProvider`, que guarda o e-mail renderizado para o teste ler.
 
 | Template | Gatilho | Variáveis |

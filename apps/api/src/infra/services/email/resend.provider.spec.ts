@@ -15,9 +15,9 @@ describe('ResendProvider', () => {
     text: 'Boas-vindas, Marina!',
   };
 
-  function configWith(fromName: string) {
+  function configWith(fromName: string, apiKey = 'test-key') {
     return configServiceMock({
-      RESEND_API_KEY: 'test-key',
+      RESEND_API_KEY: apiKey,
       MAIL_FROM_EMAIL: 'nao-responda@afiliados.porto.example',
       MAIL_FROM_NAME: fromName,
     });
@@ -78,5 +78,16 @@ describe('ResendProvider', () => {
 
     expect(Resend).toHaveBeenCalledTimes(1);
     expect(Resend).toHaveBeenCalledWith('test-key');
+  });
+
+  /*
+    A chave é opcional enquanto a conta do Resend não existe. Sem ela o SDK nem é
+    criado: o envio falha com o motivo, e o MailService registra a falha.
+  */
+  it('fails without touching the sdk when there is no key', async () => {
+    const provider = new ResendProvider(configWith('Hub de Afiliados', ''));
+
+    await expect(provider.send(input)).rejects.toThrow('RESEND_API_KEY');
+    expect(Resend).not.toHaveBeenCalled();
   });
 });
