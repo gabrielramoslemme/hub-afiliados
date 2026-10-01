@@ -3,10 +3,9 @@ Description: >
   porto-hub-afiliados - ambientes de desenvolvimento e de producao, um por
   stack. Instancia unica com Docker Compose (Caddy + web + API), RDS Postgres
   em subnets privadas, imagens no ECR e deploy por documento SSM. CloudFront na
-  frente termina o TLS e da um nome estavel para a Imperva apontar. Nos dois
-  ambientes a instancia fica em subnet privada, atras de VPC origin, e sai por
-  NAT; prod soma RDS Multi-AZ e alarmes. As escolhas e os custos estao em
-  infra/cloudformation/README.md.
+  frente termina o TLS e da um nome estavel para a Imperva apontar. Em prod a
+  instancia fica em subnet privada atras de VPC origin, com NAT, RDS Multi-AZ e
+  alarmes. As escolhas e os custos estao em infra/cloudformation/README.md.
 
 Parameters:
   EnvironmentName:
@@ -239,20 +238,14 @@ Parameters:
   # em ca-central-1, a regiao de prod -, e o nome da zona mapeia para um id
   # diferente em cada conta: `!GetAZs` pode cair justamente nela. Vazios, o
   # template escolhe a primeira e a segunda da regiao, como sempre fez.
-  #
-  # Num dev que ja existe, NAO preencha a primaria para fugir da use1-az3: ela
-  # tambem posiciona a PrivateSubnetA e o RDS, e trocar a zona dela substitui
-  # uma subnet que o banco esta usando. O README diz como conferir a zona antes
-  # do update.
   PrimaryAvailabilityZone:
     Type: String
     Default: ''
     AllowedPattern: '^$|^[a-z]{2}-[a-z]+-\d[a-z]$'
     Description: >
-      Zona da instancia e das subnets A. Escolha uma cujo ZoneId nao seja
-      cac1-az3 (prod) nem use1-az3 (dev): `aws ec2 describe-availability-zones
-      --region <regiao> --query 'AvailabilityZones[].[ZoneName,ZoneId]'
-      --output text`.
+      Zona da instancia e das subnets A. Em prod, escolha uma cujo ZoneId nao
+      seja cac1-az3: `aws ec2 describe-availability-zones --region ca-central-1
+      --query 'AvailabilityZones[].[ZoneName,ZoneId]' --output text`.
 
   SecondaryAvailabilityZone:
     Type: String
@@ -340,8 +333,8 @@ Rules:
 
 # Um template para os dois ambientes, e nao um arquivo por ambiente: a
 # referencia do bolao tem dois quase iguais e eles ja divergiram. O que muda
-# entre dev e prod pende de IsProd, e toda mudanca no que o dev resolve tem que
-# ser deliberada - confira por change set antes de executar.
+# entre dev e prod pende de IsProd, e o dev tem que continuar resolvendo para
+# exatamente o que era antes - confira por change set antes de executar.
 Mappings:
   Environment:
     dev:
@@ -391,16 +384,13 @@ Resources:
       VpcId: !Ref Vpc
       InternetGatewayId: !Ref InternetGateway
 
-  # Aqui fica so o NAT Gateway, nos dois ambientes. A instancia mora numa subnet
-  # privada, sem IP publico, e o CloudFront a alcanca por VPC origin.
+  # Em dev a instancia fica aqui, com Elastic IP. E o que apaga o NAT Gateway
+  # (~US$ 33/mes): ela alcanca ECR, SSM, Secrets Manager e Resend pelo proprio
+  # internet gateway. A exposicao e controlada pelo security group, que abre a
+  # 80 so para o CloudFront - nao ha porta 22 nem key pair.
   #
-  # O dev ja morou aqui, com Elastic IP e o CloudFront falando HTTP com ele pela
-  # internet. Era o que poupava o NAT (~US$ 33/mes), e o preco era a perna
-  # CloudFront -> origin em claro fora da rede da AWS, com o security group como
-  # unica barreira. O dev passou a ser igual a prod, e e o NAT que paga isso.
-  #
-  # MapPublicIpOnLaunch desligado: nada que nasca aqui precisa de IP publico
-  # sem pedir - o NAT traz o seu Elastic IP.
+  # Em prod aqui fica so o NAT Gateway. A instancia vai para a PrivateSubnetA,
+  # sem IP publico, e o CloudFront a alcanca por VPC origin.
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
@@ -409,7 +399,7 @@ Resources:
         - '10.${Octet}.1.0/24'
         - Octet: !FindInMap [Environment, !Ref EnvironmentName, VpcOctet]
       AvailabilityZone: !If [HasPrimaryAz, !Ref PrimaryAvailabilityZone, !Select [0, !GetAZs '']]
-      MapPublicIpOnLaunch: false
+      MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
           Value: !Sub 'porto-hub-${EnvironmentName}-public-a'
@@ -447,26 +437,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'porto-hub-${EnvironmentName}-private-b'
-
-  # Subnet da instancia em dev. Em prod a instancia mora na PrivateSubnetA, mas
-  # em dev a PrivateSubnetA e do banco - e com DbAccessCidr preenchido ela
-  # aponta para o internet gateway, o que a instancia nao pode seguir: uma
-  # subnet so tem uma rota default, e a da instancia e o NAT. Mover o banco
-  # para subnets novas, como prod faz, trocaria o DBSubnetGroup do RDS de dev, e
-  # e o banco que nao se mexe. Mesma zona da PrivateSubnetA: o trafego da API
-  # com o banco nao vira cross-AZ.
-  AppSubnetA:
-    Type: AWS::EC2::Subnet
-    Condition: IsDev
-    Properties:
-      VpcId: !Ref Vpc
-      CidrBlock: !Sub
-        - '10.${Octet}.31.0/24'
-        - Octet: !FindInMap [Environment, !Ref EnvironmentName, VpcOctet]
-      AvailabilityZone: !If [HasPrimaryAz, !Ref PrimaryAvailabilityZone, !Select [0, !GetAZs '']]
-      Tags:
-        - Key: Name
-          Value: !Sub 'porto-hub-${EnvironmentName}-app-a'
 
   # Subnets proprias do banco em prod. Em dev o banco divide a PrivateSubnetA com
   # nada que precise de saida, e abri-lo e apontar a subnet para o internet
@@ -542,16 +512,16 @@ Resources:
       SubnetId: !If [IsProd, !Ref DbSubnetB, !Ref PrivateSubnetB]
       RouteTableId: !Ref PublicRouteTable
 
-  # Saida da subnet da instancia, nos dois ambientes: ela precisa de ECR, SSM,
+  # Saida das subnets privadas em prod: a instancia precisa de ECR, SSM,
   # Secrets Manager, Resend e do gateway da Porto, e nada disso esta na VPC.
   # O Elastic IP do NAT e o IP de saida do ambiente - output EgressIp, caso a
-  # Sensedia peca allowlist.
+  # Sensedia de producao peca allowlist.
   #
-  # VPC endpoints nao substituem o NAT: cobririam ECR, SSM e Secrets Manager,
-  # mas Resend e Sensedia sao internet, e quatro endpoints de interface ja
-  # custam o mesmo que o NAT.
+  # O RDS divide a subnet e a rota, e nao ganha nada com isso: sem IP publico e
+  # com o security group sem saida, nao inicia conexao nenhuma.
   NatElasticIp:
     Type: AWS::EC2::EIP
+    Condition: IsProd
     DependsOn: VpcGatewayAttachment
     Properties:
       Domain: vpc
@@ -561,6 +531,7 @@ Resources:
 
   NatGateway:
     Type: AWS::EC2::NatGateway
+    Condition: IsProd
     Properties:
       AllocationId: !GetAtt NatElasticIp.AllocationId
       SubnetId: !Ref PublicSubnetA
@@ -570,6 +541,7 @@ Resources:
 
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
+    Condition: IsProd
     Properties:
       VpcId: !Ref Vpc
       Tags:
@@ -578,6 +550,7 @@ Resources:
 
   PrivateRoute:
     Type: AWS::EC2::Route
+    Condition: IsProd
     Properties:
       RouteTableId: !Ref PrivateRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -592,13 +565,6 @@ Resources:
       SubnetId: !Ref PrivateSubnetA
       RouteTableId: !Ref PrivateRouteTable
 
-  AppSubnetARouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: IsDev
-    Properties:
-      SubnetId: !Ref AppSubnetA
-      RouteTableId: !Ref PrivateRouteTable
-
   # =========================================================== Security groups
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -607,13 +573,13 @@ Resources:
       VpcId: !Ref Vpc
       # Uma porta, uma origem. O TLS termina no CloudFront, entao a 443 nao
       # existe aqui, e nao ha ACME porque nao ha certificado nesta maquina.
-      # Sem IP publico, a instancia nem tem endereco para ser achada: a regra
-      # e a segunda barreira, nao a primeira.
+      # Sem CloudFront na frente, a instancia nao responde a ninguem - nem a
+      # quem souber o Elastic IP.
       #
-      # A regra serve o VPC origin: a AWS aceita a prefix list do CloudFront
-      # como origem da entrada, e ela ja existe antes do VpcOrigin - a
-      # alternativa, o security group que o CloudFront cria sozinho, so nasce
-      # depois e fecharia um ciclo aqui.
+      # A mesma regra serve o VPC origin de prod: a AWS aceita a prefix list do
+      # CloudFront como origem da entrada, e ela ja existe antes do VpcOrigin -
+      # a alternativa, o security group que o CloudFront cria sozinho, so
+      # nasce depois e fecharia um ciclo aqui.
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -803,8 +769,8 @@ Resources:
   # `!If` - o `Ref` so e resolvido no ramo verdadeiro, entao a dependencia so
   # existe quando o recurso existe. Nao cria nada nem custa nada.
   #
-  # Um handle por dependente, e nao um so: a Distribution chega na Instance
-  # pelo VpcOrigin, e um handle compartilhado com a Instance fecharia um ciclo.
+  # Um handle por dependente, e nao um so: o da Distribution chega na Instance
+  # pela ElasticIpAssociation, e a Instance dependendo dele fecharia um ciclo.
   DatabaseRoutesReady:
     Type: AWS::CloudFormation::WaitConditionHandle
     Metadata:
@@ -1082,8 +1048,8 @@ Resources:
                 Action: ssm:GetParameter
                 # Nome literal, e nao `!Ref ConfigParameter`: o parametro passou a
                 # ler `Distribution.DomainName`, e a referencia aqui fecharia o
-                # ciclo ConfigParameter -> Distribution -> VpcOrigin -> Instance
-                # -> InstanceProfile -> InstanceRole.
+                # ciclo ConfigParameter -> Distribution -> ElasticIpAssociation
+                # -> Instance -> InstanceProfile -> InstanceRole.
                 Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/porto-hub/${EnvironmentName}/config'
               - Effect: Allow
                 Action:
@@ -1220,22 +1186,41 @@ Resources:
                 - 'chmod +x /opt/porto-hub/install-release.sh'
                 - '/opt/porto-hub/install-release.sh "{{ imageTag }}"'
 
+  # =========================================================== Instancia
+  # So em dev. Em prod a instancia nao tem IP publico: entra pelo VpcOrigin e
+  # sai pelo NAT.
+  ElasticIp:
+    Type: AWS::EC2::EIP
+    Condition: IsDev
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'porto-hub-${EnvironmentName}-eip'
+
+  ElasticIpAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Condition: IsDev
+    Properties:
+      AllocationId: !GetAtt ElasticIp.AllocationId
+      InstanceId: !Ref Instance
+
   # =========================================================== CloudFront
   # Duas razoes, e nenhuma delas e cache:
   #  1. Termina o TLS com o certificado da Porto, que e importado no ACM.
   #  2. Da um nome ESTAVEL para a Imperva apontar. Sem ele, o origin registrado
-  #     la seria um IP da instancia, e recriar a stack viraria uma RDM no time
-  #     deles.
+  #     la seria o Elastic IP, e recriar a stack viraria uma RDM no time deles.
   # O cache de /_next/static/* e bonus: sao arquivos com hash no nome.
   #
-  # O origin e um VPC origin, nos dois ambientes: o CloudFront entra na VPC por
-  # uma ENI que ele mesmo gerencia e fala com o IP privado da instancia. O
-  # trafego de origin nao passa pela internet, e a instancia nao tem endereco
-  # publico para achar. A AWS exige a instancia de pe (o CreationPolicy
-  # garante), um internet gateway na VPC, mesmo sem rota por ele, e a
-  # instancia fora das zonas sem suporte (use1-az3, cac1-az3).
+  # Em prod o origin e um VPC origin: o CloudFront entra na VPC por uma ENI que
+  # ele mesmo gerencia e fala com o IP privado da instancia. O trafego de origin
+  # nao passa pela internet, e a instancia nao tem endereco publico para achar.
+  # A AWS exige a instancia de pe (o CreationPolicy garante) e um internet
+  # gateway na VPC, mesmo sem rota por ele.
   VpcOrigin:
     Type: AWS::CloudFront::VpcOrigin
+    Condition: IsProd
     Properties:
       VpcOriginEndpointConfig:
         Name: !Sub 'porto-hub-${EnvironmentName}-instance'
@@ -1249,8 +1234,16 @@ Resources:
         - Key: Name
           Value: !Sub 'porto-hub-${EnvironmentName}-vpc-origin'
 
+  # A ElasticIpAssociation so existe em dev; em prod a dependencia com a
+  # instancia vem do VpcOrigin. Handle pelo motivo do DatabaseRoutesReady.
+  OriginAddressReady:
+    Type: AWS::CloudFormation::WaitConditionHandle
+    Metadata:
+      ElasticIpAssociation: !If [IsDev, !Ref ElasticIpAssociation, !Ref 'AWS::NoValue']
+
   Distribution:
     Type: AWS::CloudFront::Distribution
+    DependsOn: OriginAddressReady
     # W1030 avisa que `CertificateArn` pode nao ser um ARN de certificado -
     # verdade, ele aceita vazio. Quem garante que nao esta vazio no ramo que o
     # usa e a regra DomainRequiresCertificate, que o cfn-lint nao le.
@@ -1285,14 +1278,30 @@ Resources:
           - CloudFrontDefaultCertificate: true
         HttpVersion: http2and3
         IPV6Enabled: true
-        Origins:
-          - Id: instance
-            # Para VPC origin de EC2 a AWS pede o nome DNS privado da
-            # instancia, e so ele.
-            DomainName: !GetAtt Instance.PrivateDnsName
-            VpcOriginConfig:
-              VpcOriginId: !Ref VpcOrigin
-              OriginReadTimeout: 60
+        Origins: !If
+          - IsProd
+          - - Id: instance
+              # Para VPC origin de EC2 a AWS pede o nome DNS privado da
+              # instancia, e so ele.
+              DomainName: !GetAtt Instance.PrivateDnsName
+              VpcOriginConfig:
+                VpcOriginId: !Ref VpcOrigin
+                OriginReadTimeout: 60
+          - - Id: instance
+              # CloudFront exige NOME para origin customizado - nao aceita IP.
+              # Este e o DNS publico que a AWS da ao Elastic IP; o formato
+              # `compute-1` e o de us-east-1, a regiao do dev. Prod nao passa
+              # por aqui: usa o VpcOrigin acima, e roda em ca-central-1.
+              DomainName: !Sub
+                - 'ec2-${DashedIp}.compute-1.amazonaws.com'
+                - DashedIp: !Join ['-', !Split ['.', !Ref ElasticIp]]
+              CustomOriginConfig:
+                HTTPPort: 80
+                # A perna CloudFront -> origin vai em claro e pela internet. O
+                # que a limita e o security group, que so aceita as faixas do
+                # CloudFront. Aceitavel em dev; prod usa o VpcOrigin acima.
+                OriginProtocolPolicy: http-only
+                OriginReadTimeout: 60
         DefaultCacheBehavior:
           TargetOriginId: instance
           # Todos os metodos: as sete Server Actions do Next sao POST, e o
@@ -1328,15 +1337,14 @@ Resources:
         - Key: Name
           Value: !Sub 'porto-hub-${EnvironmentName}-cdn'
 
-  # A instancia boota na subnet privada, e sem a rota do NAT nao sai para lugar
-  # nenhum. A associacao e uma em cada ambiente - handle pelo motivo do
+  # Em prod a instancia boota na subnet privada, e sem a rota do NAT nao sai
+  # para lugar nenhum. As duas so existem em prod - handle pelo motivo do
   # DatabaseRoutesReady.
   PrivateRoutesReady:
     Type: AWS::CloudFormation::WaitConditionHandle
     Metadata:
-      PrivateRoute: !Ref PrivateRoute
+      PrivateRoute: !If [IsProd, !Ref PrivateRoute, !Ref 'AWS::NoValue']
       PrivateSubnetARoute: !If [IsProd, !Ref PrivateSubnetARouteTableAssociation, !Ref 'AWS::NoValue']
-      AppSubnetARoute: !If [IsDev, !Ref AppSubnetARouteTableAssociation, !Ref 'AWS::NoValue']
 
   Instance:
     Type: AWS::EC2::Instance
@@ -1358,9 +1366,7 @@ Resources:
     Properties:
       ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
-      # Trocar a subnet substitui a instancia - foi assim que o dev saiu da
-      # PublicSubnetA. Nada de estado mora nela; custa um deploy.
-      SubnetId: !If [IsProd, !Ref PrivateSubnetA, !Ref AppSubnetA]
+      SubnetId: !If [IsProd, !Ref PrivateSubnetA, !Ref PublicSubnetA]
       SecurityGroupIds: [!Ref AppSecurityGroup]
       IamInstanceProfile: !Ref InstanceProfile
       # Sem key pair de proposito: o acesso e por SSM Session Manager.
@@ -1629,11 +1635,19 @@ Outputs:
     Description: Host proprio da API, so /v1/*
     Value: !Sub 'https://${ApiDomainName}'
 
-  # IP de saida do ambiente, o do NAT. E o que vai para a Porto se a Sensedia
-  # pedir allowlist. Em dev ele mudou quando a instancia saiu da subnet publica.
+  ElasticIpAddress:
+    Condition: IsDev
+    Description: >
+      Origin do CloudFront, e detalhe interno: a Porto NAO aponta DNS para ca.
+      A instancia so aceita conexao das faixas do CloudFront, entao este
+      endereco nao responde a mais ninguem.
+    Value: !Ref ElasticIp
+
+  # IP de saida do ambiente: o do NAT em prod, o da instancia em dev. E o que
+  # vai para a Porto se a Sensedia de producao pedir allowlist.
   EgressIp:
     Description: IP publico de onde saem as chamadas ao gateway da Porto e ao Resend
-    Value: !Ref NatElasticIp
+    Value: !If [IsProd, !Ref NatElasticIp, !Ref ElasticIp]
 
   InstanceId:
     Value: !Ref Instance
